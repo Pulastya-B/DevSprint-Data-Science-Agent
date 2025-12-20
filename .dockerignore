@@ -1,0 +1,74 @@
+# Python cache and environment
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+ENV/
+env/
+
+# Development files
+.git/
+.gitignore
+.env
+.env.local
+*.log
+
+# Output directories (not needed in container)
+outputs/
+cache_db/
+temp/
+test_data/
+data/
+
+# Frontend development files (will be built in Docker)
+FRRONTEEEND/node_modules/
+FRRONTEEEND/.env
+FRRONTEEEND/.env.local
+
+# Documentation and tests
+*.md
+!README.md
+tests/
+test_*.py
+check_*.py
+
+# Old Gradio UI (no longer used)
+chat_ui.py
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Jupyter notebooks
+*.ipynb
+.ipynb_checkpoints/
+
+# Large model files (if any)
+*.pkl
+*.joblib
+*.h5
+*.pt
+*.pth
+
+# Documentation
+docs/
+PHASE*.md
+PROJECT*.md
+TOKEN*.md
+TOOL*.md
+FEATURE*.md
+IMPLEMENTATION*.md
+MIGRATION*.md
+EDA_REPORTS*.md
+GITHUB*.md
+BIGQUERY*.md

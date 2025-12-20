@@ -1,0 +1,71 @@
+╔═══════════════════════════════════════════════════════════════╗
+║           🚀 DATA SCIENCE AGENT - QUICK REFERENCE            ║
+║              Now powered by Google Gemini! 🤖                 ║
+╚═══════════════════════════════════════════════════════════════╝
+
+┌───────────────────────────────────────────────────────────────┐
+│ 1. SET API KEY (REQUIRED!)                                    │
+└───────────────────────────────────────────────────────────────┘
+  
+  PowerShell:
+    $env:GOOGLE_API_KEY="your-google-api-key-here"
+
+  Get your key: https://aistudio.google.com/app/apikey
+
+┌───────────────────────────────────────────────────────────────┐
+│ 2. START THE APPLICATION                                      │
+└───────────────────────────────────────────────────────────────┘
+
+  .\start.ps1
+
+┌───────────────────────────────────────────────────────────────┐
+│ 3. ACCESS THE APP                                             │
+└───────────────────────────────────────────────────────────────┘
+
+  Open browser: http://localhost:8080
+
+┌───────────────────────────────────────────────────────────────┐
+│ WHAT'S INCLUDED                                               │
+└───────────────────────────────────────────────────────────────┘
+
+  ✅ Modern React frontend with landing page
+  ✅ Professional chat interface
+  ✅ Google Gemini 2.0 Flash integration
+  ✅ 82+ data science tools
+  ✅ Complete ML pipeline automation
+
+┌───────────────────────────────────────────────────────────────┐
+│ KEY FILES                                                     │
+└───────────────────────────────────────────────────────────────┘
+
+  📖 GEMINI_UPDATE.md      - Gemini migration details
+  📖 CHECKLIST.md          - Pre-launch checklist
+  📖 MIGRATION_COMPLETE.md - Full change log
+  📖 FRONTEND_INTEGRATION.md - Technical docs
+
+┌───────────────────────────────────────────────────────────────┐
+│ TROUBLESHOOTING                                               │
+└───────────────────────────────────────────────────────────────┘
+
+  Issue: "API key not configured"
+  → Set: $env:GOOGLE_API_KEY="your-key"
+
+  Issue: "Frontend not found"
+  → Run: cd FRRONTEEEND && npm run build
+
+  Issue: "Module not found"
+  → Run: pip install -r requirements.txt
+
+┌───────────────────────────────────────────────────────────────┐
+│ API ENDPOINTS                                                 │
+└───────────────────────────────────────────────────────────────┘
+
+  POST /chat    - Chat with Gemini agent
+  POST /run     - Full ML workflow
+  POST /profile - Quick dataset profiling
+  GET  /tools   - List available tools
+  GET  /docs    - API documentation
+
+╔═══════════════════════════════════════════════════════════════╗
+║  Ready to start? Run: .\start.ps1                            ║
+╚═══════════════════════════════════════════════════════════════╝

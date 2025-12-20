@@ -1,0 +1,5 @@
+{
+  "name": "Data Science Agent",
+  "description": "A production-grade autonomous AI agent for end-to-end data science workflows, featuring 82+ specialized tools and dual LLM support.",
+  "requestFramePermissions": []
+}

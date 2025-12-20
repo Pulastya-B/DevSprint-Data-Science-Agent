@@ -1,0 +1,98 @@
+# Core Dependencies
+groq==0.11.0
+python-dotenv==1.0.0
+
+# Data Processing
+polars>=0.20.3
+duckdb>=0.10.0
+pyarrow>=14.0.1
+pandas>=2.2.0  # Updated for Python 3.13 compatibility
+
+# Machine Learning
+scikit-learn>=1.4.0
+xgboost>=2.0.3
+lightgbm>=4.6.0
+catboost>=1.2.8
+optuna>=3.5.0
+
+# Explainability
+shap>=0.44.1
+
+# Advanced ML Tools
+imbalanced-learn>=0.12.0
+
+# Statistical Analysis
+scipy>=1.11.4
+statsmodels>=0.14.1
+
+# Visualization
+matplotlib>=3.8.2
+seaborn>=0.13.1
+plotly>=5.18.0  # Interactive visualizations
+
+# EDA Report Generation
+sweetviz>=2.3.1  # Beautiful fast EDA reports
+ydata-profiling>=4.17.0  # Updated for Python 3.13 compatibility
+
+# User Interface
+# gradio>=5.49.1  # Replaced with React frontend
+
+# REST API (Cloud Run)
+fastapi>=0.109.0
+uvicorn>=0.25.0
+python-multipart>=0.0.6  # For file uploads
+
+# Text Processing
+textblob>=0.17.1
+
+# Time Series Forecasting
+prophet>=1.1.5
+holidays>=0.38
+
+# MLOps & Explainability
+lime==0.2.0.1
+fairlearn==0.10.0
+
+# NLP (Optional - Uncomment for advanced NLP tools)
+# These are optional but recommended for full NLP capabilities
+# spacy==3.7.2  # For named entity recognition (perform_named_entity_recognition)
+# transformers==4.35.2  # For transformer-based sentiment & topic modeling
+# sentence-transformers==2.2.2  # For semantic text similarity
+# bertopic==0.16.0  # For advanced topic modeling
+
+# Computer Vision (Optional - Uncomment for CV tools)
+# These are optional but recommended for full CV capabilities
+# torch==2.1.0  # For CNN-based image feature extraction
+# torchvision==0.16.0  # For pre-trained models (ResNet, EfficientNet, VGG)
+Pillow==10.1.0  # For basic image processing
+#opencv-python==4.8.1  # For advanced image processing & color features
+
+# Business Intelligence (Optional - Uncomment for advanced BI tools)
+# These are optional but add specialized capabilities
+# lifetimes==0.11.3  # For customer lifetime value modeling
+# econml==0.15.0  # For advanced causal inference
+
+# CLI & UI
+typer==0.9.0
+rich==13.7.0
+tqdm==4.66.1
+
+# Utilities
+pydantic==2.5.3
+joblib==1.3.2
+
+# Google Cloud Integration
+google-cloud-bigquery==3.14.1
+google-cloud-storage==2.14.0  # For GCS artifact storage
+google-auth==2.25.2
+google-generativeai==0.3.2  # For Gemini LLM support
+
+# Testing
+pytest==7.4.3
+pytest-mock==3.12.0
+pytest-cov==4.1.0
+
+# Development
+black==23.12.1
+flake8==7.0.0
+mypy==1.8.0
