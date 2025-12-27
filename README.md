@@ -1,632 +1,365 @@
-# Data Science Agent 🤖
+# 🤖 AI-Powered Data Science Agent
 
-A production-grade **autonomous AI agent** for end-to-end data science workflows. Upload datasets, describe your goal in natural language, and let the AI handle profiling, cleaning, feature engineering, model training, and visualization.
+> **An intelligent autonomous agent that performs end-to-end data science workflows through natural language**
 
-**Key Differentiator**: Not just a chatbot - a true AI agent with 75+ specialized tools, intelligent orchestration, dual LLM support, session memory, code interpreter, and Cloud Run API.
+Upload your dataset, describe what you want in plain English, and watch as the AI agent handles profiling, cleaning, feature engineering, model training, hyperparameter tuning, and comprehensive reporting - all automatically.
 
----
-
-> ## 🎉 **NEW: Modern React Frontend!**
-> 
-> The application now features a **professional React-based web interface** with a beautiful landing page and chat UI, replacing the old Gradio interface.
-> 
-> **Quick Start:**
-> ```powershell
-> .\start.ps1  # Windows
-> ```
-> or
-> ```bash
-> ./start.sh   # Linux/Mac
-> ```
-> 
-> 📖 **[See Full Frontend Integration Guide →](FRONTEND_INTEGRATION.md)**
+[![React](https://img.shields.io/badge/React-19-61DAFB?logo=react)](https://reactjs.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.109-009688?logo=fastapi)](https://fastapi.tiangolo.com/)
+[![Gemini](https://img.shields.io/badge/Gemini-2.5_Flash-4285F4?logo=google)](https://ai.google.dev/)
+[![Python](https://img.shields.io/badge/Python-3.10+-3776AB?logo=python)](https://python.org/)
 
 ---
 
-## 🎯 Project Vision
+## ✨ Key Features
 
-Build an **autonomous data science system** that achieves **50-70th percentile performance** on Kaggle competitions through intelligent automation, proving AI agents can handle real-world ML workflows end-to-end.
+### 🎯 **Autonomous AI Agent**
+- **82+ Specialized ML Tools** organized across data profiling, cleaning, feature engineering, model training, and visualization
+- **Intelligent Orchestration** with Google Gemini 2.5 Flash for function calling and decision-making
+- **Session Memory** for contextual awareness across conversations
+- **Smart Intent Detection** automatically classifies tasks (ML pipeline, cleaning only, visualization, etc.)
+- **Error Recovery** with automatic retry logic and file tracking
 
----
-
-## ✨ Core Features
-
-### **🤖 Intelligent Agent System**
-- **82+ Specialized Tools** across 11 categories (profiling, cleaning, feature engineering, ML, visualization, BigQuery)
-- **Dual LLM Support**: Groq (llama-3.3-70b) + Google Gemini (2.0-flash-exp)
-- **Smart Orchestration**: LLM-powered function calling with intelligent tool chaining
-- **Session Memory**: Contextual awareness across conversations ("cross-validate it", "try with Ridge")
-- **Code Interpreter**: Write and execute custom Python code for tasks beyond predefined tools
-- **Error Recovery**: Automatic retry with corrected parameters
-- **Reasoning Modules**: Dedicated LLM reasoning layer with 19 specialized functions
-- **Cloud Integration**: BigQuery data access + GCS artifact storage
-
-### 🎨 **Multiple Interfaces**
-- **Gradio Web UI** (`chat_ui.py`): Upload files, chat interface, visual plots
-- **CLI Interface** (`src/cli.py`): Command-line workflow automation
-- **REST API** (`src/api/app.py`): Cloud Run-ready FastAPI wrapper
-- **Python SDK**: Direct programmatic access
+### 🎨 **Modern Web Interface**
+- **Beautiful React Frontend** with glassmorphism design and smooth animations
+- **Interactive Chat** with file upload support (CSV, Parquet)
+- **Report Viewer** to view YData profiling and Sweetviz HTML reports in-app
+- **Markdown Support** for formatted responses
+- **Session Management** to maintain conversation history
 
 ### 📊 **Complete ML Pipeline**
-1. **Data Profiling** → Statistics, types, quality issues
-2. **Data Cleaning** → Smart imputation, outlier handling, type conversion
-3. **Feature Engineering** → Time features, encoding, interactions, ratios
-4. **Model Training** → XGBoost, LightGBM, CatBoost, ensemble methods
-5. **Hyperparameter Tuning** → Optuna-based optimization
-6. **Visualization** → Matplotlib, Plotly, interactive dashboards
-7. **EDA Reports** → Sweetviz, ydata-profiling HTML reports
-8. **Explainability** → SHAP values, feature importance
+1. **Data Profiling** - Automated statistical analysis and data quality assessment
+2. **Data Cleaning** - Smart missing value handling, outlier treatment, type conversion
+3. **Feature Engineering** - Time-based features, encoding, interactions, statistical features
+4. **Model Training** - Ridge, Lasso, Random Forest, XGBoost, LightGBM, CatBoost
+5. **Hyperparameter Tuning** - Optuna-based optimization with 50+ trials
+6. **Cross-Validation** - Stratified K-fold validation for robust evaluation
+7. **Visualization** - Interactive Plotly dashboards and correlation heatmaps
+8. **Reporting** - Comprehensive HTML reports with YData Profiling
 
-### ⚡ **Performance & Scale**
-- **Token Optimization**: 34% reduction in LLM context (compressed tool schemas)
-- **SQLite Caching**: Memoization of expensive operations with TTL
-- **Polars & DuckDB**: 10-100x faster than pandas for large datasets
-- **Rate Limiting**: Intelligent API call management (Groq: 12K TPM, Gemini: 10 RPM)
-- **Cloud Ready**: FastAPI service for Google Cloud Run deployment
-
----
-
-## 🏗️ Architecture
-
-### **System Design**
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                   User Interfaces                            │
-│  Gradio UI  │  CLI  │  REST API  │  Python SDK               │
-└─────────────────────────┬───────────────────────────────────┘
-                          ▼
-┌─────────────────────────────────────────────────────────────┐
-│              DataScienceCopilot Orchestrator                 │
-│  • LLM Function Calling (Groq/Gemini)                       │
-│  • Session Memory Management                                 │
-│  • Tool Execution & Chaining                                 │
-│  • Error Recovery & Retry Logic                              │
-└─────────────────────────┬───────────────────────────────────┘
-                          ▼
-┌─────────────────────────────────────────────────────────────┐
-│                    75+ Specialized Tools                     │
-│  Data Profiling │ Cleaning │ Feature Engineering             │
-│  Model Training │ Visualization │ EDA Reports                │
-│  NLP/Text │ Computer Vision │ Time Series │ MLOps           │
-└─────────────────────────┬───────────────────────────────────┘
-                          ▼
-┌─────────────────────────────────────────────────────────────┐
-│              Execution & Storage Backends                    │
-│  Local: Polars, sklearn, XGBoost                            │
-│  Cloud: BigQuery, Vertex AI, Cloud Storage (planned)        │
-│  Cache: SQLite with TTL                                      │
-└─────────────────────────────────────────────────────────────┘
-```
-
-### **Tech Stack**
-
-| Layer | Technologies |
-|-------|-------------|
-| **LLM** | Groq (llama-3.3-70b), Google Gemini (2.0-flash-exp) |
-| **Data Processing** | Polars, DuckDB, Pandas, PyArrow, BigQuery |
-| **ML/AI** | scikit-learn, XGBoost, LightGBM, CatBoost, Optuna |
-| **Visualization** | Matplotlib, Seaborn, Plotly |
-| **EDA Reports** | Sweetviz, ydata-profiling |
-| **Explainability** | SHAP, LIME |
-| **APIs** | FastAPI, Uvicorn |
-| **UI** | Gradio, Typer + Rich (CLI) |
-| **Storage** | SQLite (cache), CSV, Parquet, Google Cloud Storage |
-| **Cloud** | Google Cloud Run, BigQuery, GCS, Vertex AI (planned) |
+### ⚡ **Production Ready**
+- **FastAPI Backend** with async support and automatic API documentation
+- **Docker Support** with multi-stage builds for optimized deployment
+- **Rate Limiting** configured for Gemini API (6.5s intervals for 10 RPM limit)
+- **Caching System** for faster repeated queries
+- **CORS Enabled** for frontend-backend communication
 
 ---
 
 ## 🚀 Quick Start
 
-### **Prerequisites**
-- Python 3.9+
-- API Keys: [Groq](https://console.groq.com) or [Google AI Studio](https://makersuite.google.com/app/apikey)
+### Prerequisites
+- Python 3.10+
+- Node.js 18+ (for frontend)
+- Google Gemini API key ([Get one here](https://ai.google.dev/))
 
-### **Installation**
+### Installation
 
+**1. Clone the repository**
 ```bash
-# Clone repository
-git clone https://github.com/Surfing-Ninja/Data-Science-Agent.git
-cd Data-Science-Agent
+git clone https://github.com/Pulastya-B/DevSprint-Data-Science-Agent.git
+cd DevSprint-Data-Science-Agent
+```
 
-# Create virtual environment
-python -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Set up environment variables
+**2. Set up environment variables**
+```bash
 cp .env.example .env
-# Edit .env and add your API keys:
-# GROQ_API_KEY=your_groq_key
-# GOOGLE_API_KEY=your_google_key (optional)
-# LLM_PROVIDER=groq  # or "gemini"
+# Edit .env and add your GOOGLE_API_KEY
 ```
 
-### **Usage Examples**
-
-#### **1. Gradio Web UI** (Recommended for beginners)
+**3. Install Python dependencies**
 ```bash
-python chat_ui.py
-# Opens at http://localhost:7860
-# Upload CSV → Ask: "Analyze this data and predict house prices"
+pip install -r requirements.txt
 ```
 
-#### **2. CLI Interface**
+**4. Install frontend dependencies**
 ```bash
-# Complete workflow
-python src/cli.py analyze data.csv --target price --task "Predict house prices"
-
-# Quick profiling
-python src/cli.py profile data.csv
-
-# Train models only
-python src/cli.py train cleaned.csv Survived --task-type classification
+cd FRRONTEEEND
+npm install
+npm run build
+cd ..
 ```
 
-#### **3. Python SDK**
-```python
-from src.orchestrator import DataScienceCopilot
+**5. Run the application**
 
-# Initialize agent
-agent = DataScienceCopilot(
-    provider="groq",  # or "gemini"
-    reasoning_effort="medium"
-)
-
-# Run workflow
-result = agent.analyze(
-    file_path="titanic.csv",
-    task_description="Build a model to predict passenger survival",
-    target_col="Survived"
-)
-
-print(f"Status: {result['status']}")
-print(f"Best Model: {result['best_model']}")
-print(f"Accuracy: {result['best_score']}")
+**Windows:**
+```powershell
+.\start.ps1
 ```
 
-#### **4. REST API** (Cloud Run Ready)
+**Linux/Mac:**
 ```bash
-# Start local server
-cd src/api
-python app.py
-# Server runs at http://localhost:8080
+chmod +x start.sh
+./start.sh
+```
 
-# Make API call
-curl -X POST http://localhost:8080/run \
-  -F "file=@data.csv" \
-  -F "task_description=Analyze and predict churn" \
-  -F "target_col=churn"
+The application will be available at **http://localhost:8080**
+
+---
+
+## 📖 Usage
+
+### Web Interface
+
+1. **Navigate to http://localhost:8080**
+2. **Click "Launch Agent"** from the landing page
+3. **Upload your dataset** (CSV or Parquet format)
+4. **Type your request** in natural language:
+   - "Generate a comprehensive report on this dataset"
+   - "Train a model to predict [target_column]"
+   - "Clean the data and show me visualizations"
+   - "Perform feature engineering and train the best model"
+5. **View results** in the chat and click "View Report" buttons to see detailed HTML reports
+
+### Example Queries
+
+```
+📊 "Profile this dataset and tell me about data quality issues"
+
+🧹 "Clean the missing values and handle outliers"
+
+🎯 "Train a model to predict house prices with target column 'price'"
+
+📈 "Generate a correlation heatmap and feature importance plot"
+
+🔧 "Create time-based features and perform hyperparameter tuning"
+
+📋 "Generate a comprehensive YData profiling report"
 ```
 
 ---
 
-## 📁 Project Structure
+## 🏗️ Architecture
 
 ```
-Data-Science-Agent/
-├── src/
-│   ├── orchestrator.py              # Main agent brain (1,136 lines)
-│   ├── cli.py                       # CLI interface (346 lines)
+┌─────────────────────────────────────────────────────────────┐
+│                    React Frontend (Port 8080)                │
+│  Landing Page │ Chat Interface │ Report Viewer               │
+└─────────────────────────┬───────────────────────────────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────────────┐
+│              FastAPI Backend (Python 3.10+)                  │
+│  /chat │ /run │ /outputs │ /api/health                      │
+└─────────────────────────┬───────────────────────────────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────────────┐
+│           DataScienceCopilot Orchestrator                    │
+│  • Gemini 2.5 Flash Integration                             │
+│  • 82+ Specialized Tools                                     │
+│  • Session Memory & Context                                  │
+│  • Intelligent Intent Detection                              │
+│  • Error Recovery & Loop Prevention                          │
+└─────────────────────────┬───────────────────────────────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────────────┐
+│                     Tool Categories                          │
+│  Profiling │ Cleaning │ Feature Engineering │ ML Training   │
+│  Visualization │ EDA Reports │ Data Wrangling               │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 🛠️ Tech Stack
+
+### Frontend
+- **React 19** - Modern UI library
+- **TypeScript 5.8** - Type-safe development
+- **Vite 6** - Lightning-fast build tool
+- **Tailwind CSS** - Utility-first styling
+- **Framer Motion** - Smooth animations
+- **React Markdown** - Formatted responses
+
+### Backend
+- **FastAPI** - High-performance Python web framework
+- **Google Gemini 2.5 Flash** - LLM for agent orchestration
+- **Polars** - Fast dataframe library (10-100x faster than pandas)
+- **Scikit-learn** - Classical ML algorithms
+- **XGBoost / LightGBM / CatBoost** - Gradient boosting frameworks
+- **Optuna** - Hyperparameter optimization
+- **YData Profiling** - Automated EDA reports
+- **Plotly / Matplotlib** - Interactive visualizations
+
+### DevOps
+- **Docker** - Containerization with multi-stage builds
+- **Python-dotenv** - Environment variable management
+- **SQLite** - Caching layer for performance
+
+---
+
+## 🐳 Docker Deployment
+
+**Build and run with Docker:**
+
+```bash
+docker build -t ds-agent .
+docker run -p 8080:8080 --env-file .env ds-agent
+```
+
+**Or use the deployment script:**
+
+```bash
+.\build-and-deploy.ps1  # Windows
+./build-and-deploy.sh   # Linux/Mac
+```
+
+---
+
+## 📂 Project Structure
+
+```
+.
+├── FRRONTEEEND/              # React frontend
+│   ├── components/           # UI components
+│   │   ├── ChatInterface.tsx # Main chat interface
+│   │   ├── HeroGeometric.tsx # Landing page hero
+│   │   └── ...
+│   ├── dist/                 # Built frontend
+│   └── package.json
+│
+├── src/                      # Python backend
 │   ├── api/
-│   │   └── app.py                   # FastAPI Cloud Run wrapper (331 lines)
-│   ├── bigquery/                    # BigQuery integration 🆕
-│   │   ├── __init__.py             # BigQuery tools (4 functions)
-│   │   └── client.py               # BigQuery client wrapper
-│   ├── storage/                     # Artifact storage 🆕
-│   │   ├── artifact_store.py       # Local + GCS backends (613 lines)
-│   │   └── helpers.py              # Storage helper functions (125 lines)
-│   ├── reasoning/                   # LLM reasoning layer 🆕
-│   │   ├── __init__.py             # Core reasoning engine (350 lines)
-│   │   ├── data_understanding.py   # Data insights (6 functions)
-│   │   ├── model_explanation.py    # Model interpretation (6 functions)
-│   │   └── business_summary.py     # Business translations (7 functions)
-│   ├── cache/
-│   │   └── cache_manager.py        # SQLite caching with TTL
-│   ├── tools/                       # 82+ specialized tools
-│   │   ├── data_profiling.py       # Dataset analysis
-│   │   ├── data_cleaning.py        # Cleaning & preprocessing
-│   │   ├── feature_engineering.py  # Feature creation
-│   │   ├── model_training.py       # ML training
-│   │   ├── visualization_engine.py # Matplotlib/Seaborn plots
-│   │   ├── plotly_visualizations.py # Interactive charts
-│   │   ├── eda_reports.py          # Sweetviz, ydata-profiling
-│   │   ├── advanced_*.py           # Advanced features
-│   │   └── tools_registry.py       # All 82 tool definitions (1,600+ lines)
-│   └── utils/                       # Helper utilities
-│       ├── polars_helpers.py       # Data manipulation
-│       └── validation.py           # Input validation
-├── chat_ui.py                       # Gradio web interface (912 lines)
-├── examples/
-│   └── titanic_example.py           # Complete workflow demo
-├── outputs/
-│   ├── data/                        # Processed datasets
-│   ├── models/                      # Trained models (.pkl)
-│   ├── plots/                       # Visualizations (.png, .html)
-│   └── reports/                     # EDA reports (.html)
-├── cache_db/                        # SQLite cache storage
-├── requirements.txt                 # Python dependencies
-├── .env.example                     # Environment template
-└── README.md                        # This file
+│   │   └── app.py           # FastAPI application
+│   ├── orchestrator.py      # Agent orchestrator
+│   ├── session_memory.py    # Session management
+│   ├── tools/               # 82+ ML tools
+│   │   ├── data_profiling.py
+│   │   ├── data_cleaning.py
+│   │   ├── feature_engineering.py
+│   │   ├── model_training.py
+│   │   └── ...
+│   └── utils/               # Helper utilities
+│
+├── Dockerfile               # Multi-stage Docker build
+├── requirements.txt         # Python dependencies
+├── start.ps1 / start.sh    # Quick start scripts
+└── README.md               # This file
 ```
 
 ---
 
-## 🛠️ Tool Categories (82 Tools Total)
+## 🔑 Environment Variables
 
-### **📊 Data Profiling & Analysis (7 tools)**
-- `profile_dataset`, `detect_data_quality_issues`, `analyze_correlations`, `get_smart_summary`, `compare_datasets`, `calculate_statistics`, `detect_skewness`
-
-### **☁️ BigQuery Integration (4 tools)** 🆕
-- `bigquery_profile_table`, `bigquery_load_table`, `bigquery_execute_query`, `bigquery_write_results`
-
-### **🧹 Data Cleaning (8 tools)**
-- `clean_missing_values`, `handle_outliers`, `remove_duplicates`, `filter_rows`, `rename_columns`, `drop_columns`, `sort_data`, `fix_data_types`
-
-### **🔧 Feature Engineering (13 tools)**
-- `encode_categorical`, `force_numeric_conversion`, `smart_type_inference`, `create_time_features`, `create_interaction_features`, `create_aggregation_features`, `create_ratio_features`, `create_statistical_features`, `create_log_features`, `create_binned_features`, `engineer_text_features`, `auto_feature_engineering`, `auto_feature_selection`
-
-### **🤖 Model Training & Tuning (6 tools)**
-- `train_baseline_models`, `hyperparameter_tuning`, `train_ensemble_models`, `perform_cross_validation`, `generate_model_report`, `auto_ml_pipeline`
-
-### **📈 Visualization (11 tools)**
-- `generate_all_plots`, `generate_data_quality_plots`, `generate_eda_plots`, `generate_model_performance_plots`, `generate_feature_importance_plot`, `generate_interactive_scatter`, `generate_interactive_histogram`, `generate_interactive_correlation_heatmap`, `generate_interactive_box_plots`, `generate_interactive_time_series`, `generate_plotly_dashboard`
-
-### **📊 EDA Reports (3 tools)**
-- `generate_sweetviz_report`, `generate_ydata_profiling_report`, `generate_combined_eda_report`
-
-### **🔬 Advanced Analysis (11 tools)**
-- `perform_eda_analysis`, `detect_model_issues`, `detect_anomalies`, `detect_and_handle_multicollinearity`, `perform_statistical_tests`, `analyze_root_cause`, `detect_trends_and_seasonality`, `detect_anomalies_advanced`, `perform_hypothesis_testing`, `analyze_distribution`, `perform_segment_analysis`
-
-### **📝 Data Wrangling (3 tools)**
-- `merge_datasets`, `concat_datasets`, `reshape_dataset`
-
-### **🚀 MLOps & Production (5 tools)**
-- `monitor_model_drift`, `explain_predictions`, `generate_model_card`, `perform_ab_test_analysis`, `detect_feature_leakage`
-
-### **⏰ Time Series (3 tools)**
-- `forecast_time_series`, `detect_seasonality_trends`, `create_time_series_features`
-
-### **💼 Business Intelligence (4 tools)**
-- `perform_cohort_analysis`, `perform_rfm_analysis`, `detect_causal_relationships`, `generate_business_insights`
-
-### **📚 NLP/Text (4 tools)**
-- `perform_topic_modeling`, `perform_named_entity_recognition`, `analyze_sentiment_advanced`, `perform_text_similarity`
-
-### **🖼️ Computer Vision (3 tools)**
-- `extract_image_features`, `perform_image_clustering`, `analyze_tabular_image_hybrid`
-
----
-
-## 🎯 Advanced Features
-
-### **1. Session Memory**
-The agent remembers context across conversations:
-
-```python
-# Conversation 1
-"Train a model on earthquake.csv to predict magnitude"
-→ Agent trains XGBoost, achieves 0.92 R²
-
-# Conversation 2 (Same session)
-"Cross-validate it"
-→ Agent knows: model=XGBoost, dataset=earthquake.csv, target=magnitude
-→ Runs 5-fold CV automatically
-```
-
-### **2. Code Interpreter**
-Execute custom Python code for tasks beyond predefined tools:
-
-```python
-User: "Make a Plotly scatter with custom dropdown filters"
-
-Agent: execute_python_code(code='''
-import plotly.graph_objects as go
-df = pd.read_csv('./temp/data.csv')
-# Custom visualization code...
-fig.write_html('./outputs/code/custom_plot.html')
-''')
-```
-
-### **3. Token Optimization**
-System stays under LLM token limits even with 75 tools:
-
-| Component | Before | After | Savings |
-|-----------|--------|-------|---------|
-| Tool Schemas | 8,193 tokens | 5,463 tokens | 34% |
-| Tool Results | 5,000+ tokens | 50-200 tokens | 90%+ |
-
-### **4. Error Recovery**
-Agent learns from errors and auto-corrects:
-
-```python
-# Attempt 1
-train_baseline_models(target_col="magnitude")
-→ Error: Column 'magnitude' not found. Hint: Did you mean 'mag'?
-
-# Attempt 2 (Automatic)
-train_baseline_models(target_col="mag")
-→ Success! Trained 4 models, best: XGBoost (0.92 R²)
-```
-
----
-
-## ☁️ Cloud Features
-
-### **1. BigQuery Integration** 🆕
-Direct access to BigQuery tables without local downloads:
-
-```python
-# Profile a BigQuery table
-agent.chat("Profile the table project.dataset.sales")
-
-# Query and analyze
-agent.chat("Query top 10 customers by revenue from BigQuery")
-
-# Write results back
-agent.chat("Write the cleaned data to BigQuery table project.dataset.sales_clean")
-```
-
-**Available Tools:**
-- `bigquery_profile_table`: Get statistics for any BigQuery table
-- `bigquery_load_table`: Load BigQuery data into local Polars DataFrame
-- `bigquery_execute_query`: Run SQL queries directly on BigQuery
-- `bigquery_write_results`: Write processed data back to BigQuery
-
-**Setup:**
-```bash
-# Install BigQuery dependencies
-pip install google-cloud-bigquery db-dtypes
-
-# Set environment variable
-export GOOGLE_APPLICATION_CREDENTIALS="/path/to/service-account-key.json"
-```
-
-**Looker-Compatible Schemas:**
-
-The project defines stable BigQuery table schemas for BI tools (see [`BIGQUERY_SCHEMAS.md`](BIGQUERY_SCHEMAS.md)):
-- 📊 `model_metrics` - Model performance tracking over time
-- 🎯 `feature_importance` - Feature impact analysis
-- 🔮 `predictions` - Prediction monitoring with actuals
-- 📋 `data_profile_summary` - Data quality metrics
-
-**Design Principles:**
-- Stable schemas (no breaking changes without versioning)
-- Consistent snake_case naming
-- Clear dimension/metric separation
-- Dashboard-ready with sample Looker views
-
-### **2. Artifact Storage** 🆕
-Unified storage abstraction - switch between local and GCS with zero code changes:
-
-```python
-# Local storage (default)
-agent.save_model(model, "my_model.pkl")  
-# → Saves to outputs/models/my_model.pkl
-
-# GCS storage (automatic when GCS credentials present)
-agent.save_model(model, "my_model.pkl")
-# → Saves to gs://your-bucket/models/my_model_v1.pkl with versioning
-```
-
-**Features:**
-- **Automatic Backend Selection**: Uses GCS if credentials available, falls back to local
-- **Versioning**: Automatic version suffixes for GCS artifacts
-- **Metadata**: Stores creation time, size, checksums
-- **Unified API**: Same code works for local and cloud storage
-
-**Setup:**
-```bash
-# Install GCS dependencies
-pip install google-cloud-storage
-
-# Set bucket (optional, defaults to local)
-export GCS_BUCKET="your-gcs-bucket-name"
-```
-
-### **3. Reasoning Modules** 🆕
-Dedicated LLM reasoning layer with clear boundaries (no raw data access, no training decisions):
-
-```python
-from reasoning.data_understanding import explain_dataset
-from reasoning.model_explanation import explain_model_performance
-from reasoning.business_summary import create_executive_summary
-
-# Data insights
-insights = explain_dataset(summary={
-    "rows": 10000,
-    "columns": 20,
-    "missing_values": {"age": {"count": 150, "percentage": 1.5}}
-})
-
-# Model explanations
-explanation = explain_model_performance(metrics={
-    "accuracy": 0.95,
-    "precision": 0.92,
-    "recall": 0.88
-}, task_type="classification")
-
-# Business summaries
-summary = create_executive_summary(
-    project_results={"model_accuracy": 0.95},
-    project_name="churn_prediction",
-    business_objective="Reduce customer churn"
-)
-```
-
-**19 Reasoning Functions:**
-- **Data Understanding**: explain_dataset, suggest_transformations, identify_feature_engineering_opportunities, explain_missing_values, compare_datasets (6 functions)
-- **Model Explanation**: explain_model_performance, interpret_feature_importance, diagnose_model_failure, explain_prediction, compare_models, explain_overfitting (6 functions)
-- **Business Summary**: create_executive_summary, estimate_business_impact, create_stakeholder_report, translate_technical_to_business, prioritize_next_steps, explain_to_customer, assess_deployment_readiness (7 functions)
-
-**Design Principles:**
-- ✅ **NO Raw Data Access**: Only summaries/statistics allowed
-- ✅ **NO Training Decisions**: Only explanations, never execution
-- ✅ **Structured Output**: JSON schemas for cacheability
-- ✅ **Dual Backend**: Works with both Gemini and Groq
-
----
-
-## 🔧 Configuration
-
-### **Environment Variables** (`.env`)
+Create a `.env` file in the root directory:
 
 ```bash
-# LLM Provider
-LLM_PROVIDER=groq               # "groq" or "gemini"
-GROQ_API_KEY=your_groq_key
-GOOGLE_API_KEY=your_google_key  # Optional
+# LLM Provider Configuration
+LLM_PROVIDER=gemini
 
-# Model Selection
-GROQ_MODEL=llama-3.3-70b-versatile
-GEMINI_MODEL=gemini-2.0-flash-exp
-REASONING_EFFORT=medium         # low, medium, high
+# API Keys
+GOOGLE_API_KEY=your_gemini_api_key_here
 
-# Cache Settings
+# Model Configuration
+GEMINI_MODEL=gemini-2.5-flash
+
+# Cache Configuration
 CACHE_DB_PATH=./cache_db/cache.db
-CACHE_TTL_SECONDS=86400         # 24 hours
+CACHE_TTL_SECONDS=86400
 
-# Cloud Features (Optional)
-GCS_BUCKET=your-gcs-bucket-name                           # For artifact storage
-GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-key.json  # For BigQuery + GCS
-
-# Cloud Run (for API deployment)
-PORT=8080
+# Output Configuration
+OUTPUT_DIR=./outputs
+DATA_DIR=./data
 ```
-
-### **Provider Comparison**
-
-| Feature | Groq | Gemini |
-|---------|------|--------|
-| **Model** | llama-3.3-70b-versatile | gemini-2.0-flash-exp |
-| **Speed** | ⚡ Extremely fast (LPU) | 🚀 Very fast |
-| **Free Tier** | 100K tokens/day | 1,500 requests/day |
-| **Rate Limit** | 12K tokens/min | 10 requests/min |
-| **Best For** | High-volume, low-latency | Free tier, high quota |
 
 ---
 
-## 🚀 Cloud Deployment (Google Cloud Run)
+## 🎯 Features in Detail
 
-### **Deploy REST API**
+### Intelligent Intent Detection
+The agent automatically classifies your request and applies the appropriate workflow:
+- **Full ML Pipeline** - Complete end-to-end workflow with training
+- **Exploratory Analysis** - Data profiling and visualization only
+- **Cleaning Only** - Data quality improvements without modeling
+- **Visualization Only** - Generate plots and dashboards
+- **Multi-Intent** - Combine multiple tasks intelligently
 
-```bash
-# 1. Build Docker image (Dockerfile provided)
-docker build -t data-science-agent .
+### Session Memory
+The agent remembers context across messages:
+```
+You: "Train a model on this dataset"
+Agent: [Trains XGBoost model with R² = 0.85]
 
-# 2. Push to Google Container Registry
-gcloud builds submit --tag gcr.io/PROJECT_ID/data-science-agent
+You: "Now try hyperparameter tuning"
+Agent: [Automatically uses previous model and dataset]
 
-# 3. Deploy to Cloud Run
-gcloud run deploy data-science-agent \
-  --image gcr.io/PROJECT_ID/data-science-agent \
-  --platform managed \
-  --region us-central1 \
-  --allow-unauthenticated \
-  --memory 4Gi \
-  --timeout 3600 \
-  --set-env-vars GROQ_API_KEY=your_key,LLM_PROVIDER=groq
-
-# 4. Test deployment
-curl -X POST https://your-service-url/run \
-  -F "file=@data.csv" \
-  -F "task_description=Predict churn"
+You: "Cross-validate it"
+Agent: [Applies CV to tuned model from context]
 ```
 
-### **API Endpoints**
+### Error Recovery
+- Automatic retry with corrected parameters
+- File existence validation before execution
+- Recovery guidance showing last successful file
+- Loop detection to prevent infinite retries
 
-- `GET /` - Health check
-- `GET /health` - Readiness probe
-- `POST /run` - Full analysis workflow
-- `POST /profile` - Quick dataset profiling
-- `GET /tools` - List all available tools
+### Report Viewing
+- Click "View Report" buttons to see HTML reports in-app
+- Full-screen modal with professional styling
+- Supports YData Profiling, Sweetviz, and custom dashboards
 
 ---
 
-## 🗺️ Roadmap
+## 📊 Example Workflow
 
-### **Phase 1: Core Agent** ✅ COMPLETE
-- [x] 75 specialized tools
-- [x] Dual LLM support (Groq + Gemini)
-- [x] CLI + Gradio UI
-- [x] SQLite caching
-- [x] Token optimization
+**Upload:** `earthquake_data.csv` (175K rows, 22 columns)
 
-### **Phase 2: Intelligence** ✅ COMPLETE
-- [x] Session memory
-- [x] Code interpreter
-- [x] Error recovery
-- [x] EDA reports (Sweetviz, ydata-profiling)
-- [x] Interactive Plotly visualizations
+**Prompt:** "Train a model to predict earthquake magnitude"
 
-### **Phase 3: Cloud Native** ✅ COMPLETE
-- [x] FastAPI Cloud Run wrapper with 4 REST endpoints
-- [x] BigQuery integration (4 tools: profile, load, query, write)
-- [x] Artifact Storage abstraction (Local ↔ GCS switching)
-- [x] Reasoning modules for LLM explanations (19 functions)
-- [x] Looker-compatible BigQuery schemas (4 stable tables)
-- [ ] Vertex AI model training (planned)
-- [ ] Cloud Logging & Monitoring (planned)
+**Agent Actions:**
+1. ✅ Profiles dataset (175,947 rows, 22 columns)
+2. ✅ Detects data quality issues (11.67% missing, outliers)
+3. ✅ Drops high-missing columns (>40% missing)
+4. ✅ Imputes remaining missing values with median/mode
+5. ✅ Handles outliers with IQR clipping
+6. ✅ Extracts time-based features (year, month, hour, cyclical)
+7. ✅ Encodes categorical variables
+8. ✅ Trains 6 baseline models (XGBoost wins with R² = 0.716)
+9. ✅ Performs hyperparameter tuning (R² = 0.743)
+10. ✅ Runs 5-fold cross-validation (RMSE = 0.167 ± 0.0005)
+11. ✅ Generates YData profiling report
+12. ✅ Creates interactive Plotly dashboard
 
-### **Phase 4: Enterprise** 📋 PLANNED
-- [ ] Multi-user authentication
-- [ ] Team workspaces
-- [ ] Model registry
-- [ ] Automated retraining pipelines
-
-### **Phase 5: Kaggle Integration** 🎯 FUTURE
-- [ ] Direct Kaggle API integration
-- [ ] Automated competition workflow
-- [ ] Ensemble strategies
-- [ ] Submission automation
+**Result:** Trained and tuned XGBoost model ready for deployment!
 
 ---
 
 ## 🤝 Contributing
 
-Contributions welcome! Areas for improvement:
-
-1. **New Tools**: Time series forecasting, NLP preprocessing, image augmentation
-2. **Cloud Backends**: AWS, Azure support
-3. **Performance**: Optimize tool execution, reduce latency
-4. **UI/UX**: Better visualization, workflow builder
-5. **Documentation**: Tutorials, video guides, blog posts
+Contributions are welcome! Please feel free to submit a Pull Request.
 
 ---
 
-## 📜 License
+## 📄 License
 
-MIT License - See LICENSE file for details
-
----
-
-## 📧 Support & Community
-
-- **Issues**: [GitHub Issues](https://github.com/Surfing-Ninja/Data-Science-Agent/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/Surfing-Ninja/Data-Science-Agent/discussions)
+This project is licensed under the MIT License.
 
 ---
 
-## 📊 Project Stats
+## 🙏 Acknowledgments
 
-- **Lines of Code**: ~18,000+
-- **Tools**: 82 specialized functions (75 core + 4 BigQuery + 3 storage helpers)
-- **Reasoning Functions**: 19 LLM-powered explanation modules
-- **Supported Models**: 10+ (LR, Ridge, Lasso, RF, XGBoost, LightGBM, CatBoost, etc.)
-- **Visualization Types**: 20+ (static + interactive)
-- **Data Formats**: CSV, Parquet, JSON, BigQuery tables
-- **Cloud Platforms**: Google Cloud (Run, BigQuery, GCS) - AWS/Azure planned
+- **Google Gemini** for powerful LLM capabilities
+- **FastAPI** for excellent async Python framework
+- **React** community for amazing UI libraries
+- **Polars** for blazing-fast data processing
+- **YData Profiling** for comprehensive EDA reports
+
+---
+
+## 📧 Contact
+
+**Pulastya B**
+- GitHub: [@Pulastya-B](https://github.com/Pulastya-B)
+- Project: [DevSprint-Data-Science-Agent](https://github.com/Pulastya-B/DevSprint-Data-Science-Agent)
 
 ---
 
 <div align="center">
 
-**Built with ❤️ for the Data Science Community**
+**Built with ❤️ for DevSprint Hackathon**
 
-*"Making data science accessible through AI automation"*
-
-⭐ Star this repo if you find it useful! ⭐
+⭐ Star this repo if you find it helpful!
 
 </div>
