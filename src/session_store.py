@@ -44,26 +44,56 @@ class SessionStore:
     
     def _init_database(self):
         """Create sessions table if it doesn't exist."""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS sessions (
-                session_id TEXT PRIMARY KEY,
-                created_at TEXT NOT NULL,
-                last_active TEXT NOT NULL,
-                context_json TEXT NOT NULL
-            )
-        """)
-        
-        # Create index on last_active for faster queries
-        cursor.execute("""
-            CREATE INDEX IF NOT EXISTS idx_last_active 
-            ON sessions(last_active DESC)
-        """)
-        
-        conn.commit()
-        conn.close()
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS sessions (
+                    session_id TEXT PRIMARY KEY,
+                    created_at TEXT NOT NULL,
+                    last_active TEXT NOT NULL,
+                    context_json TEXT NOT NULL
+                )
+            """)
+            
+            # Create index on last_active for faster queries
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_last_active 
+                ON sessions(last_active DESC)
+            """)
+            
+            conn.commit()
+            conn.close()
+            print(f"✅ Sessions database initialized at {self.db_path}")
+        except Exception as e:
+            print(f"⚠️ Failed to initialize sessions database: {e}")
+            # Try to recreate the database if corrupted
+            try:
+                Path(self.db_path).unlink(missing_ok=True)
+                print(f"   Deleted corrupted database, reinitializing...")
+                conn = sqlite3.connect(self.db_path)
+                cursor = conn.cursor()
+                
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS sessions (
+                        session_id TEXT PRIMARY KEY,
+                        created_at TEXT NOT NULL,
+                        last_active TEXT NOT NULL,
+                        context_json TEXT NOT NULL
+                    )
+                """)
+                
+                cursor.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_last_active 
+                    ON sessions(last_active DESC)
+                """)
+                
+                conn.commit()
+                conn.close()
+                print(f"✅ Sessions database reinitialized successfully")
+            except Exception as retry_error:
+                print(f"❌ Failed to reinitialize sessions database: {retry_error}")
     
     def _make_json_serializable(self, obj: Any) -> Any:
         """
@@ -116,25 +146,56 @@ class SessionStore:
         Args:
             session: SessionMemory instance to save
         """
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        # Serialize session to JSON - clean non-serializable objects first
-        data = session.to_dict()
-        clean_data = self._make_json_serializable(data)
-        
-        cursor.execute("""
-            INSERT OR REPLACE INTO sessions (session_id, created_at, last_active, context_json)
-            VALUES (?, ?, ?, ?)
-        """, (
-            session.session_id,
-            session.created_at.isoformat(),
-            session.last_active.isoformat(),
-            json.dumps(clean_data)
-        ))
-        
-        conn.commit()
-        conn.close()
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            # Serialize session to JSON - clean non-serializable objects first
+            data = session.to_dict()
+            clean_data = self._make_json_serializable(data)
+            
+            cursor.execute("""
+                INSERT OR REPLACE INTO sessions (session_id, created_at, last_active, context_json)
+                VALUES (?, ?, ?, ?)
+            """, (
+                session.session_id,
+                session.created_at.isoformat(),
+                session.last_active.isoformat(),
+                json.dumps(clean_data)
+            ))
+            
+            conn.commit()
+            conn.close()
+        except sqlite3.OperationalError as e:
+            if "no such table" in str(e):
+                print(f"⚠️ Sessions table not found, reinitializing database...")
+                self._init_database()
+                # Retry save after reinitialization
+                try:
+                    conn = sqlite3.connect(self.db_path)
+                    cursor = conn.cursor()
+                    
+                    data = session.to_dict()
+                    clean_data = self._make_json_serializable(data)
+                    
+                    cursor.execute("""
+                        INSERT OR REPLACE INTO sessions (session_id, created_at, last_active, context_json)
+                        VALUES (?, ?, ?, ?)
+                    """, (
+                        session.session_id,
+                        session.created_at.isoformat(),
+                        session.last_active.isoformat(),
+                        json.dumps(clean_data)
+                    ))
+                    
+                    conn.commit()
+                    conn.close()
+                    print(f"✅ Session saved successfully after database reinitialization")
+                except Exception as retry_error:
+                    print(f"❌ Failed to save session after reinitialization: {retry_error}")
+                    raise
+            else:
+                raise
     
     def load(self, session_id: str) -> Optional[SessionMemory]:
         """
