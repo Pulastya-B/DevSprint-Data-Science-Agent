@@ -1314,22 +1314,12 @@ You are a DOER. Complete workflows based on user intent."""
         # Prepare tools once
         tools_to_use = self._compress_tools_registry()
         
-        # For Gemini, create a model with tools configured and start chat session
+        # For Gemini, use the existing model without tools (text-only mode)
+        # Gemini tool schema is incompatible with OpenAI/Groq format
+        # Tool execution is handled by our orchestrator, not by Gemini itself
         gemini_chat = None
         if self.provider == "gemini":
-            # Convert tools to Gemini format
-            gemini_tools = self._convert_to_gemini_tools(tools_to_use)
-            
-            # Create a NEW model instance with tools configured
-            # This is the correct way for Gemini API - tools are part of model config
-            gemini_model_with_tools = genai.GenerativeModel(
-                self.model,
-                generation_config={"temperature": 0.1},
-                tools=gemini_tools
-            )
-            
-            # Start chat with the tool-configured model (no extra parameters)
-            gemini_chat = gemini_model_with_tools.start_chat(history=[])
+            gemini_chat = self.gemini_model.start_chat(history=[])
         
         while iteration < max_iterations:
             iteration += 1
