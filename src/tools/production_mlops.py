@@ -25,8 +25,8 @@ import shap
 from lime import lime_tabular
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
 
-from utils.polars_helpers import load_dataframe, get_numeric_columns, split_features_target
-from utils.validation import validate_file_exists, validate_file_format, validate_dataframe, validate_column_exists
+from ..utils.polars_helpers import load_dataframe, get_numeric_columns, split_features_target
+from ..utils.validation import validate_file_exists, validate_file_format, validate_dataframe, validate_column_exists
 
 
 def monitor_model_drift(

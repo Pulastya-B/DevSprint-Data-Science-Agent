@@ -24,11 +24,11 @@ from imblearn.under_sampling import RandomUnderSampler, TomekLinks, EditedNeares
 from imblearn.combine import SMOTETomek, SMOTEENN
 from collections import Counter
 
-from utils.polars_helpers import (
+from ..utils.polars_helpers import (
     load_dataframe, save_dataframe, get_numeric_columns,
     get_categorical_columns, split_features_target
 )
-from utils.validation import (
+from ..utils.validation import (
     validate_file_exists, validate_file_format, validate_dataframe,
     validate_column_exists
 )

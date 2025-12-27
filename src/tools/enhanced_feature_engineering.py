@@ -11,8 +11,8 @@ import os
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from utils.polars_helpers import load_dataframe, save_dataframe, get_numeric_columns
-from utils.validation import validate_file_exists, validate_dataframe
+from ..utils.polars_helpers import load_dataframe, save_dataframe, get_numeric_columns
+from ..utils.validation import validate_file_exists, validate_dataframe
 
 
 def create_ratio_features(file_path: str, 

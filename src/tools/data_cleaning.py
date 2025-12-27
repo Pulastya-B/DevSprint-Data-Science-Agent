@@ -13,7 +13,7 @@ import os
 # Add parent directory to path for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from utils.polars_helpers import (
+from ..utils.polars_helpers import (
     load_dataframe,
     save_dataframe,
     get_numeric_columns,
@@ -21,7 +21,7 @@ from utils.polars_helpers import (
     get_datetime_columns,
     detect_id_columns,
 )
-from utils.validation import (
+from ..utils.validation import (
     validate_file_exists,
     validate_file_format,
     validate_dataframe,

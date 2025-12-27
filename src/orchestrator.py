@@ -15,11 +15,11 @@ from groq import Groq
 import google.generativeai as genai
 from dotenv import load_dotenv
 
-from cache.cache_manager import CacheManager
-from tools.tools_registry import TOOLS, get_all_tool_names, get_tools_by_category
-from session_memory import SessionMemory
-from session_store import SessionStore
-from tools import (
+from .cache.cache_manager import CacheManager
+from .tools.tools_registry import TOOLS, get_all_tool_names, get_tools_by_category
+from .session_memory import SessionMemory
+from .session_store import SessionStore
+from .tools import (
     # Basic Tools (13) - UPDATED: Added get_smart_summary + 3 wrangling tools
     profile_dataset,
     detect_data_quality_issues,

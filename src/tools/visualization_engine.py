@@ -22,8 +22,8 @@ from sklearn.metrics import confusion_matrix, roc_curve, auc, precision_recall_c
 # Add parent directory to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from utils.polars_helpers import load_dataframe
-from utils.validation import validate_file_exists
+from ..utils.polars_helpers import load_dataframe
+from ..utils.validation import validate_file_exists
 
 # Import matplotlib visualization functions
 try:

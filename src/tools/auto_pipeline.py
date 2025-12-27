@@ -16,12 +16,12 @@ from sklearn.preprocessing import StandardScaler
 # Add parent directory to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from utils.polars_helpers import load_dataframe, get_numeric_columns
-from utils.validation import validate_file_exists
-from tools.data_cleaning import clean_missing_values, handle_outliers
-from tools.data_type_conversion import force_numeric_conversion, smart_type_inference
-from tools.feature_engineering import encode_categorical, create_time_features
-from tools.advanced_feature_engineering import create_interaction_features
+from ..utils.polars_helpers import load_dataframe, get_numeric_columns
+from ..utils.validation import validate_file_exists
+from .data_cleaning import clean_missing_values, handle_outliers
+from .data_type_conversion import force_numeric_conversion, smart_type_inference
+from .feature_engineering import encode_categorical, create_time_features
+from .advanced_feature_engineering import create_interaction_features
 
 
 def auto_ml_pipeline(file_path: str,

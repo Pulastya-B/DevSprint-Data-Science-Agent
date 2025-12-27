@@ -47,12 +47,12 @@ except ImportError as e:
     VISUALIZATION_AVAILABLE = False
     print(f"⚠️  Visualization engine not available: {e}")
 
-from utils.polars_helpers import (
+from ..utils.polars_helpers import (
     load_dataframe,
     get_numeric_columns,
     split_features_target,
 )
-from utils.validation import (
+from ..utils.validation import (
     validate_file_exists,
     validate_file_format,
     validate_dataframe,

@@ -1,0 +1,56 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "src/api/app.py",
+      "use": "@vercel/python",
+      "config": {
+        "maxLambdaSize": "50mb"
+      }
+    },
+    {
+      "src": "FRRONTEEEND/package.json",
+      "use": "@vercel/static-build",
+      "config": {
+        "distDir": "dist"
+      }
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/(.*)",
+      "dest": "src/api/app.py"
+    },
+    {
+      "src": "/outputs/(.*)",
+      "dest": "src/api/app.py"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "FRRONTEEEND/dist/$1"
+    }
+  ],
+  "env": {
+    "LLM_PROVIDER": "gemini",
+    "GEMINI_MODEL": "gemini-2.5-flash",
+    "REASONING_EFFORT": "medium",
+    "CACHE_DB_PATH": "/tmp/cache_db/cache.db",
+    "CACHE_TTL_SECONDS": "86400",
+    "OUTPUT_DIR": "/tmp/outputs",
+    "DATA_DIR": "/tmp/data",
+    "MAX_PARALLEL_TOOLS": "5",
+    "MAX_RETRIES": "3",
+    "TIMEOUT_SECONDS": "60"
+  },
+  "build": {
+    "env": {
+      "NODE_VERSION": "20"
+    }
+  },
+  "functions": {
+    "src/api/app.py": {
+      "memory": 3008,
+      "maxDuration": 60
+    }
+  }
+}

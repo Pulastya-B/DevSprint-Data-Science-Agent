@@ -20,8 +20,8 @@ import json
 # Add parent directory to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from utils.polars_helpers import load_dataframe, get_numeric_columns
-from utils.validation import validate_file_exists, validate_file_format
+from ..utils.polars_helpers import load_dataframe, get_numeric_columns
+from ..utils.validation import validate_file_exists, validate_file_format
 
 
 def analyze_root_cause(file_path: str, 

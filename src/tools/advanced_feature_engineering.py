@@ -25,11 +25,11 @@ from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
 from textblob import TextBlob
 import re
 
-from utils.polars_helpers import (
+from ..utils.polars_helpers import (
     load_dataframe, save_dataframe, get_numeric_columns,
     get_categorical_columns, get_datetime_columns
 )
-from utils.validation import (
+from ..utils.validation import (
     validate_file_exists, validate_file_format, validate_dataframe,
     validate_column_exists
 )

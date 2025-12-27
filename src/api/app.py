@@ -21,10 +21,8 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-# Add src to path for imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-
-from orchestrator import DataScienceCopilot
+# Import from parent package
+from src.orchestrator import DataScienceCopilot
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

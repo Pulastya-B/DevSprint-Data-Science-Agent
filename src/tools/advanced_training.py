@@ -45,8 +45,8 @@ from sklearn.metrics import (
     mean_squared_error, mean_absolute_error, r2_score
 )
 
-from utils.polars_helpers import load_dataframe, get_numeric_columns, split_features_target
-from utils.validation import (
+from ..utils.polars_helpers import load_dataframe, get_numeric_columns, split_features_target
+from ..utils.validation import (
     validate_file_exists, validate_file_format, validate_dataframe,
     validate_column_exists, validate_target_column
 )

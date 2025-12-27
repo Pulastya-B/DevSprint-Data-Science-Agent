@@ -14,7 +14,7 @@ import os
 # Add parent directory to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from utils.validation import validate_dataframe
+from ..utils.validation import validate_dataframe
 
 try:
     from google.cloud import bigquery

@@ -25,8 +25,8 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # from prophet import Prophet
 import pandas as pd
 
-from utils.polars_helpers import load_dataframe, save_dataframe
-from utils.validation import validate_file_exists, validate_file_format, validate_dataframe, validate_column_exists
+from ..utils.polars_helpers import load_dataframe, save_dataframe
+from ..utils.validation import validate_file_exists, validate_file_format, validate_dataframe, validate_column_exists
 
 
 def forecast_time_series(
