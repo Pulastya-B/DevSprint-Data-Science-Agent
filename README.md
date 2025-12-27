@@ -1,8 +1,12 @@
-# 🤖 AI-Powered Data Science Agent
+# AI-Powered Data Science Agent
 
-> **An intelligent autonomous agent that performs end-to-end data science workflows through natural language**
+## Overview
 
-Upload your dataset, describe what you want in plain English, and watch as the AI agent handles profiling, cleaning, feature engineering, model training, hyperparameter tuning, and comprehensive reporting - all automatically.
+The AI-Powered Data Science Agent is an intelligent autonomous system designed to perform complete end-to-end data science workflows through natural language interaction. This agent leverages Google Gemini 2.5 Flash for advanced reasoning and function calling capabilities, combined with a comprehensive suite of over 82 specialized machine learning tools.
+
+The system enables users to upload datasets in CSV or Parquet format and describe their analytical objectives in plain English. The agent autonomously handles the entire pipeline including data profiling, quality assessment, cleaning, feature engineering, model training, hyperparameter optimization, cross-validation, and comprehensive reporting generation.
+
+Key capabilities include intelligent intent classification, session memory for contextual awareness, error recovery mechanisms, and a modern React-based web interface for seamless user interaction.
 
 [![React](https://img.shields.io/badge/React-19-61DAFB?logo=react)](https://reactjs.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.109-009688?logo=fastapi)](https://fastapi.tiangolo.com/)
@@ -11,67 +15,223 @@ Upload your dataset, describe what you want in plain English, and watch as the A
 
 ---
 
-## ✨ Key Features
+## Key Features
 
-### 🎯 **Autonomous AI Agent**
-- **82+ Specialized ML Tools** organized across data profiling, cleaning, feature engineering, model training, and visualization
-- **Intelligent Orchestration** with Google Gemini 2.5 Flash for function calling and decision-making
-- **Session Memory** for contextual awareness across conversations
-- **Smart Intent Detection** automatically classifies tasks (ML pipeline, cleaning only, visualization, etc.)
-- **Error Recovery** with automatic retry logic and file tracking
+### Autonomous AI Agent System
 
-### 🎨 **Modern Web Interface**
-- **Beautiful React Frontend** with glassmorphism design and smooth animations
-- **Interactive Chat** with file upload support (CSV, Parquet)
-- **Report Viewer** to view YData profiling and Sweetviz HTML reports in-app
-- **Markdown Support** for formatted responses
-- **Session Management** to maintain conversation history
+The core orchestration engine integrates Google Gemini 2.5 Flash with over 82 specialized machine learning tools organized across multiple categories:
 
-### 📊 **Complete ML Pipeline**
-1. **Data Profiling** - Automated statistical analysis and data quality assessment
-2. **Data Cleaning** - Smart missing value handling, outlier treatment, type conversion
-3. **Feature Engineering** - Time-based features, encoding, interactions, statistical features
-4. **Model Training** - Ridge, Lasso, Random Forest, XGBoost, LightGBM, CatBoost
-5. **Hyperparameter Tuning** - Optuna-based optimization with 50+ trials
-6. **Cross-Validation** - Stratified K-fold validation for robust evaluation
-7. **Visualization** - Interactive Plotly dashboards and correlation heatmaps
-8. **Reporting** - Comprehensive HTML reports with YData Profiling
+- **Data Profiling Tools**: Generate comprehensive statistical summaries, distribution analysis, correlation matrices, data quality reports, and automated anomaly detection
+- **Data Cleaning Tools**: Handle missing values with intelligent imputation strategies (mean, median, mode, forward/backward fill, KNN), outlier detection and treatment using IQR and Z-score methods, duplicate removal, and data type conversions
+- **Feature Engineering Tools**: Create time-based features (hour, day, month, year, cyclical encodings), polynomial features, interaction terms, statistical aggregations, lag features, rolling window statistics, and domain-specific transformations
+- **Model Training Tools**: Support for multiple algorithm families including linear models (Ridge, Lasso, ElasticNet), tree-based models (Random Forest, Gradient Boosting), and advanced gradient boosting frameworks (XGBoost, LightGBM, CatBoost)
+- **Visualization Tools**: Generate interactive Plotly visualizations, Matplotlib static plots, correlation heatmaps, distribution plots, scatter matrices, feature importance charts, and residual analysis plots
 
-### ⚡ **Production Ready**
-- **FastAPI Backend** with async support and automatic API documentation
-- **Docker Support** with multi-stage builds for optimized deployment
-- **Rate Limiting** configured for Gemini API (6.5s intervals for 10 RPM limit)
-- **Caching System** for faster repeated queries
-- **CORS Enabled** for frontend-backend communication
+The intelligent orchestration system uses function calling capabilities to dynamically select and execute appropriate tools based on user intent. The agent maintains session memory for contextual awareness across conversation turns, enabling multi-turn dialogues where previous actions and results inform subsequent decisions.
 
----
+Smart intent detection automatically classifies incoming requests into categories such as full ML pipeline execution, exploratory data analysis, data cleaning only, visualization generation, or multi-intent tasks requiring combined workflows.
 
-## 🚀 Quick Start
+Error recovery mechanisms include automatic retry logic with corrected parameters, file existence validation before tool execution, recovery guidance displaying the last successful file state, and loop detection to prevent infinite retry cycles.
+
+### Modern Web Interface
+
+The frontend is built with React 19 and TypeScript 5.8, featuring a modern glassmorphism design aesthetic with smooth animations powered by Framer Motion. Key interface components include:
+
+- **Landing Page**: Geometric hero section with animated background paths, key capabilities showcase, problem-solution presentation, process flow visualization, and technology stack display
+- **Chat Interface**: Real-time message streaming, file upload support for CSV and Parquet formats, markdown rendering for formatted responses with code syntax highlighting, loading states with animated indicators, and error handling with user-friendly messages
+- **Report Viewer**: In-application modal viewer for HTML reports generated by YData Profiling, Sweetviz, and custom dashboard tools. Full-screen modal with professional styling, iframe embedding for report content, and download capabilities
+- **Session Management**: Maintains conversation history across browser sessions, allows users to review previous analyses, and provides context for follow-up questions
+
+### Complete Machine Learning Pipeline
+
+The agent executes a comprehensive end-to-end pipeline:
+
+1. **Data Profiling and Assessment**: Automatically generates statistical summaries including descriptive statistics (mean, median, standard deviation, quartiles), distribution analysis with histogram generation, correlation analysis with heatmap visualization, missing value analysis with percentage calculations, data type detection and validation, outlier detection using multiple methods (IQR, Z-score, isolation forest), and cardinality analysis for categorical variables
+
+2. **Data Cleaning and Preprocessing**: Handles missing values with context-aware imputation strategies, removes or treats outliers based on statistical thresholds, performs data type conversions and casting, removes duplicate records, handles inconsistent formatting in categorical variables, and validates data integrity constraints
+
+3. Quick Start Guide
 
 ### Prerequisites
-- Python 3.10+
-- Node.js 18+ (for frontend)
-- Google Gemini API key ([Get one here](https://ai.google.dev/))
 
-### Installation
+Before beginning the installation, ensure your system meets the following requirements:
 
-**1. Clone the repository**
+- **Python**: Version 3.10 or higher with pip package manager
+- **Node.js**: V Steps
+
+**Step 1: Clone the Repository**
+
+Clone the repository from GitHub and navigate to the project directory:
+
 ```bash
 git clone https://github.com/Pulastya-B/DevSprint-Data-Science-Agent.git
 cd DevSprint-Data-Science-Agent
 ```
 
-**2. Set up environment variables**
+**Step 2: Configure Environment Variables**
+
+Create a `.env` file in the root directory with the following configuration:
+
 ```bash
-cp .env.example .env
-# Edit .env and add your GOOGLE_API_KEY
+# LLM Provider Configuration
+LLM_PROVIDER=gemini
+
+# Google Gemini API Key (required)
+GOOGLE_API_KEY=your_api_key_here
+
+# Model Configuration
+GEMINI_MODEL=gemini-2.5-flash
+
+# Cache Configuration
+CACHE_DB_PATH=./cache_db/cache.db
+CACHE_TTL_SECONDS=86400
+
+# Output and Data Directories
+OUTPUT_DIR=./outputs
+DATA_DIR=./data
 ```
 
-**3. Install Python dependencies**
+Replace `your_api_key_here` with your actual Google Gemini API key obtained from https://ai.google.dev/
+
+**Step 3: Install Python Dependencies**
+
+Install all required Python packages using pip:
+
 ```bash
 pip install -r requirements.txt
 ```
 
+ThiUsage Guide
+
+### Web Interface Workflow
+
+**Step 1: Access the Application**
+
+Open your web browser and navigate to http://localhost:8080. You will see the landing page with an overview of the agent's capabilities.
+
+**Step 2: Launch the Chat Interface**
+
+Click the "Launch Agent" button to access the interactive chat interface.
+
+**Step 3: Upload Your Dataset**
+
+Click the file upload button (paperclip icon) and select your dataset file. Supported formats:
+- CSV files (.csv) with any delimiter (comma, tab, semicolon, etc.)
+- Parquet files (.parquet) for high-performance columnar storage
+
+The agent will automatically detect the file format and load the data using appropriate parsers.
+
+**Step 4: Describe Your Task**
+
+Type your request in natural language in the chat input box. The agent understands various types of requests and will automatically determine the appropriate workflow.
+
+**Step 5: Review Results**
+
+The agent will execute the requested workflow and display results in the chat interface. For analyses that generate HTML reports (such as YData Profiling or Sweetviz), a "View Report" button will appear. Click this button to open the report in a full-screen modal viewer.
+
+### Example Queries and Use Cases
+
+**Data Profiling and Exploration:**
+```
+"Generate a comprehensive profile report on this dataset"
+"Show me the statistical summary and distribution of all variables"
+"Analyze data quality issues including missing values and outliers"
+"Create a correlation matrix and identify highly correlated features"
+```
+
+**Data Cleaning:**
+```
+"Clean the missing values using median imputation for numeric columns"
+"Handle outliers in the dataset using IQR method"
+"Remove duplicate records and fix data type inconsistencies"
+"Drop columns with more than 50% missing values"
+```
+
+**Predictive Modeling:**
+```
+"Train a model to predict the target column 'price' using all features"
+"Build a classification model for the 'churn' column"
+"Compare multiple regression algorithms and select the best one"
+"Train an XGBoost model with default hyperparameters"
+```
+
+**Feature Engineering:**
+```
+"Extract time-based features from the datetime column"
+"Create interaction terms between numeric features"
+"Apply target encoding for high-cardinality categorical variables"
+"Generate polynomial features of degree 2"
+```
+
+**Model Optimization:**
+```
+"Perform hyperparameter tuning on the trained model using Optuna"
+"Run 5-fold cross-validation to evaluate model performance"
+"Optimize the XGBoost model for better accuracy"
+```
+
+**Visualization:**
+```
+"Generate a correlation heatmap for numeric features"
+"Create distribution plots for all numeric columns"
+"Show feature importance for the trained model"
+"Generate interactive Plotly visualizations"
+```
+
+**End-to-End Pipeline:**
+```
+"Profile the data, clean it, engineer features, and train the best model"
+"Perform complete analysis and predict the target column 'sales'"
+"Do everything needed to build a production-ready model
+.\start.ps1
+```
+
+**For Linux/macOS:**
+```bash
+chmod +x start.sh
+./start.sh
+```
+
+The startup script will:
+1. Technology Stack
+
+### Frontend Technologies
+
+- **React 19.2.3**: Latest version of React with improved concurrent rendering, automatic batching, and enhanced hooks for building performant user interfaces
+- **TypeScript 5.8.2**: Provides static type checking, enhanced IDE support, and improved code maintainability with advanced type inference
+- **Vite 6.2.0**: Next-generation frontend build tool offering instant server start, lightning-fast hot module replacement (HMR), and optimized production builds
+- **Tailwind CSS 3.4.1**: Utility-first CSS framework enabling rapid UI development with pre-built classes and responsive design utilities
+- **Framer Motion 12.23.26**: Production-ready animation library for React with declarative animations, gestures, and smooth transitions
+- **React Markdown 9.0.1**: Markdown rendering component supporting GitHub-flavored markdown, code syntax highlighting, and custom renderers
+- **Lucide React**: Icon library providing consistent, customizable SVG icons for the user interface
+
+### Backend Technologies
+
+- **FastAPI 0.109+**: Modern, high-performance Python web framework with automatic OpenAPI documentation, async/await support, and built-in request validation
+- **Google Gemini 2.5 Flash**: Large language model with advanced reasoning capabilities, function calling support, and high token limits for agent orchestration
+- **Polars 0.20+**: High-performance DataFrame library written in Rust, offering 10-100x speed improvements over pandas for large datasets
+- **Scikit-learn 1.3+**: Comprehensive machine learning library providing classical algorithms for classification, regression, clustering, and preprocessing
+- **XGBoost 2.0+**: Optimized gradient boosting framework with parallel tree construction, regularization, and efficient handling of sparse data
+- **LightGBM 4.1+**: Gradient boosting framework by Microsoft with leaf-wise tree growth, categorical feature support, and memory efficiency
+- **CatBoost 1.2+**: Gradient boosting library by Yandex with native categorical feature handling, GPU support, and symmetric tree structure
+- **Optuna 3.5+**: Hyperparameter optimization framework with Bayesian optimization, pruning strategies, and distributed optimization support
+- **YData Profiling 4.6+**: Automated exploratory data analysis tool generating comprehensive HTML reports with statistical summaries and data quality insights
+- **Plotly 5.18+**: Interactive visualization library creating web-based charts with zooming, panning, and hover tooltips
+- **Matplotlib 3.8+**: Fundamental plotting library for Python offering publication-quality static visualizations
+- **Pydantic 2.5+**: Data validation library using Python type annotations for request/response models
+
+### Data Processing and Storage
+
+- **Polars**: Primary dataframe library for all data manipulation operations
+- **Pandas 2.1+**: Secondary support for compatibility with legacy tools and libraries
+- **SQLite**: Embedded database for caching query results and session management
+- **Python-dotenv**: Environment variable management from .env files
+
+### Development and Deployment
+
+- **Docker**: Containerization platform with multi-stage builds for optimized image size and consistent deployment
+- **Uvicorn**: Lightning-fast ASGI server for running FastAPI applications
+- **Git**: Version control system for code management and collaboration
 **4. Install frontend dependencies**
 ```bash
 cd FRRONTEEEND
@@ -163,7 +323,7 @@ The application will be available at **http://localhost:8080**
 
 ---
 
-## 🛠️ Tech Stack
+##  Tech Stack
 
 ### Frontend
 - **React 19** - Modern UI library
