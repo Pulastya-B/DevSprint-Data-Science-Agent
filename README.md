@@ -926,7 +926,7 @@ Agent: [Applies CV to tuned model from context]
 ### Report Viewing
 - Click "View Report" buttons to see HTML reports in-app
 - Full-screen modal with professional styling
-- Supports YData Profiling, Sweetviz, and custom dashboards
+- Supports YData Profiling and custom dashboards
 
 ---
 

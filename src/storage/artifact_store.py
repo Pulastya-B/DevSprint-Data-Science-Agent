@@ -477,7 +477,7 @@ class ArtifactStore:
             store = ArtifactStore()
             path = store.save_report(
                 "eda_report.html",
-                metadata={"report_type": "sweetviz", "dataset": "titanic"}
+                metadata={"report_type": "ydata_profiling", "dataset": "titanic"}
             )
         """
         return self.backend.save_file(local_path, "report", metadata)

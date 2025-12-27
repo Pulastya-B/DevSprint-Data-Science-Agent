@@ -120,7 +120,7 @@ export const ChatInterface: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         
         // Extract report paths from workflow history
         if (result.workflow_history) {
-          const reportTools = ['generate_ydata_profiling_report', 'generate_sweetviz_report', 'generate_combined_eda_report'];
+          const reportTools = ['generate_ydata_profiling_report'];
           result.workflow_history.forEach((step: any) => {
             if (reportTools.includes(step.tool)) {
               // Check multiple possible locations for the report path
