@@ -61,11 +61,18 @@ async def startup_event():
     global agent
     try:
         logger.info("Initializing DataScienceCopilot...")
+        provider = os.getenv("LLM_PROVIDER", "groq")
+        # Auto-enable compact prompts for Groq (small context window)
+        use_compact = provider.lower() == "groq"
+        
         agent = DataScienceCopilot(
             reasoning_effort="medium",
-            provider=os.getenv("LLM_PROVIDER", "groq")
+            provider=provider,
+            use_compact_prompts=use_compact
         )
         logger.info(f"✅ Agent initialized with provider: {agent.provider}")
+        if use_compact:
+            logger.info("🔧 Compact prompts enabled for small context window")
     except Exception as e:
         logger.error(f"❌ Failed to initialize agent: {e}")
         raise

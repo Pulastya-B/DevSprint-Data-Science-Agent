@@ -137,7 +137,8 @@ class DataScienceCopilot:
                  reasoning_effort: str = "medium",
                  provider: Optional[str] = None,
                  session_id: Optional[str] = None,
-                 use_session_memory: bool = True):
+                 use_session_memory: bool = True,
+                 use_compact_prompts: bool = False):
         """
         Initialize the Data Science Copilot.
         
@@ -149,12 +150,16 @@ class DataScienceCopilot:
             provider: LLM provider - 'groq' or 'gemini' (or set LLM_PROVIDER env var)
             session_id: Session ID to resume (None = auto-resume recent or create new)
             use_session_memory: Enable session-based memory for context across requests
+            use_compact_prompts: Use compact prompts for small context window models (e.g., Groq)
         """
         # Load environment variables
         load_dotenv()
         
         # Determine provider
         self.provider = provider or os.getenv("LLM_PROVIDER", "groq").lower()
+        
+        # Set compact prompts: Auto-enable for Groq, manual for others
+        self.use_compact_prompts = use_compact_prompts or (self.provider == "groq")
         
         if self.provider == "groq":
             # Initialize Groq client
@@ -848,6 +853,11 @@ You are a DOER. Complete workflows based on user intent."""
                     # Convert directory to full file path
                     arguments["output_path"] = f"{output_dir}/ydata_profile.html"
             
+            # General parameter corrections for common LLM hallucinations
+            if "output" in arguments and "output_path" not in arguments:
+                # Many tools use 'output_path' but LLM uses 'output'
+                arguments["output_path"] = arguments.pop("output")
+            
             # Fix "None" string being passed as actual None
             for key, value in list(arguments.items()):
                 if isinstance(value, str) and value.lower() in ["none", "null", "undefined"]:
@@ -1294,7 +1304,13 @@ You are a DOER. Complete workflows based on user intent."""
                 return cached
         
         # Build initial messages
-        system_prompt = self._build_system_prompt()
+        # Use dynamic prompts for small context models
+        if self.use_compact_prompts:
+            from .dynamic_prompts import build_compact_system_prompt
+            system_prompt = build_compact_system_prompt(user_query=task_description)
+            print("🔧 Using compact prompt for small context window")
+        else:
+            system_prompt = self._build_system_prompt()
         
         # 🧠 RESOLVE AMBIGUITY USING SESSION MEMORY
         original_file_path = file_path
