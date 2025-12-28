@@ -176,9 +176,19 @@ class DataScienceCopilot:
             
             genai.configure(api_key=api_key)
             self.model = os.getenv("GEMINI_MODEL", "gemini-2.0-flash-exp")
+            
+            # Configure safety settings to be more permissive for data science content
+            safety_settings = [
+                {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
+            ]
+            
             self.gemini_model = genai.GenerativeModel(
                 self.model,
-                generation_config={"temperature": 0.1}
+                generation_config={"temperature": 0.1},
+                safety_settings=safety_settings
             )
             self.groq_client = None
             print(f"🤖 Initialized with Gemini provider - Model: {self.model}")
@@ -1359,28 +1369,39 @@ You are a DOER. Complete workflows based on user intent."""
                     
                 elif self.provider == "gemini":
                     # Send messages WITHOUT tools parameter (tools already configured on model)
-                    if iteration == 1:
-                        # First iteration: send system + user message
-                        combined_message = f"{messages[0]['content']}\n\n{messages[1]['content']}"
-                        response = gemini_chat.send_message(combined_message)
-                    else:
-                        # Subsequent iterations: send function responses
-                        last_tool_msg = messages[-1]
-                        if last_tool_msg.get("role") == "tool":
-                            # Send function response back to Gemini
-                            from google.ai.generativelanguage_v1beta.types import content as glm_content
-                            
-                            function_response_part = glm_content.Part(
-                                function_response=glm_content.FunctionResponse(
-                                    name=last_tool_msg["name"],
-                                    response={"result": last_tool_msg["content"]}
-                                )
-                            )
-                            
-                            response = gemini_chat.send_message(function_response_part)
+                    try:
+                        if iteration == 1:
+                            # First iteration: send system + user message
+                            combined_message = f"{messages[0]['content']}\n\n{messages[1]['content']}"
+                            response = gemini_chat.send_message(combined_message)
                         else:
-                            # Fallback
-                            response = gemini_chat.send_message("Continue with the next step.")
+                            # Subsequent iterations: send function responses
+                            last_tool_msg = messages[-1]
+                            if last_tool_msg.get("role") == "tool":
+                                # Send function response back to Gemini
+                                from google.ai.generativelanguage_v1beta.types import content as glm_content
+                                
+                                function_response_part = glm_content.Part(
+                                    function_response=glm_content.FunctionResponse(
+                                        name=last_tool_msg["name"],
+                                        response={"result": last_tool_msg["content"]}
+                                    )
+                                )
+                                
+                                response = gemini_chat.send_message(function_response_part)
+                            else:
+                                # Fallback
+                                response = gemini_chat.send_message("Continue with the next step.")
+                    except Exception as gemini_error:
+                        # Handle StopCandidateException (finish_reason: 12 = blocked/filtered)
+                        error_str = str(gemini_error)
+                        if "finish_reason" in error_str or "StopCandidateException" in str(type(gemini_error)):
+                            print(f"⚠️ Gemini response blocked (safety filter/content policy). Retrying with simplified prompt...")
+                            # Retry with a much shorter message
+                            simplified_msg = "Please provide the next step in data analysis using available tools."
+                            response = gemini_chat.send_message(simplified_msg)
+                        else:
+                            raise
                     
                     self.api_calls_made += 1
                     self.last_api_call_time = time.time()
