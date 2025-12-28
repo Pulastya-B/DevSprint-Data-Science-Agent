@@ -76,10 +76,30 @@ export const ChatInterface: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       
       let response;
       
-      if (uploadedFile) {
+      // Check if there's a recent file analysis in the conversation
+      const recentFileMessage = newMessages.slice(-5).find(m => m.file || m.content.includes('Uploaded:'));
+      const hasRecentFile = recentFileMessage && !uploadedFile;
+      
+      if (uploadedFile || hasRecentFile) {
+        // Use /run endpoint for file analysis or follow-up questions about uploaded data
         const formData = new FormData();
-        formData.append('file', uploadedFile);
-        formData.append('task_description', input || 'Analyze this dataset and provide insights');
+        
+        if (uploadedFile) {
+          formData.append('file', uploadedFile);
+          formData.append('task_description', input || 'Analyze this dataset and provide insights');
+        } else if (hasRecentFile) {
+          // For follow-up questions, extract the filename from recent context
+          const fileNameMatch = recentFileMessage?.content.match(/Uploaded: (.+)/);
+          const fileName = fileNameMatch ? fileNameMatch[1] : 'dataset.csv';
+          
+          // Send follow-up request as a new task description
+          formData.append('task_description', input);
+          formData.append('session_id', activeSessionId);
+          
+          // Note: Backend needs to support session-based file context
+          // For now, just send the task which should work with session memory
+        }
+        
         formData.append('use_cache', 'true');
         formData.append('max_iterations', '20');
         
@@ -114,7 +134,8 @@ export const ChatInterface: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       let assistantContent = '';
       let reports: Array<{name: string, path: string}> = [];
       
-      if (uploadedFile && data.result) {
+      // Check for reports in any /run endpoint response (not just when file is uploaded)
+      if (data.result) {
         const result = data.result;
         assistantContent = `✅ Analysis Complete!\n\n`;
         
