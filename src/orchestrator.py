@@ -1489,14 +1489,13 @@ You are a DOER. Complete workflows based on user intent."""
                                 # Parse tool calls from text using JSON blocks or function syntax
                                 parsed_calls = self._parse_text_tool_calls(text_response)
                                 if parsed_calls:
-                                    # Convert to tool_call objects matching Groq format
+                                    # Convert to tool_call objects matching Gemini expected format
                                     for call in parsed_calls:
+                                        # Create object with attributes matching line 1543: tool_call.name and tool_call.args
                                         tool_call_obj = type('ToolCall', (), {
                                             'id': call['id'],
-                                            'function': type('Function', (), {
-                                                'name': call['function']['name'],
-                                                'arguments': call['function']['arguments']
-                                            })()
+                                            'name': call['function']['name'],
+                                            'args': json.loads(call['function']['arguments']) if isinstance(call['function']['arguments'], str) else call['function']['arguments']
                                         })()
                                         tool_calls.append(tool_call_obj)
                 
