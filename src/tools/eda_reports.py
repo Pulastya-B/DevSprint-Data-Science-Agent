@@ -4,9 +4,14 @@ Generates comprehensive HTML reports using ydata-profiling.
 """
 
 import os
+import warnings
 from pathlib import Path
 from typing import Dict, Any, Optional
 import polars as pl
+
+# Suppress multiprocessing warnings from ydata-profiling cleanup
+warnings.filterwarnings("ignore", category=UserWarning, module="multiprocessing")
+warnings.filterwarnings("ignore", message=".*resource_tracker.*")
 
 
 def generate_ydata_profiling_report(
