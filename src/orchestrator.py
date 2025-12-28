@@ -175,7 +175,7 @@ class DataScienceCopilot:
                 raise ValueError("Google API key must be provided or set in GOOGLE_API_KEY or GEMINI_API_KEY env var")
             
             genai.configure(api_key=api_key)
-            self.model = os.getenv("GEMINI_MODEL", "gemini-2.0-flash-exp")
+            self.model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
             
             # Configure safety settings to be more permissive for data science content
             safety_settings = [
