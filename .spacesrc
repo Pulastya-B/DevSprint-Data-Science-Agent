@@ -1,0 +1,8 @@
+sdk: docker
+sdk_version: "3.12"
+app_file: src/api/app.py
+app_port: 7860
+emoji: 🤖
+colorFrom: blue
+colorTo: purple
+pinned: false

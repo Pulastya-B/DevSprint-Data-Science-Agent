@@ -1,11 +1,7 @@
 # ===============================
-# HuggingFace Spaces Dockerfile
-# ===============================
-# Optimized for 16GB RAM, Port 7860
-
-# ===============================
 # Stage 1: Build Frontend
 # ===============================
+# Cache bust: 2025-12-28 fix
 FROM node:20-alpine AS frontend-builder
 
 WORKDIR /frontend
@@ -56,38 +52,33 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=builder /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-# Create non-root user for HuggingFace Spaces
-RUN useradd -m -u 1000 user
-USER user
-
 # App working directory
-WORKDIR /home/user/app
+WORKDIR /app
 
-# Copy backend code (as user)
-COPY --chown=user:user src/ ./src/
-COPY --chown=user:user examples/ ./examples/
+# Copy backend code
+COPY src/ /app/src/
+COPY examples/ /app/examples/
 
 # Copy frontend build
-COPY --from=frontend-builder --chown=user:user /frontend/dist ./FRRONTEEEND/dist
+COPY --from=frontend-builder /frontend/dist /app/FRRONTEEEND/dist
 
-# HuggingFace Spaces directories (user-writable)
+# Cloud Run ephemeral directories
 RUN mkdir -p \
-    /home/user/app/data \
-    /home/user/app/outputs/models \
-    /home/user/app/outputs/plots \
-    /home/user/app/outputs/reports \
-    /home/user/app/outputs/data \
-    /home/user/app/cache_db
+    /tmp/data_science_agent \
+    /tmp/outputs/models \
+    /tmp/outputs/plots \
+    /tmp/outputs/reports \
+    /tmp/outputs/data \
+    /tmp/cache_db
 
-# Environment variables for HuggingFace Spaces
+# Environment variables
 ENV PYTHONUNBUFFERED=1
-ENV PORT=7860
-ENV OUTPUT_DIR=/home/user/app/outputs
-ENV CACHE_DB_PATH=/home/user/app/cache_db/cache.db
+ENV PORT=8080
+ENV OUTPUT_DIR=/tmp/outputs
+ENV CACHE_DB_PATH=/tmp/cache_db/cache.db
 ENV ARTIFACT_BACKEND=local
 
-# HuggingFace Spaces uses port 7860 by default
-EXPOSE 7860
+EXPOSE 8080
 
-# Start FastAPI on port 7860
-CMD ["uvicorn", "src.api.app:app", "--host", "0.0.0.0", "--port", "7860"]
+# Start FastAPI
+CMD ["uvicorn", "src.api.app:app", "--host", "0.0.0.0", "--port", "8080"]
