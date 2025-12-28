@@ -378,18 +378,36 @@ async def chat(request: ChatRequest) -> JSONResponse:
         logger.info(f"Configuring Gemini with API key (length: {len(api_key)})")
         genai.configure(api_key=api_key)
         
-        # Initialize Gemini model
+        # Safety settings for data science content
+        safety_settings = [
+            {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+            {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+            {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
+            {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
+        ]
+        
+        # Initialize Gemini model (system_instruction not supported in this SDK version)
         model = genai.GenerativeModel(
             model_name=os.getenv("GEMINI_MODEL", "gemini-2.5-flash-lite"),
-            system_instruction="You are a Senior Data Science Autonomous Agent. You help users with end-to-end machine learning, data profiling, visualization, and strategic insights. Use a professional, technical yet accessible tone. Provide code snippets in Python if requested. You have access to tools for data analysis, ML training, visualization, and more."
+            generation_config={"temperature": 0.7},
+            safety_settings=safety_settings
         )
+        
+        # System message will be prepended to first user message
+        system_msg = "You are a Senior Data Science Autonomous Agent. You help users with end-to-end machine learning, data profiling, visualization, and strategic insights. Use a professional, technical yet accessible tone. Provide code snippets in Python if requested. You have access to tools for data analysis, ML training, visualization, and more.\\n\\n"
         
         # Convert messages to Gemini format (exclude system message, just conversation)
         chat_history = []
+        first_user_msg = True
         for msg in request.messages[:-1]:  # Exclude the latest message
+            content = msg.content
+            # Prepend system instruction to first user message
+            if first_user_msg and msg.role == "user":
+                content = system_msg + content
+                first_user_msg = False
             chat_history.append({
                 "role": "user" if msg.role == "user" else "model",
-                "parts": [msg.content]
+                "parts": [content]
             })
         
         # Start chat with history
