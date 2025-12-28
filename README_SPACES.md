@@ -49,13 +49,16 @@ This ensures smooth operation even with large datasets on HuggingFace's 16GB RAM
 
 ## Environment Variables
 
-Set `GEMINI_API_KEY` in HuggingFace Spaces settings (Settings → Repository secrets):
+Set these in HuggingFace Spaces settings (Settings → Repository secrets):
 
-```
-GEMINI_API_KEY=your_google_gemini_api_key_here
-```
+**Required:**
+- `GEMINI_API_KEY` - Your Google Gemini API key (get from https://aistudio.google.com/app/apikey)
+- `LLM_PROVIDER` - Set to `gemini` to use Gemini (or `groq` if you have Groq API key)
 
-Get your API key from: https://aistudio.google.com/app/apikey
+**Optional:**
+- `GROQ_API_KEY` - Only if using Groq provider instead of Gemini
+
+**Note**: The code supports both `GOOGLE_API_KEY` and `GEMINI_API_KEY` environment variable names.
 
 ## Local Development
 

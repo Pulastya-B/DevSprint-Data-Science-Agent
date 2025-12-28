@@ -170,9 +170,9 @@ class DataScienceCopilot:
             
         elif self.provider == "gemini":
             # Initialize Gemini client
-            api_key = google_api_key or os.getenv("GOOGLE_API_KEY")
+            api_key = google_api_key or os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
             if not api_key:
-                raise ValueError("Google API key must be provided or set in GOOGLE_API_KEY env var")
+                raise ValueError("Google API key must be provided or set in GOOGLE_API_KEY or GEMINI_API_KEY env var")
             
             genai.configure(api_key=api_key)
             self.model = os.getenv("GEMINI_MODEL", "gemini-2.0-flash-exp")

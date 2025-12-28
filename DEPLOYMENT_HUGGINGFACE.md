@@ -71,10 +71,18 @@ git push huggingface main
 2. Click **Settings** tab
 3. Scroll to **Repository secrets**
 4. Click **New secret**
-5. Add:
+5. Add **both** secrets (code supports both names):
    - **Name**: `GEMINI_API_KEY`
-   - **Value**: Your Google Gemini API key
+   - **Value**: Your Google Gemini API key (from .env file)
+   - Click **Add** 
+   
+   Also add:
+   - **Name**: `LLM_PROVIDER`
+   - **Value**: `gemini`
+   - Click **Add**
 6. Click **Save**
+
+**Note**: The code supports both `GOOGLE_API_KEY` and `GEMINI_API_KEY` for compatibility.
 
 ### Step 6: Wait for Build
 
