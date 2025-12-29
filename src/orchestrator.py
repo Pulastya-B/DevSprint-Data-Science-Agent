@@ -1655,6 +1655,11 @@ You are a DOER. Complete workflows based on user intent."""
                         print(f"⏳ Rate limiting: waiting {wait_time:.1f}s...")
                         time.sleep(wait_time)
                 
+                # Initialize variables before try block to avoid UnboundLocalError
+                tool_calls = None
+                final_content = None
+                response_message = None
+                
                 # Call LLM with function calling (provider-specific)
                 if self.provider == "groq":
                     try:
@@ -1718,10 +1723,49 @@ You are a DOER. Complete workflows based on user intent."""
                             gemini_chat = self.gemini_model.start_chat(history=[])
                             print(f"   🔄 Now using Gemini for remaining workflow")
                             
-                            # Retry with Gemini (continue to Gemini block below)
-                            # Set tool_calls to None to trigger Gemini path
-                            response_message = None
-                            tool_calls = None
+                            # Make the Gemini API call immediately
+                            try:
+                                if iteration == 1:
+                                    # First iteration: send system + user message
+                                    combined_message = f"{messages[0]['content']}\n\n{messages[1]['content']}"
+                                    response = gemini_chat.send_message(combined_message)
+                                else:
+                                    # Subsequent iterations: send tool results as plain text
+                                    last_tool_msg = messages[-1]
+                                    if last_tool_msg.get("role") == "tool":
+                                        # Format tool result as text for Gemini
+                                        result_message = f"Tool '{last_tool_msg['name']}' executed successfully.\n\nResult:\n{last_tool_msg['content']}\n\nWhat's the next step?"
+                                        response = gemini_chat.send_message(result_message)
+                                    else:
+                                        # Fallback
+                                        response = gemini_chat.send_message("Continue with the next step.")
+                                
+                                self.api_calls_made += 1
+                                self.last_api_call_time = time.time()
+                                
+                                # Extract tool calls from Gemini TEXT response
+                                tool_calls = []
+                                if response.candidates and response.candidates[0].content.parts:
+                                    for part in response.candidates[0].content.parts:
+                                        if hasattr(part, 'text') and part.text:
+                                            text_response = part.text
+                                            final_content = text_response
+                                            
+                                            # Parse tool calls from text
+                                            parsed_calls = self._parse_text_tool_calls(text_response)
+                                            if parsed_calls:
+                                                for call in parsed_calls:
+                                                    tool_call_obj = type('ToolCall', (), {
+                                                        'id': call['id'],
+                                                        'name': call['function']['name'],
+                                                        'args': json.loads(call['function']['arguments']) if isinstance(call['function']['arguments'], str) else call['function']['arguments']
+                                                    })()
+                                                    tool_calls.append(tool_call_obj)
+                            except Exception as gemini_error:
+                                # If Gemini also fails, log and continue with empty response
+                                print(f"⚠️  Gemini fallback also failed: {str(gemini_error)[:200]}")
+                                final_content = "Analysis interrupted due to API errors."
+                                tool_calls = []
                         else:
                             # Not a rate limit error, re-raise
                             raise
