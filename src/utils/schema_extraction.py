@@ -74,7 +74,11 @@ def extract_schema_local(file_path: str, sample_rows: int = 5) -> Dict[str, Any]
         ]
         schema_info['categorical_columns'] = [
             col for col, info in schema_info['columns'].items()
-            if info['dtype'] in ['Utf8', 'String'] or (info.get('unique_count', 999999) < 50 and col not in schema_info['numeric_columns'])
+            if info['dtype'] in ['Utf8', 'String'] or (
+                info.get('unique_count') is not None and 
+                info.get('unique_count') < 50 and 
+                col not in schema_info['numeric_columns']
+            )
         ]
         schema_info['datetime_columns'] = [
             col for col, info in schema_info['columns'].items()

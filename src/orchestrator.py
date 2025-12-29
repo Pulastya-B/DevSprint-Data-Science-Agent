@@ -1717,7 +1717,10 @@ You are a DOER. Complete workflows based on user intent."""
                     print(f"✂️  Pruned conversation (keeping last 4 exchanges, ~4K tokens saved)")
                 
                 # 🔍 Token estimation and warning
-                estimated_tokens = sum(len(str(m.get('content', ''))) // 4 for m in messages)
+                estimated_tokens = sum(
+                    len(str(m.get('content', '') if isinstance(m, dict) else getattr(m, 'content', ''))) // 4 
+                    for m in messages
+                )
                 if estimated_tokens > 8000:
                     # Emergency pruning - keep only last 2 exchanges
                     messages = [messages[0], messages[1]] + messages[-4:]
