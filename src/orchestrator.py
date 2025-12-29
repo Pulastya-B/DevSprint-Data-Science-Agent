@@ -1125,14 +1125,15 @@ You are a DOER. Complete workflows based on user intent."""
         Returns:
             Compressed result dict (typically 100-500 tokens vs 5K-10K)
         """
-        if not result.get("success", True):
-            # Keep full error info (critical for debugging)
-            return result
-        
-        compressed = {
-            "success": True,
-            "tool": tool_name
-        }
+        try:
+            if not result.get("success", True):
+                # Keep full error info (critical for debugging)
+                return result
+            
+            compressed = {
+                "success": True,
+                "tool": tool_name
+            }
         
         # Tool-specific compression rules
         if tool_name == "profile_dataset":
@@ -1173,15 +1174,26 @@ You are a DOER. Complete workflows based on user intent."""
         elif tool_name == "train_baseline_models":
             r = result.get("result", {})
             models = r.get("models", [])
-            if models:
-                best = max(models, key=lambda m: m.get("test_score", 0))
-                compressed["summary"] = {
-                    "best_model": best.get("model"),
-                    "test_score": round(best.get("test_score", 0), 4),
-                    "train_score": round(best.get("train_score", 0), 4),
-                    "task_type": r.get("task_type"),
-                    "models_trained": len(models)
-                }
+            if models and isinstance(models, list) and len(models) > 0:
+                # Filter to only dict entries (defensive)
+                valid_models = [m for m in models if isinstance(m, dict) and "test_score" in m]
+                if valid_models:
+                    best = max(valid_models, key=lambda m: m.get("test_score", 0))
+                    compressed["summary"] = {
+                        "best_model": best.get("model"),
+                        "test_score": round(best.get("test_score", 0), 4),
+                        "train_score": round(best.get("train_score", 0), 4),
+                        "task_type": r.get("task_type"),
+                        "models_trained": len(valid_models)
+                    }
+                else:
+                    # Fallback if no valid models
+                    compressed["summary"] = {
+                        "task_type": r.get("task_type"),
+                        "status": "No valid models trained"
+                    }
+            else:
+                compressed["summary"] = {"status": "No models found"}
             compressed["next_steps"] = ["hyperparameter_tuning", "generate_combined_eda_report"]
             
         elif tool_name in ["generate_plotly_dashboard", "generate_ydata_profiling_report", "generate_combined_eda_report"]:
@@ -1217,7 +1229,17 @@ You are a DOER. Complete workflows based on user intent."""
                 compressed["summary"] = {"result": str(r)[:200] if r else "completed"}
             compressed["next_steps"] = ["Continue workflow"]
         
-        return compressed
+            return compressed
+        
+        except Exception as e:
+            # If compression fails, return minimal safe result
+            print(f"⚠️  Compression failed for {tool_name}: {str(e)}")
+            return {
+                "success": result.get("success", True),
+                "tool": tool_name,
+                "summary": {"status": "completed (compression failed)"},
+                "result": result.get("result", {}) if isinstance(result.get("result"), dict) else {}
+            }
 
 
     def _parse_text_tool_calls(self, text_response: str) -> List[Dict[str, Any]]:
