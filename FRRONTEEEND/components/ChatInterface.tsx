@@ -19,6 +19,11 @@ interface Message {
     name: string;
     path: string;
   }>;
+  plots?: Array<{
+    title: string;
+    url: string;
+    type?: 'image' | 'html';
+  }>;
 }
 
 interface ChatSession {
@@ -133,11 +138,21 @@ export const ChatInterface: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       
       let assistantContent = '';
       let reports: Array<{name: string, path: string}> = [];
+      let plots: Array<{title: string, url: string, type?: 'image' | 'html'}> = [];
       
       // Check for reports in any /run endpoint response (not just when file is uploaded)
       if (data.result) {
         const result = data.result;
         assistantContent = `✅ Analysis Complete!\n\n`;
+        
+        // Extract plots from result
+        if (result.plots && Array.isArray(result.plots)) {
+          plots = result.plots.map((plot: any) => ({
+            title: plot.title || 'Plot',
+            url: plot.url || plot.path?.replace('./outputs/', '/outputs/'),
+            type: (plot.url || plot.path)?.endsWith('.html') ? 'html' : 'image'
+          }));
+        }
         
         // Extract report paths from workflow history
         if (result.workflow_history) {
@@ -187,7 +202,8 @@ export const ChatInterface: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         role: 'assistant',
         content: assistantContent,
         timestamp: new Date(),
-        reports: reports.length > 0 ? reports : undefined
+        reports: reports.length > 0 ? reports : undefined,
+        plots: plots.length > 0 ? plots : undefined
       }]);
     } catch (error: any) {
       console.error("Chat Error:", error);
@@ -454,6 +470,27 @@ export const ChatInterface: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                           </button>
                         );
                       })}
+                    </div>
+                  )}
+                  {msg.plots && msg.plots.length > 0 && (
+                    <div className="mt-4 space-y-3">
+                      <div className="text-xs font-semibold text-white/60 mb-2">
+                        📊 Generated Visualizations ({msg.plots.length})
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {msg.plots.map((plot, idx) => (
+                          <button
+                            key={idx}
+                            onClick={() => setReportModalUrl(`${window.location.origin}${plot.url}`)}
+                            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/30 text-emerald-200 text-xs font-medium transition-all group"
+                          >
+                            <svg className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
+                            </svg>
+                            View {plot.title}
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   )}
                   <div className="mt-2 text-[10px] opacity-20 font-mono">
