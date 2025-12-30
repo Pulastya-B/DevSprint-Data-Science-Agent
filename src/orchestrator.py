@@ -945,7 +945,7 @@ You are a DOER. Complete workflows based on user intent."""
     def _make_json_serializable(self, obj: Any) -> Any:
         """
         Convert objects to JSON-serializable format.
-        Handles matplotlib Figures, numpy arrays, and other non-serializable types.
+        Handles matplotlib Figures, numpy arrays, infinity values, and other non-serializable types.
         """
         try:
             import numpy as np
@@ -964,6 +964,15 @@ You are a DOER. Complete workflows based on user intent."""
         # Handle lists recursively
         elif isinstance(obj, (list, tuple)):
             return [self._make_json_serializable(item) for item in obj]
+        
+        # Handle infinity and NaN values (not JSON compliant)
+        elif isinstance(obj, float):
+            import math
+            if math.isinf(obj):
+                return "Infinity" if obj > 0 else "-Infinity"
+            elif math.isnan(obj):
+                return "NaN"
+            return obj
         
         # Handle matplotlib Figure objects
         elif Figure and isinstance(obj, Figure):
