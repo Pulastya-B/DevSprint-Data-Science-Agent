@@ -172,7 +172,7 @@ class DataScienceCopilot:
                 raise ValueError("Mistral API key must be provided or set in MISTRAL_API_KEY env var")
             
             from mistralai.client import MistralClient
-            self.mistral_client = MistralClient(api_key=api_key)
+            self.mistral_client = MistralClient(api_key=api_key.strip())
             self.model = os.getenv("MISTRAL_MODEL", "mistral-large-latest")
             self.reasoning_effort = reasoning_effort
             self.gemini_model = None
@@ -185,7 +185,7 @@ class DataScienceCopilot:
             if not api_key:
                 raise ValueError("Groq API key must be provided or set in GROQ_API_KEY env var")
             
-            self.groq_client = Groq(api_key=api_key)
+            self.groq_client = Groq(api_key=api_key.strip())
             self.model = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
             self.reasoning_effort = reasoning_effort
             self.gemini_model = None
@@ -198,7 +198,7 @@ class DataScienceCopilot:
             if not api_key:
                 raise ValueError("Google API key must be provided or set in GOOGLE_API_KEY or GEMINI_API_KEY env var")
             
-            genai.configure(api_key=api_key)
+            genai.configure(api_key=api_key.strip())
             self.model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
             
             # Configure safety settings to be more permissive for data science content
