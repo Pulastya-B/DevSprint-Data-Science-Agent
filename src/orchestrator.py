@@ -864,6 +864,217 @@ You are a DOER. Complete workflows based on user intent."""
         
         return next_steps.get(stuck_tool, "generate_eda_plots OR train_baseline_models")
     
+    def _generate_enhanced_summary(
+        self, 
+        workflow_history: List[Dict], 
+        llm_summary: str,
+        task_description: str
+    ) -> Dict[str, Any]:
+        """
+        Generate an enhanced summary with extracted metrics, plots, and artifacts.
+        
+        Args:
+            workflow_history: List of executed workflow steps
+            llm_summary: Original summary from LLM
+            task_description: User's original request
+            
+        Returns:
+            Dictionary with enhanced summary text, metrics, and artifacts
+        """
+        metrics = {}
+        artifacts = {
+            "models": [],
+            "reports": [],
+            "data_files": []
+        }
+        plots = []
+        
+        # Extract information from workflow history
+        for step in workflow_history:
+            tool = step.get("tool", "")
+            result = step.get("result", {})
+            
+            # Skip failed steps
+            if not result.get("success", True):
+                continue
+            
+            # Extract nested result if present
+            nested_result = result.get("result", result)
+            
+            # === EXTRACT MODEL METRICS ===
+            if tool == "train_baseline_models":
+                if "models" in nested_result:
+                    models_data = nested_result["models"]
+                    if models_data:
+                        # Find best model
+                        best_model_name = nested_result.get("best_model", "")
+                        best_model_data = models_data.get(best_model_name, {})
+                        
+                        metrics["best_model"] = {
+                            "name": best_model_name,
+                            "r2_score": best_model_data.get("r2", 0),
+                            "rmse": best_model_data.get("rmse", 0),
+                            "mae": best_model_data.get("mae", 0)
+                        }
+                        
+                        # All models comparison
+                        metrics["all_models"] = {
+                            name: {
+                                "r2": data.get("r2", 0),
+                                "rmse": data.get("rmse", 0),
+                                "mae": data.get("mae", 0)
+                            }
+                            for name, data in models_data.items()
+                        }
+                
+                # Extract model artifacts
+                if "model_path" in nested_result:
+                    artifacts["models"].append({
+                        "name": nested_result.get("best_model", "model"),
+                        "path": nested_result["model_path"],
+                        "url": f"/outputs/models/{nested_result['model_path'].split('/')[-1]}"
+                    })
+                
+                # Extract performance plots
+                if "performance_plots" in nested_result:
+                    for plot_path in nested_result["performance_plots"]:
+                        plots.append({
+                            "title": plot_path.split("/")[-1].replace("_", " ").replace(".png", "").title(),
+                            "path": plot_path,
+                            "url": f"/outputs/{plot_path.replace('./outputs/', '')}"
+                        })
+                
+                if "feature_importance_plot" in nested_result:
+                    plot_path = nested_result["feature_importance_plot"]
+                    plots.append({
+                        "title": "Feature Importance",
+                        "path": plot_path,
+                        "url": f"/outputs/{plot_path.replace('./outputs/', '')}"
+                    })
+            
+            # === HYPERPARAMETER TUNING METRICS ===
+            elif tool == "hyperparameter_tuning":
+                if "best_score" in nested_result:
+                    metrics["tuned_model"] = {
+                        "best_score": nested_result["best_score"],
+                        "best_params": nested_result.get("best_params", {}),
+                        "model_type": nested_result.get("model_type", "unknown")
+                    }
+                
+                if "model_path" in nested_result:
+                    artifacts["models"].append({
+                        "name": f"{nested_result.get('model_type', 'model')}_tuned",
+                        "path": nested_result["model_path"],
+                        "url": f"/outputs/models/{nested_result['model_path'].split('/')[-1]}"
+                    })
+            
+            # === CROSS-VALIDATION METRICS ===
+            elif tool == "perform_cross_validation":
+                if "mean_score" in nested_result:
+                    metrics["cross_validation"] = {
+                        "mean_score": nested_result["mean_score"],
+                        "std_score": nested_result.get("std_score", 0),
+                        "scores": nested_result.get("scores", [])
+                    }
+            
+            # === COLLECT REPORT FILES ===
+            elif "report" in tool.lower() or "dashboard" in tool.lower():
+                if "output_path" in nested_result:
+                    report_path = nested_result["output_path"]
+                    artifacts["reports"].append({
+                        "name": tool.replace("_", " ").title(),
+                        "path": report_path,
+                        "url": f"/outputs/{report_path.replace('./outputs/', '')}"
+                    })
+            
+            # === COLLECT PLOT FILES ===
+            if "plot_paths" in nested_result:
+                for plot_path in nested_result["plot_paths"]:
+                    plots.append({
+                        "title": plot_path.split("/")[-1].replace("_", " ").replace(".png", "").title(),
+                        "path": plot_path,
+                        "url": f"/outputs/{plot_path.replace('./outputs/', '')}"
+                    })
+            
+            # === COLLECT DATA FILES ===
+            if "output_path" in nested_result and nested_result["output_path"].endswith(".csv"):
+                artifacts["data_files"].append({
+                    "name": nested_result["output_path"].split("/")[-1],
+                    "path": nested_result["output_path"],
+                    "url": f"/outputs/{nested_result['output_path'].replace('./outputs/', '')}"
+                })
+        
+        # Build enhanced text summary
+        summary_lines = [
+            f"## 📊 Analysis Complete: {task_description}",
+            "",
+            llm_summary,
+            ""
+        ]
+        
+        # Add model metrics if available
+        if "best_model" in metrics:
+            best = metrics["best_model"]
+            summary_lines.extend([
+                "### 🏆 Best Model Performance",
+                f"- **Model**: {best['name']}",
+                f"- **R² Score**: {best['r2_score']:.4f}",
+                f"- **RMSE**: {best['rmse']:.4f}",
+                f"- **MAE**: {best['mae']:.4f}",
+                ""
+            ])
+        
+        if "tuned_model" in metrics:
+            tuned = metrics["tuned_model"]
+            summary_lines.extend([
+                "### ⚙️ Hyperparameter Tuning",
+                f"- **Model Type**: {tuned['model_type']}",
+                f"- **Best Score**: {tuned['best_score']:.4f}",
+                ""
+            ])
+        
+        if "cross_validation" in metrics:
+            cv = metrics["cross_validation"]
+            summary_lines.extend([
+                "### ✅ Cross-Validation Results",
+                f"- **Mean Score**: {cv['mean_score']:.4f} (± {cv['std_score']:.4f})",
+                ""
+            ])
+        
+        # Add artifact links
+        if artifacts["models"]:
+            summary_lines.append("### 💾 Trained Models")
+            for model in artifacts["models"]:
+                summary_lines.append(f"- [{model['name']}]({model['url']})")
+            summary_lines.append("")
+        
+        if artifacts["reports"]:
+            summary_lines.append("### 📄 Generated Reports")
+            for report in artifacts["reports"]:
+                summary_lines.append(f"- [{report['name']}]({report['url']})")
+            summary_lines.append("")
+        
+        if plots:
+            summary_lines.append(f"### 📈 Visualizations ({len(plots)} plots generated)")
+            for plot in plots[:5]:  # Show first 5
+                summary_lines.append(f"- [{plot['title']}]({plot['url']})")
+            if len(plots) > 5:
+                summary_lines.append(f"- ... and {len(plots) - 5} more")
+            summary_lines.append("")
+        
+        summary_lines.extend([
+            "---",
+            f"**Workflow Steps**: {len([s for s in workflow_history if s.get('result', {}).get('success', True)])} completed",
+            f"**Iterations**: {len(workflow_history)}",
+        ])
+        
+        return {
+            "text": "\n".join(summary_lines),
+            "metrics": metrics,
+            "artifacts": artifacts,
+            "plots": plots
+        }
+    
     def _execute_tool(self, tool_name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
         """
         Execute a single tool function.
@@ -1912,15 +2123,25 @@ You are a DOER. Complete workflows based on user intent."""
                     # Final response
                     final_summary = final_content or "Analysis completed"
                     
+                    # 🎯 ENHANCED SUMMARY: Extract metrics and artifacts from workflow
+                    enhanced_summary = self._generate_enhanced_summary(
+                        workflow_history, 
+                        final_summary, 
+                        task_description
+                    )
+                    
                     # 🧠 Save conversation to session memory
                     if self.session:
-                        self.session.add_conversation(task_description, final_summary)
+                        self.session.add_conversation(task_description, enhanced_summary["text"])
                         self.session_store.save(self.session)
                         print(f"\n✅ Session saved: {self.session.session_id}")
                     
                     result = {
                         "status": "success",
-                        "summary": final_summary,
+                        "summary": enhanced_summary["text"],
+                        "metrics": enhanced_summary.get("metrics", {}),
+                        "artifacts": enhanced_summary.get("artifacts", {}),
+                        "plots": enhanced_summary.get("plots", []),
                         "workflow_history": workflow_history,
                         "iterations": iteration,
                         "api_calls": self.api_calls_made,
