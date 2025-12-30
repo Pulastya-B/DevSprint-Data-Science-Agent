@@ -410,6 +410,13 @@ export const ChatInterface: React.FC<{ onBack: () => void }> = ({ onBack }) => {
           ref={scrollRef}
           className="flex-1 overflow-y-auto p-4 md:p-8 space-y-8 scroll-smooth"
         >
+          {/* ALWAYS VISIBLE DEBUG */}
+          <div className="fixed top-20 right-4 bg-red-500 text-white p-4 rounded-lg z-50 text-xs">
+            🔴 Frontend Version: {Date.now()}<br/>
+            Messages: {activeSession.messages.length}<br/>
+            Last msg plots: {activeSession.messages[activeSession.messages.length - 1]?.plots?.length || 0}
+          </div>
+          
           {activeSession.messages.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-center px-4">
                <motion.div 
