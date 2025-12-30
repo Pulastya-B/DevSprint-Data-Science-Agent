@@ -179,6 +179,9 @@ async def run_analysis(
                 "timestamp": time.time()
             })
         
+        # Set progress callback on existing agent
+        agent.progress_callback = progress_callback
+        
         try:
             # Agent's session memory should resolve file_path from context
             result = agent.analyze(
@@ -271,16 +274,8 @@ async def run_analysis(
                 "timestamp": time.time()
             })
         
-        # Recreate agent with progress callback
-        global agent
-        provider = os.getenv("LLM_PROVIDER", "mistral")
-        use_compact = provider.lower() in ["mistral", "groq"]
-        agent = DataScienceCopilot(
-            reasoning_effort="medium",
-            provider=provider,
-            use_compact_prompts=use_compact,
-            progress_callback=progress_callback
-        )
+        # Set progress callback on existing agent
+        agent.progress_callback = progress_callback
         
         # Call existing agent logic
         logger.info(f"Starting analysis with task: {task_description}")
