@@ -171,8 +171,8 @@ class DataScienceCopilot:
             if not api_key:
                 raise ValueError("Mistral API key must be provided or set in MISTRAL_API_KEY env var")
             
-            from mistralai import Mistral
-            self.mistral_client = Mistral(api_key=api_key)
+            from mistralai.client import MistralClient
+            self.mistral_client = MistralClient(api_key=api_key)
             self.model = os.getenv("MISTRAL_MODEL", "mistral-large-latest")
             self.reasoning_effort = reasoning_effort
             self.gemini_model = None
@@ -1789,7 +1789,7 @@ You are a DOER. Complete workflows based on user intent."""
                 # Call LLM with function calling (provider-specific)
                 if self.provider == "mistral":
                     try:
-                        response = self.mistral_client.chat.complete(
+                        response = self.mistral_client.chat(
                             model=self.model,
                             messages=messages,
                             tools=tools_to_use,
