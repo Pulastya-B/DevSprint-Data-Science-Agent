@@ -2028,12 +2028,29 @@ You are a DOER. Complete workflows based on user intent."""
             iteration += 1
             
             try:
-                # 🚀 AGGRESSIVE CONVERSATION PRUNING (LangChain pattern)
+                # 🚀 SMART CONVERSATION PRUNING (Mistral-compatible)
                 # Keep only: system + user + last 4 exchanges (8 messages)
-                # This prevents token bloat while maintaining context
+                # CRITICAL: Maintain valid message ordering for Mistral API
                 if len(messages) > 10:
-                    # Keep: system prompt [0], user query [1], last 4 exchanges
-                    messages = [messages[0], messages[1]] + messages[-8:]
+                    # Keep: system prompt [0], user query [1], last valid exchanges
+                    system_msg = messages[0]
+                    user_msg = messages[1]
+                    recent_msgs = messages[-8:]
+                    
+                    # Ensure no orphaned tool messages after pruning
+                    # Mistral requires: assistant → tool → assistant → user (never tool after user)
+                    cleaned_recent = []
+                    for i, msg in enumerate(recent_msgs):
+                        # Skip tool messages that aren't preceded by assistant
+                        if msg.get('role') == 'tool':
+                            # Check if previous message is assistant
+                            if i > 0 and recent_msgs[i-1].get('role') == 'assistant':
+                                cleaned_recent.append(msg)
+                            # Otherwise skip this orphaned tool message
+                        else:
+                            cleaned_recent.append(msg)
+                    
+                    messages = [system_msg, user_msg] + cleaned_recent
                     print(f"✂️  Pruned conversation (keeping last 4 exchanges, ~4K tokens saved)")
                 
                 # 🔍 Token estimation and warning
@@ -2043,7 +2060,20 @@ You are a DOER. Complete workflows based on user intent."""
                 )
                 if estimated_tokens > 8000:
                     # Emergency pruning - keep only last 2 exchanges
-                    messages = [messages[0], messages[1]] + messages[-4:]
+                    system_msg = messages[0]
+                    user_msg = messages[1]
+                    recent_msgs = messages[-4:]
+                    
+                    # Clean orphaned tool messages
+                    cleaned_recent = []
+                    for i, msg in enumerate(recent_msgs):
+                        if msg.get('role') == 'tool':
+                            if i > 0 and recent_msgs[i-1].get('role') == 'assistant':
+                                cleaned_recent.append(msg)
+                        else:
+                            cleaned_recent.append(msg)
+                    
+                    messages = [system_msg, user_msg] + cleaned_recent
                     print(f"⚠️  Emergency pruning (conversation > 8K tokens)")
                 
                 # 💰 Token budget management (TPM limit)
