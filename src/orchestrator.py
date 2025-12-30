@@ -2031,6 +2031,13 @@ You are a DOER. Complete workflows based on user intent."""
                 # 🚀 SMART CONVERSATION PRUNING (Mistral-compatible)
                 # Keep only: system + user + last 4 exchanges (8 messages)
                 # CRITICAL: Maintain valid message ordering for Mistral API
+                
+                # Helper function to get role from message (handles dict or ChatMessage object)
+                def get_role(msg):
+                    if isinstance(msg, dict):
+                        return msg.get('role', '')
+                    return getattr(msg, 'role', '')
+                
                 if len(messages) > 10:
                     # Keep: system prompt [0], user query [1], last valid exchanges
                     system_msg = messages[0]
@@ -2042,9 +2049,9 @@ You are a DOER. Complete workflows based on user intent."""
                     cleaned_recent = []
                     for i, msg in enumerate(recent_msgs):
                         # Skip tool messages that aren't preceded by assistant
-                        if msg.get('role') == 'tool':
+                        if get_role(msg) == 'tool':
                             # Check if previous message is assistant
-                            if i > 0 and recent_msgs[i-1].get('role') == 'assistant':
+                            if i > 0 and get_role(recent_msgs[i-1]) == 'assistant':
                                 cleaned_recent.append(msg)
                             # Otherwise skip this orphaned tool message
                         else:
@@ -2067,8 +2074,8 @@ You are a DOER. Complete workflows based on user intent."""
                     # Clean orphaned tool messages
                     cleaned_recent = []
                     for i, msg in enumerate(recent_msgs):
-                        if msg.get('role') == 'tool':
-                            if i > 0 and recent_msgs[i-1].get('role') == 'assistant':
+                        if get_role(msg) == 'tool':
+                            if i > 0 and get_role(recent_msgs[i-1]) == 'assistant':
                                 cleaned_recent.append(msg)
                         else:
                             cleaned_recent.append(msg)
