@@ -135,7 +135,6 @@ export const ChatInterface: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       }
 
       const data = await response.json();
-      console.log('📊 API Response:', JSON.stringify(data, null, 2));
       
       let assistantContent = '';
       let reports: Array<{name: string, path: string}> = [];
@@ -144,21 +143,9 @@ export const ChatInterface: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       // Check for reports in any /run endpoint response (not just when file is uploaded)
       if (data.result) {
         const result = data.result;
-        console.log('📈 Plots in result:', result.plots);
-        console.log('📊 Artifacts in result:', result.artifacts);
         assistantContent = `✅ Analysis Complete!\n\n`;
         
-        // Extract plots from result
-        if (result.plots && Array.isArray(result.plots)) {
-          plots = result.plots.map((plot: any) => ({
-            title: plot.title || 'Plot',
-            url: plot.url || plot.path?.replace('./outputs/', '/outputs/'),
-            type: (plot.url || plot.path)?.endsWith('.html') ? 'html' : 'image'
-          }));
-          console.log('✅ Extracted plots:', plots);
-        }
-        
-        // Extract report paths from workflow history
+        // Extract plots from workflow_history (PRIMARY SOURCE)
         if (result.workflow_history) {
           const reportTools = ['generate_ydata_profiling_report', 'generate_plotly_dashboard', 'generate_all_plots'];
           const plotTools = [
@@ -231,8 +218,6 @@ export const ChatInterface: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       } else {
         throw new Error('Invalid response from API');
       }
-      
-      console.log('🎯 Final message data - Reports:', reports.length, 'Plots:', plots.length);
       
       updateSession(activeSessionId, [...newMessages, {
         id: (Date.now() + 1).toString(),
@@ -410,13 +395,6 @@ export const ChatInterface: React.FC<{ onBack: () => void }> = ({ onBack }) => {
           ref={scrollRef}
           className="flex-1 overflow-y-auto p-4 md:p-8 space-y-8 scroll-smooth"
         >
-          {/* ALWAYS VISIBLE DEBUG */}
-          <div className="fixed top-20 right-4 bg-red-500 text-white p-4 rounded-lg z-50 text-xs">
-            🔴 Frontend Version: {Date.now()}<br/>
-            Messages: {activeSession.messages.length}<br/>
-            Last msg plots: {activeSession.messages[activeSession.messages.length - 1]?.plots?.length || 0}
-          </div>
-          
           {activeSession.messages.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-center px-4">
                <motion.div 
@@ -516,22 +494,8 @@ export const ChatInterface: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                       })}
                     </div>
                   )}
-                  {/* DEBUG: Force show plots section */}
-                  {msg.role === 'assistant' && msg.content?.includes('Visualizations') && (
-                    <div className="mt-4 space-y-3 border-2 border-yellow-500">
-                      <div className="text-xs font-semibold text-yellow-400 mb-2">
-                        🐛 DEBUG: Plots section (should appear if msg has Visualizations in content)
-                      </div>
-                      <div className="text-xs text-white/60">
-                        msg.plots exists: {msg.plots ? 'YES' : 'NO'}<br/>
-                        msg.plots length: {msg.plots?.length || 0}<br/>
-                        msg.plots data: {JSON.stringify(msg.plots)}
-                      </div>
-                    </div>
-                  )}
                   {msg.plots && msg.plots.length > 0 && (
                     <>
-                      {console.log('🎨 Rendering plots for message:', msg.id, msg.plots)}
                       <div className="mt-4 space-y-3">
                         <div className="text-xs font-semibold text-white/60 mb-2">
                           📊 Generated Visualizations ({msg.plots.length})
