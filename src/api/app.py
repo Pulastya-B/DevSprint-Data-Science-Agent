@@ -294,13 +294,11 @@ async def run_analysis(
         )
     
     finally:
-        # Cleanup temporary file
-        if temp_file_path and temp_file_path.exists():
-            try:
-                temp_file_path.unlink()
-                logger.info(f"Cleaned up temporary file: {temp_file_path}")
-            except Exception as e:
-                logger.warning(f"Failed to cleanup temp file: {e}")
+        # Keep temporary file for session continuity (follow-up requests)
+        # Files in /tmp are automatically cleaned up by the OS
+        # For HuggingFace Spaces: space restart clears /tmp
+        # For production: implement session-based cleanup after timeout
+        pass
 
 
 @app.post("/profile")
