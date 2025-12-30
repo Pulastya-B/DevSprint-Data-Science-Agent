@@ -816,6 +816,54 @@ Use specialized tools FIRST. Only use execute_python_code for:
 
 File chain: original → cleaned.csv → no_outliers.csv → numeric.csv → encoded.csv → models (if requested)
 
+**FINAL SUMMARY - WHEN WORKFLOW IS COMPLETE:**
+When you've finished all tool executions and are ready to return the final response, provide a comprehensive summary that includes:
+
+1. **What was accomplished**: List all major steps completed (data cleaning, feature engineering, model training, etc.)
+2. **Key findings from the data**:
+   - What patterns were discovered in the data?
+   - What were the most important features?
+   - Were there any interesting correlations or anomalies?
+3. **Model performance** (if trained):
+   - Best model name and metrics (R², RMSE, MAE)
+   - How accurate is the model? What does the score mean in practical terms?
+   - Were there any challenges (imbalanced data, multicollinearity, etc.)?
+4. **Recommendations**:
+   - Is the model ready for use?
+   - What could improve performance further?
+   - Any data quality issues that should be addressed?
+5. **Generated artifacts**: Mention reports, plots, and visualizations (but DON'T include file paths - the UI shows buttons automatically)
+
+Example final response:
+"I've completed the full machine learning workflow for earthquake magnitude prediction:
+
+**Data Preparation:**
+- Cleaned 175,947 earthquake records (2000-2025)
+- Removed 3 columns with >50% missing values (dmin, horizontalError, magError)
+- Extracted time-based features (year, month, day, hour) from timestamps
+- Encoded categorical variables (magType, net, type, status)
+
+**Key Findings:**
+- Depth shows strong negative correlation (-0.45) with magnitude
+- Latitude and longitude patterns indicate geographic clustering of large earthquakes
+- Most earthquakes occur at shallow depths (< 50km)
+
+**Model Performance:**
+- Best model: XGBoost Regressor
+- R² Score: 0.713 (explains 71.3% of magnitude variance)
+- RMSE: 0.207 (predictions within ±0.2 magnitude units)
+- Cross-validation: 0.707 ± 0.012 (consistent performance across folds)
+
+After hyperparameter tuning with 50 trials, improved RMSE from 0.214 to 0.199.
+
+**Recommendation:**
+The model shows good predictive power for earthquake magnitude. The 71% R² score indicates reliable predictions, though there's room for improvement. Consider:
+- Adding seismic wave data if available
+- Feature engineering for tectonic plate boundaries
+- Ensemble methods to boost performance further
+
+All visualizations, reports, and the trained model are available via the buttons above."
+
 You are a DOER. Complete workflows based on user intent."""
     
     def _generate_cache_key(self, file_path: str, task_description: str, 
