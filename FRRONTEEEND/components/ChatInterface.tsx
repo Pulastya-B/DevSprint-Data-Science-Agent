@@ -51,7 +51,7 @@ export const ChatInterface: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   const [showAssets, setShowAssets] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const progressIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const eventSourceRef = useRef<EventSource | null>(null);
   
   const activeSession = sessions.find(s => s.id === activeSessionId) || sessions[0];
 
@@ -61,48 +61,82 @@ export const ChatInterface: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     }
   }, [activeSession.messages, isTyping]);
 
-  // Poll for progress ONLY when isTyping is true
+  // Connect to SSE when workflow starts, disconnect when it completes
   useEffect(() => {
     if (!isTyping) {
-      if (progressIntervalRef.current) {
-        clearInterval(progressIntervalRef.current);
-        progressIntervalRef.current = null;
+      // Close SSE connection when workflow completes
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
       }
       setCurrentStep('');
       return;
     }
 
+    // Connect to SSE stream
+    const API_URL = window.location.origin;
     const sessionKey = activeSessionId || 'default';
+    const eventSource = new EventSource(`${API_URL}/api/progress/stream/${sessionKey}`);
 
-    const pollProgress = async () => {
-      try {
-        const API_URL = window.location.origin;
-        const progressResponse = await fetch(`${API_URL}/api/progress/${sessionKey}`);
-        if (progressResponse.ok) {
-          const progressData = await progressResponse.json();
-          const steps = progressData.steps || [];
-
-          if (steps.length > 0) {
-            const latestStep = steps[steps.length - 1];
-            // Format tool name nicely
-            const toolName = latestStep.tool
-              .replace(/_/g, ' ')
-              .replace(/\b\w/g, (l: string) => l.toUpperCase());
-            setCurrentStep(`Executing: ${toolName}`);
-          }
-        }
-      } catch (err) {
-        console.error('Progress polling error:', err);
-      }
+    eventSource.onopen = () => {
+      console.log('✅ SSE connection established');
     };
 
-    // Start polling every 1 second when workflow is active
-    progressIntervalRef.current = setInterval(pollProgress, 1000);
+    // Handle connection event
+    eventSource.addEventListener('connected', (e) => {
+      console.log('Connected to progress stream:', e.data);
+    });
 
+    // Handle tool start events
+    eventSource.addEventListener('tool_start', (e) => {
+      try {
+        const data = JSON.parse(e.data);
+        setCurrentStep(data.message || `🔧 Executing: ${data.tool}`);
+      } catch (err) {
+        console.error('Error parsing tool_start event:', err);
+      }
+    });
+
+    // Handle tool complete events
+    eventSource.addEventListener('tool_complete', (e) => {
+      try {
+        const data = JSON.parse(e.data);
+        setCurrentStep(data.message || `✓ Completed: ${data.tool}`);
+      } catch (err) {
+        console.error('Error parsing tool_complete event:', err);
+      }
+    });
+
+    // Handle tool error events
+    eventSource.addEventListener('tool_error', (e) => {
+      try {
+        const data = JSON.parse(e.data);
+        setCurrentStep(data.message || `❌ Failed: ${data.tool}`);
+      } catch (err) {
+        console.error('Error parsing tool_error event:', err);
+      }
+    });
+
+    // Handle analysis completion
+    eventSource.addEventListener('analysis_complete', (e) => {
+      console.log('✅ Analysis completed');
+      setIsTyping(false);  // This will trigger cleanup
+    });
+
+    // Handle errors
+    eventSource.onerror = (err) => {
+      console.error('SSE error:', err);
+      eventSource.close();
+      eventSourceRef.current = null;
+    };
+
+    eventSourceRef.current = eventSource;
+
+    // Cleanup on unmount or when isTyping changes to false
     return () => {
-      if (progressIntervalRef.current) {
-        clearInterval(progressIntervalRef.current);
-        progressIntervalRef.current = null;
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
       }
     };
   }, [isTyping, activeSessionId]);

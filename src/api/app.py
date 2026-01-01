@@ -17,10 +17,12 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Request
-from fastapi.responses import JSONResponse, FileResponse
+from fastapi.responses import JSONResponse, FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+import asyncio
+import json
 
 # Import from parent package
 from src.orchestrator import DataScienceCopilot
@@ -49,8 +51,80 @@ app.add_middleware(
 # Agent itself is stateless - no conversation memory between requests
 agent: Optional[DataScienceCopilot] = None
 
-# Global progress tracking (in-memory for simplicity)
+# Global progress tracking with SSE support
 progress_store: Dict[str, List[Dict[str, Any]]] = {}
+
+# SSE event queues for real-time streaming
+class ProgressEventManager:
+    """Manages SSE connections and progress events for real-time updates."""
+    
+    def __init__(self):
+        self.active_streams: Dict[str, List[asyncio.Queue]] = {}
+        self.session_status: Dict[str, Dict[str, Any]] = {}
+    
+    def create_stream(self, session_id: str) -> asyncio.Queue:
+        """Create a new SSE stream for a session."""
+        if session_id not in self.active_streams:
+            self.active_streams[session_id] = []
+        
+        queue = asyncio.Queue()
+        self.active_streams[session_id].append(queue)
+        return queue
+    
+    def remove_stream(self, session_id: str, queue: asyncio.Queue):
+        """Remove an SSE stream when client disconnects."""
+        if session_id in self.active_streams:
+            try:
+                self.active_streams[session_id].remove(queue)
+                if not self.active_streams[session_id]:
+                    del self.active_streams[session_id]
+            except (ValueError, KeyError):
+                pass
+    
+    async def send_event(self, session_id: str, event_type: str, data: Dict[str, Any]):
+        """Send an event to all connected clients for a session."""
+        if session_id not in self.active_streams:
+            return
+        
+        # Store current status
+        self.session_status[session_id] = {
+            "type": event_type,
+            "data": data,
+            "timestamp": time.time()
+        }
+        
+        # Send to all connected streams
+        dead_queues = []
+        for queue in self.active_streams[session_id]:
+            try:
+                await asyncio.wait_for(queue.put((event_type, data)), timeout=1.0)
+            except (asyncio.TimeoutError, Exception):
+                dead_queues.append(queue)
+        
+        # Clean up dead queues
+        for queue in dead_queues:
+            self.remove_stream(session_id, queue)
+    
+    def get_current_status(self, session_id: str) -> Optional[Dict[str, Any]]:
+        """Get the current status for a session."""
+        return self.session_status.get(session_id)
+    
+    def clear_session(self, session_id: str):
+        """Clear all data for a session."""
+        if session_id in self.active_streams:
+            # Close all queues
+            for queue in self.active_streams[session_id]:
+                try:
+                    queue.put_nowait(("complete", {}))
+                except:
+                    pass
+            del self.active_streams[session_id]
+        
+        if session_id in self.session_status:
+            del self.session_status[session_id]
+
+# Global event manager
+event_manager = ProgressEventManager()
 
 # Mount static files for React frontend
 frontend_path = Path(__file__).parent.parent.parent / "FRRONTEEEND" / "dist"
@@ -95,11 +169,73 @@ async def root():
 
 @app.get("/api/progress/{session_id}")
 async def get_progress(session_id: str):
-    """Get progress updates for a specific session."""
+    """Get progress updates for a specific session (legacy polling endpoint)."""
     return {
         "session_id": session_id,
-        "steps": progress_store.get(session_id, [])
+        "steps": progress_store.get(session_id, []),
+        "current": event_manager.get_current_status(session_id)
     }
+
+
+@app.get("/api/progress/stream/{session_id}")
+async def stream_progress(session_id: str):
+    """Stream real-time progress updates using Server-Sent Events (SSE).
+    
+    This replaces the polling mechanism with a persistent connection that
+    receives events as they happen during workflow execution.
+    
+    Events:
+        - tool_start: When a tool begins execution
+        - tool_complete: When a tool finishes successfully
+        - tool_error: When a tool fails
+        - analysis_complete: When the entire workflow finishes
+        - status_update: General status messages
+    """
+    async def event_generator():
+        queue = event_manager.create_stream(session_id)
+        
+        try:
+            # Send initial connection event
+            yield f"event: connected\ndata: {{\"session_id\": \"{session_id}\"}}\n\n"
+            
+            # Send current status if exists
+            current = event_manager.get_current_status(session_id)
+            if current:
+                yield f"event: {current['type']}\ndata: {json.dumps(current['data'])}\n\n"
+            
+            # Stream events as they arrive
+            while True:
+                try:
+                    # Wait for next event with timeout
+                    event_type, data = await asyncio.wait_for(queue.get(), timeout=30.0)
+                    
+                    # Check for completion signal
+                    if event_type == "complete":
+                        yield f"event: analysis_complete\ndata: {{\"status\": \"completed\"}}\n\n"
+                        break
+                    
+                    # Send the event
+                    yield f"event: {event_type}\ndata: {json.dumps(data)}\n\n"
+                    
+                except asyncio.TimeoutError:
+                    # Send keepalive ping
+                    yield f": keepalive\n\n"
+                    continue
+                    
+        except asyncio.CancelledError:
+            logger.info(f"SSE stream cancelled for session {session_id}")
+        finally:
+            event_manager.remove_stream(session_id, queue)
+    
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no"  # Disable nginx buffering
+        }
+    )
 
 
 @app.get("/health")
@@ -172,12 +308,31 @@ async def run_analysis(
         progress_store[session_key] = []
         
         def progress_callback(tool_name: str, status: str):
-            """Callback to track progress"""
+            """Callback to track progress and send SSE events"""
+            # Store in legacy progress store
             progress_store[session_key].append({
                 "tool": tool_name,
                 "status": status,
                 "timestamp": time.time()
             })
+            
+            # Send SSE event asynchronously
+            event_type = "tool_start" if status == "running" else "tool_complete" if status == "completed" else "tool_error"
+            event_data = {
+                "tool": tool_name,
+                "status": status,
+                "message": f"🔧 Executing: {tool_name.replace('_', ' ').title()}" if status == "running" else 
+                           f"✓ Completed: {tool_name.replace('_', ' ').title()}" if status == "completed" else
+                           f"❌ Failed: {tool_name.replace('_', ' ').title()}",
+                "timestamp": time.time()
+            }
+            
+            # Schedule the async event send
+            try:
+                asyncio.create_task(event_manager.send_event(session_key, event_type, event_data))
+            except RuntimeError:
+                # If no event loop, we're in sync context - that's ok, legacy polling still works
+                pass
         
         # Set progress callback on existing agent
         agent.progress_callback = progress_callback
@@ -193,6 +348,20 @@ async def run_analysis(
             )
             
             logger.info(f"Follow-up analysis completed: {result.get('status')}")
+            
+            # Send completion event via SSE
+            try:
+                asyncio.create_task(event_manager.send_event(
+                    session_key, 
+                    "analysis_complete",
+                    {
+                        "status": result.get("status"),
+                        "message": "✅ Analysis completed successfully!",
+                        "timestamp": time.time()
+                    }
+                ))
+            except RuntimeError:
+                pass
             
             # Make result JSON serializable
             def make_json_serializable(obj):
@@ -267,12 +436,31 @@ async def run_analysis(
         progress_store[session_key] = []
         
         def progress_callback(tool_name: str, status: str):
-            """Callback to track progress"""
+            """Callback to track progress and send SSE events"""
+            # Store in legacy progress store
             progress_store[session_key].append({
                 "tool": tool_name,
                 "status": status,
                 "timestamp": time.time()
             })
+            
+            # Send SSE event asynchronously
+            event_type = "tool_start" if status == "running" else "tool_complete" if status == "completed" else "tool_error"
+            event_data = {
+                "tool": tool_name,
+                "status": status,
+                "message": f"🔧 Executing: {tool_name.replace('_', ' ').title()}" if status == "running" else 
+                           f"✓ Completed: {tool_name.replace('_', ' ').title()}" if status == "completed" else
+                           f"❌ Failed: {tool_name.replace('_', ' ').title()}",
+                "timestamp": time.time()
+            }
+            
+            # Schedule the async event send
+            try:
+                asyncio.create_task(event_manager.send_event(session_key, event_type, event_data))
+            except RuntimeError:
+                # If no event loop, we're in sync context - that's ok, legacy polling still works
+                pass
         
         # Set progress callback on existing agent
         agent.progress_callback = progress_callback
@@ -288,6 +476,20 @@ async def run_analysis(
         )
         
         logger.info(f"Analysis completed: {result.get('status')}")
+        
+        # Send completion event via SSE
+        try:
+            asyncio.create_task(event_manager.send_event(
+                session_key, 
+                "analysis_complete",
+                {
+                    "status": result.get("status"),
+                    "message": "✅ Analysis completed successfully!",
+                    "timestamp": time.time()
+                }
+            ))
+        except RuntimeError:
+            pass
         
         # Filter out non-JSON-serializable objects (like matplotlib/plotly Figures)
         def make_json_serializable(obj):
