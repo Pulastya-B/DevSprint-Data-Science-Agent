@@ -192,7 +192,7 @@ async def stream_progress(session_id: str):
         - token_update: Token budget updates
         - analysis_complete: When the entire workflow finishes
     """
-    print(f"🌊 SSE ENDPOINT: Client connected for session_id={session_id}")
+    print(f"[SSE] ENDPOINT: Client connected for session_id={session_id}")
     
     async def event_generator():
         try:
@@ -331,7 +331,7 @@ async def run_analysis(
         
         # Set HTTP session key for SSE streaming (so orchestrator emits to correct stream)
         agent.http_session_key = session_key
-        print(f"🔑 SET agent.http_session_key = {session_key}")
+        print(f"[SSE] SET agent.http_session_key = {session_key}")
         
         try:
             # Agent's session memory should resolve file_path from context
@@ -450,7 +450,7 @@ async def run_analysis(
         
         # Set HTTP session key for SSE streaming (so orchestrator emits to correct stream)
         agent.http_session_key = session_key
-        print(f"\ud83d\udd11 SET agent.http_session_key = {session_key} (file upload)")
+        print(f"[SSE] SET agent.http_session_key = {session_key} (file upload)")
         
         # Call existing agent logic
         logger.info(f"Starting analysis with task: {task_description}")
