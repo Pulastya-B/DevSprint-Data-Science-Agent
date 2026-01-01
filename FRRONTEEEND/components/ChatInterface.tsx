@@ -55,25 +55,15 @@ export const ChatInterface: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   
   const activeSession = sessions.find(s => s.id === activeSessionId) || sessions[0];
 
-  // Cleanup progress interval on unmount
-  useEffect(() => {
-    return () => {
-      if (progressIntervalRef.current) {
-        clearInterval(progressIntervalRef.current);
-      }
-    };
-  }, []);
-
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [activeSession.messages, isTyping]);
 
-  // Setup progress polling only when typing is active
+  // Poll for progress ONLY when isTyping is true
   useEffect(() => {
     if (!isTyping) {
-      // Stop polling when not typing
       if (progressIntervalRef.current) {
         clearInterval(progressIntervalRef.current);
         progressIntervalRef.current = null;
@@ -94,15 +84,11 @@ export const ChatInterface: React.FC<{ onBack: () => void }> = ({ onBack }) => {
 
           if (steps.length > 0) {
             const latestStep = steps[steps.length - 1];
+            // Format tool name nicely
             const toolName = latestStep.tool
               .replace(/_/g, ' ')
-              .replace(/generate/gi, 'Generating')
-              .replace(/train/gi, 'Training')
-              .replace(/clean/gi, 'Cleaning')
-              .replace(/create/gi, 'Creating')
-              .replace(/perform/gi, 'Performing')
               .replace(/\b\w/g, (l: string) => l.toUpperCase());
-            setCurrentStep(toolName);
+            setCurrentStep(`Executing: ${toolName}`);
           }
         }
       } catch (err) {
@@ -110,10 +96,9 @@ export const ChatInterface: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       }
     };
 
-    // Start polling only when isTyping is true
+    // Start polling every 1 second when workflow is active
     progressIntervalRef.current = setInterval(pollProgress, 1000);
 
-    // Cleanup on unmount or when isTyping becomes false
     return () => {
       if (progressIntervalRef.current) {
         clearInterval(progressIntervalRef.current);
@@ -285,6 +270,24 @@ export const ChatInterface: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       } else {
         throw new Error('Invalid response from API');
       }
+
+      // Aggressive text cleaning to remove malformed content
+      assistantContent = assistantContent
+        // Remove broken markdown tables (lines with just | symbols)
+        .replace(/^\s*\|\s*\|\s*$/gm, '')
+        // Remove confusing phrases
+        .replace(/Printed in logs \(see above\)/gi, '')
+        .replace(/\(see above\)/gi, '')
+        .replace(/see above/gi, '')
+        // Remove broken table rows (just dashes and pipes)
+        .replace(/^\s*[-|]+\s*$/gm, '')
+        // Remove code block markers without content
+        .replace(/```\s*```/g, '')
+        // Remove empty markdown sections
+        .replace(/\n{3,}/g, '\n\n')
+        // Clean up broken table syntax
+        .replace(/\|\s*\n\s*\|/g, '')
+        .trim();
       
       updateSession(activeSessionId, [...newMessages, {
         id: (Date.now() + 1).toString(),
@@ -607,24 +610,16 @@ export const ChatInterface: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                   <Bot className="w-4 h-4 text-indigo-400" />
                 </div>
                 <div className="bg-white/[0.03] p-4 rounded-2xl border border-white/5">
-                  {currentStep ? (
-                    <div className="flex items-center gap-3">
-                      <div className="flex gap-1">
-                        <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
-                        <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
-                        <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-bounce"></span>
-                      </div>
-                      <span className="text-sm text-white/60">
-                        🔧 {currentStep.replace(/_/g, ' ').replace('train', 'Training').replace('clean', 'Cleaning').replace('generate', 'Generating').replace(/\b\w/g, l => l.toUpperCase())}...
-                      </span>
-                    </div>
-                  ) : (
+                  <div className="flex items-center gap-3">
                     <div className="flex gap-1">
-                      <span className="w-1.5 h-1.5 bg-white/20 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
-                      <span className="w-1.5 h-1.5 bg-white/20 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
-                      <span className="w-1.5 h-1.5 bg-white/20 rounded-full animate-bounce"></span>
+                      <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
+                      <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
+                      <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-bounce"></span>
                     </div>
-                  )}
+                    <span className="text-sm text-white/60">
+                      {currentStep || '🔧 Starting analysis...'}
+                    </span>
+                  </div>
                 </div>
              </div>
           )}
@@ -776,18 +771,26 @@ export const ChatInterface: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                           <h4 className="text-xs font-bold uppercase tracking-wider text-white/60">Data Files ({uniqueDataFiles.length})</h4>
                         </div>
                         <div className="space-y-2">
-                          {uniqueDataFiles.map((file, idx) => (
-                            <div 
-                              key={idx}
-                              className="p-3 rounded-lg bg-white/5 border border-white/10 hover:bg-blue-500/10 transition-all cursor-pointer group"
-                            >
-                              <div className="flex items-center justify-between">
-                                <span className="text-sm text-white/80 truncate flex-1">{file}</span>
-                                <ChevronRight className="w-4 h-4 text-white/40 group-hover:text-blue-400 transition-all" />
-                              </div>
-                              <span className="text-xs text-white/40 mt-1 block">Dataset</span>
-                            </div>
-                          ))}
+                          {uniqueDataFiles.map((file, idx) => {
+                            // Extract filename from path
+                            const fileName = file.split('/').pop() || file;
+                            // Create download URL
+                            const downloadUrl = file.startsWith('/') ? file : `/${file}`;
+                            
+                            return (
+                              <button
+                                key={idx}
+                                onClick={() => window.open(downloadUrl, '_blank')}
+                                className="w-full p-3 rounded-lg bg-white/5 border border-white/10 hover:bg-blue-500/10 hover:border-blue-500/30 transition-all text-left group"
+                              >
+                                <div className="flex items-center justify-between">
+                                  <span className="text-sm text-white/80 truncate flex-1">{fileName}</span>
+                                  <ChevronRight className="w-4 h-4 text-white/40 group-hover:text-blue-400 transition-all" />
+                                </div>
+                                <span className="text-xs text-white/40 mt-1 block">Click to download</span>
+                              </button>
+                            );
+                          })}
                         </div>
                       </div>
                     )}
@@ -800,17 +803,42 @@ export const ChatInterface: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                           <h4 className="text-xs font-bold uppercase tracking-wider text-white/60">Models ({uniqueModels.length})</h4>
                         </div>
                         <div className="space-y-2">
-                          {uniqueModels.map((model, idx) => (
-                            <div 
-                              key={idx}
-                              className="p-3 rounded-lg bg-white/5 border border-white/10 hover:bg-purple-500/10 transition-all cursor-pointer group"
-                            >
-                              <div className="flex items-center justify-between">
-                                <span className="text-sm text-white/80 truncate flex-1">{model}</span>
-                                <ChevronRight className="w-4 h-4 text-white/40 group-hover:text-purple-400 transition-all" />
-                              </div>
-                            </div>
-                          ))}
+                          {uniqueModels.map((model, idx) => {
+                            // Find the model file path from workflow history
+                            let modelPath = '';
+                            activeSession.messages.forEach(msg => {
+                              if (msg.role === 'assistant' && msg.content.includes(model)) {
+                                // Try to extract model path (typically in ./outputs/models/)
+                                const match = msg.content.match(/\.\/outputs\/models\/[^\s)]+\.pkl/);
+                                if (match) modelPath = match[0].replace('./', '/');
+                              }
+                            });
+                            
+                            // Fallback: construct typical path
+                            if (!modelPath) {
+                              modelPath = `/outputs/models/${model.toLowerCase().replace(/\s+/g, '_')}_model.pkl`;
+                            }
+                            
+                            return (
+                              <button
+                                key={idx}
+                                onClick={() => {
+                                  // Trigger download
+                                  const link = document.createElement('a');
+                                  link.href = modelPath;
+                                  link.download = `${model.toLowerCase().replace(/\s+/g, '_')}_model.pkl`;
+                                  link.click();
+                                }}
+                                className="w-full p-3 rounded-lg bg-white/5 border border-white/10 hover:bg-purple-500/10 hover:border-purple-500/30 transition-all text-left group"
+                              >
+                                <div className="flex items-center justify-between">
+                                  <span className="text-sm text-white/80 truncate flex-1">{model}</span>
+                                  <ChevronRight className="w-4 h-4 text-white/40 group-hover:text-purple-400 transition-all" />
+                                </div>
+                                <span className="text-xs text-white/40 mt-1 block">Click to download</span>
+                              </button>
+                            );
+                          })}
                         </div>
                       </div>
                     )}
