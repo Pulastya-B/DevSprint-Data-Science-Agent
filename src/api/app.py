@@ -194,11 +194,14 @@ async def stream_progress(session_id: str):
     """
     print(f"[SSE] ENDPOINT: Client connected for session_id={session_id}")
     
+    # CRITICAL: Create queue and register subscriber IMMEDIATELY
+    queue = asyncio.Queue(maxsize=100)
+    if session_id not in progress_manager._queues:
+        progress_manager._queues[session_id] = []
+    progress_manager._queues[session_id].append(queue)
+    print(f"[SSE] Queue registered, total subscribers: {len(progress_manager._queues[session_id])}")
+    
     async def event_generator():
-        # CRITICAL: Subscribe FIRST to create queue before any events are emitted
-        subscription = progress_manager.subscribe(session_id)
-        queue_iterator = subscription.__aiter__()
-        
         try:
             # Send initial connection event
             connection_event = {
@@ -211,15 +214,16 @@ async def stream_progress(session_id: str):
             
             # Send any existing history first (for reconnections)
             history = progress_manager.get_history(session_id)
+            print(f"[SSE] Sending {len(history[-10:])} history events")
             for event in history[-10:]:  # Send last 10 events
                 yield f"data: {json.dumps(event)}\n\n"
             
             print(f"[SSE] Starting event stream loop for session {session_id}")
             
-            # Stream new events as they occur
+            # Stream new events from the queue
             while True:
-                event = await queue_iterator.__anext__()
-                print(f"[SSE] STREAMING event to client: {event.get('type')}")
+                event = await queue.get()
+                print(f"[SSE] GOT event from queue: {event.get('type')}")
                 yield f"data: {json.dumps(event)}\n\n"
                 
                 # Check if analysis is complete
@@ -228,10 +232,12 @@ async def stream_progress(session_id: str):
                     
         except asyncio.CancelledError:
             logger.info(f"SSE stream cancelled for session {session_id}")
-            progress_manager.clear(session_id)
         except Exception as e:
             logger.error(f"SSE error for session {session_id}: {e}")
         finally:
+            # Cleanup queue
+            if session_id in progress_manager._queues and queue in progress_manager._queues[session_id]:
+                progress_manager._queues[session_id].remove(queue)
             logger.info(f"SSE stream closed for session {session_id}")
     
     return StreamingResponse(
