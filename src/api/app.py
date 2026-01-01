@@ -202,6 +202,7 @@ async def stream_progress(session_id: str):
                 'message': '🔗 Connected to progress stream',
                 'session_id': session_id
             }
+            print(f"[SSE] SENDING connection event to client")
             yield f"data: {json.dumps(connection_event)}\n\n"
             
             # Send any existing history first (for reconnections)
@@ -211,6 +212,7 @@ async def stream_progress(session_id: str):
             
             # Stream new events as they occur
             async for event in progress_manager.subscribe(session_id):
+                print(f"[SSE] STREAMING event to client: {event.get('type')}")
                 yield f"data: {json.dumps(event)}\n\n"
                 
                 # Check if analysis is complete

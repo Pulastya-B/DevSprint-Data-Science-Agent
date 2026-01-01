@@ -84,6 +84,7 @@ class ProgressManager:
         try:
             while True:
                 event = await queue.get()
+                print(f"[SSE] YIELDING event to client: type={event.get('type')}, msg={event.get('message', '')[:50]}")
                 yield event
         except asyncio.CancelledError:
             # Client disconnected
