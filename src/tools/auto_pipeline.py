@@ -56,6 +56,10 @@ def auto_ml_pipeline(file_path: str,
     if output_path is None:
         output_path = "./outputs/data/auto_pipeline_output.csv"
     
+    # Ensure output_path has .csv extension
+    if not output_path.endswith('.csv'):
+        output_path = output_path.rstrip('/\\') + '.csv'
+    
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
     
     results = {
