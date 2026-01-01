@@ -26,6 +26,7 @@ import json
 
 # Import from parent package
 from src.orchestrator import DataScienceCopilot
+from src.progress_manager import progress_manager
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -181,51 +182,46 @@ async def get_progress(session_id: str):
 async def stream_progress(session_id: str):
     """Stream real-time progress updates using Server-Sent Events (SSE).
     
-    This replaces the polling mechanism with a persistent connection that
-    receives events as they happen during workflow execution.
+    This endpoint connects clients to the global progress_manager which
+    receives events from the orchestrator as tools execute.
     
     Events:
-        - tool_start: When a tool begins execution
-        - tool_complete: When a tool finishes successfully
-        - tool_error: When a tool fails
+        - tool_executing: When a tool begins execution
+        - tool_completed: When a tool finishes successfully  
+        - tool_failed: When a tool fails
+        - token_update: Token budget updates
         - analysis_complete: When the entire workflow finishes
-        - status_update: General status messages
     """
     async def event_generator():
-        queue = event_manager.create_stream(session_id)
-        
         try:
             # Send initial connection event
-            yield f"event: connected\ndata: {{\"session_id\": \"{session_id}\"}}\n\n"
+            connection_event = {
+                'type': 'connected',
+                'message': '🔗 Connected to progress stream',
+                'session_id': session_id
+            }
+            yield f"data: {json.dumps(connection_event)}\n\n"
             
-            # Send current status if exists
-            current = event_manager.get_current_status(session_id)
-            if current:
-                yield f"event: {current['type']}\ndata: {json.dumps(current['data'])}\n\n"
+            # Send any existing history first (for reconnections)
+            history = progress_manager.get_history(session_id)
+            for event in history[-10:]:  # Send last 10 events
+                yield f"data: {json.dumps(event)}\n\n"
             
-            # Stream events as they arrive
-            while True:
-                try:
-                    # Wait for next event with timeout
-                    event_type, data = await asyncio.wait_for(queue.get(), timeout=30.0)
-                    
-                    # Check for completion signal
-                    if event_type == "complete":
-                        yield f"event: analysis_complete\ndata: {{\"status\": \"completed\"}}\n\n"
-                        break
-                    
-                    # Send the event
-                    yield f"event: {event_type}\ndata: {json.dumps(data)}\n\n"
-                    
-                except asyncio.TimeoutError:
-                    # Send keepalive ping
-                    yield f": keepalive\n\n"
-                    continue
+            # Stream new events as they occur
+            async for event in progress_manager.subscribe(session_id):
+                yield f"data: {json.dumps(event)}\n\n"
+                
+                # Check if analysis is complete
+                if event.get('type') == 'analysis_complete':
+                    break
                     
         except asyncio.CancelledError:
             logger.info(f"SSE stream cancelled for session {session_id}")
+            progress_manager.clear(session_id)
+        except Exception as e:
+            logger.error(f"SSE error for session {session_id}: {e}")
         finally:
-            event_manager.remove_stream(session_id, queue)
+            logger.info(f"SSE stream closed for session {session_id}")
     
     return StreamingResponse(
         event_generator(),
@@ -316,23 +312,17 @@ async def run_analysis(
                 "timestamp": time.time()
             })
             
-            # Send SSE event asynchronously
-            event_type = "tool_start" if status == "running" else "tool_complete" if status == "completed" else "tool_error"
+            # Emit event to progress_manager (synchronous, works in any context)
+            event_type = "tool_executing" if status == "running" else "tool_completed" if status == "completed" else "tool_failed"
             event_data = {
+                "type": event_type,
                 "tool": tool_name,
                 "status": status,
                 "message": f"🔧 Executing: {tool_name.replace('_', ' ').title()}" if status == "running" else 
                            f"✓ Completed: {tool_name.replace('_', ' ').title()}" if status == "completed" else
-                           f"❌ Failed: {tool_name.replace('_', ' ').title()}",
-                "timestamp": time.time()
+                           f"❌ Failed: {tool_name.replace('_', ' ').title()}"
             }
-            
-            # Schedule the async event send
-            try:
-                asyncio.create_task(event_manager.send_event(session_key, event_type, event_data))
-            except RuntimeError:
-                # If no event loop, we're in sync context - that's ok, legacy polling still works
-                pass
+            progress_manager.emit(session_key, event_data)
         
         # Set progress callback on existing agent
         agent.progress_callback = progress_callback
@@ -350,18 +340,11 @@ async def run_analysis(
             logger.info(f"Follow-up analysis completed: {result.get('status')}")
             
             # Send completion event via SSE
-            try:
-                asyncio.create_task(event_manager.send_event(
-                    session_key, 
-                    "analysis_complete",
-                    {
-                        "status": result.get("status"),
-                        "message": "✅ Analysis completed successfully!",
-                        "timestamp": time.time()
-                    }
-                ))
-            except RuntimeError:
-                pass
+            progress_manager.emit(session_key, {
+                "type": "analysis_complete",
+                "status": result.get("status"),
+                "message": "✅ Analysis completed successfully!"
+            })
             
             # Make result JSON serializable
             def make_json_serializable(obj):
@@ -444,23 +427,17 @@ async def run_analysis(
                 "timestamp": time.time()
             })
             
-            # Send SSE event asynchronously
-            event_type = "tool_start" if status == "running" else "tool_complete" if status == "completed" else "tool_error"
+            # Emit event to progress_manager (synchronous, works in any context)
+            event_type = "tool_executing" if status == "running" else "tool_completed" if status == "completed" else "tool_failed"
             event_data = {
+                "type": event_type,
                 "tool": tool_name,
                 "status": status,
                 "message": f"🔧 Executing: {tool_name.replace('_', ' ').title()}" if status == "running" else 
                            f"✓ Completed: {tool_name.replace('_', ' ').title()}" if status == "completed" else
-                           f"❌ Failed: {tool_name.replace('_', ' ').title()}",
-                "timestamp": time.time()
+                           f"❌ Failed: {tool_name.replace('_', ' ').title()}"
             }
-            
-            # Schedule the async event send
-            try:
-                asyncio.create_task(event_manager.send_event(session_key, event_type, event_data))
-            except RuntimeError:
-                # If no event loop, we're in sync context - that's ok, legacy polling still works
-                pass
+            progress_manager.emit(session_key, event_data)
         
         # Set progress callback on existing agent
         agent.progress_callback = progress_callback
@@ -478,18 +455,11 @@ async def run_analysis(
         logger.info(f"Analysis completed: {result.get('status')}")
         
         # Send completion event via SSE
-        try:
-            asyncio.create_task(event_manager.send_event(
-                session_key, 
-                "analysis_complete",
-                {
-                    "status": result.get("status"),
-                    "message": "✅ Analysis completed successfully!",
-                    "timestamp": time.time()
-                }
-            ))
-        except RuntimeError:
-            pass
+        progress_manager.emit(session_key, {
+            "type": "analysis_complete",
+            "status": result.get("status"),
+            "message": "✅ Analysis completed successfully!"
+        })
         
         # Filter out non-JSON-serializable objects (like matplotlib/plotly Figures)
         def make_json_serializable(obj):

@@ -66,6 +66,7 @@ export const ChatInterface: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     if (!isTyping) {
       // Close SSE connection when workflow completes
       if (eventSourceRef.current) {
+        console.log('🔌 Closing SSE connection');
         eventSourceRef.current.close();
         eventSourceRef.current = null;
       }
@@ -82,50 +83,36 @@ export const ChatInterface: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       console.log('✅ SSE connection established');
     };
 
-    // Handle connection event
-    eventSource.addEventListener('connected', (e) => {
-      console.log('Connected to progress stream:', e.data);
-    });
-
-    // Handle tool start events
-    eventSource.addEventListener('tool_start', (e) => {
+    // Handle all incoming messages
+    eventSource.onmessage = (e) => {
+      console.log('📨 SSE received:', e.data);
       try {
         const data = JSON.parse(e.data);
-        setCurrentStep(data.message || `🔧 Executing: ${data.tool}`);
+        
+        // Handle different event types
+        if (data.type === 'connected') {
+          console.log('🔗 Connected to progress stream');
+        } else if (data.type === 'tool_executing') {
+          setCurrentStep(data.message || `🔧 Executing: ${data.tool}`);
+        } else if (data.type === 'tool_completed') {
+          setCurrentStep(data.message || `✓ Completed: ${data.tool}`);
+        } else if (data.type === 'tool_failed') {
+          setCurrentStep(data.message || `❌ Failed: ${data.tool}`);
+        } else if (data.type === 'token_update') {
+          // Optional: Display token budget updates
+          console.log('💰 Token update:', data.message);
+        } else if (data.type === 'analysis_complete') {
+          console.log('✅ Analysis completed');
+          setIsTyping(false);  // This will trigger cleanup
+        }
       } catch (err) {
-        console.error('Error parsing tool_start event:', err);
+        console.error('❌ Error parsing SSE event:', err, e.data);
       }
-    });
-
-    // Handle tool complete events
-    eventSource.addEventListener('tool_complete', (e) => {
-      try {
-        const data = JSON.parse(e.data);
-        setCurrentStep(data.message || `✓ Completed: ${data.tool}`);
-      } catch (err) {
-        console.error('Error parsing tool_complete event:', err);
-      }
-    });
-
-    // Handle tool error events
-    eventSource.addEventListener('tool_error', (e) => {
-      try {
-        const data = JSON.parse(e.data);
-        setCurrentStep(data.message || `❌ Failed: ${data.tool}`);
-      } catch (err) {
-        console.error('Error parsing tool_error event:', err);
-      }
-    });
-
-    // Handle analysis completion
-    eventSource.addEventListener('analysis_complete', (e) => {
-      console.log('✅ Analysis completed');
-      setIsTyping(false);  // This will trigger cleanup
-    });
+    };
 
     // Handle errors
     eventSource.onerror = (err) => {
-      console.error('SSE error:', err);
+      console.error('❌ SSE error:', err);
       eventSource.close();
       eventSourceRef.current = null;
     };
@@ -135,6 +122,7 @@ export const ChatInterface: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     // Cleanup on unmount or when isTyping changes to false
     return () => {
       if (eventSourceRef.current) {
+        console.log('🧹 Cleaning up SSE connection');
         eventSourceRef.current.close();
         eventSourceRef.current = null;
       }
