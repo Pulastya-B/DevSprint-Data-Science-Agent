@@ -42,7 +42,7 @@ export const ChatInterface: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       updatedAt: new Date(),
     }
   ]);
-  const [activeSessionId, setActiveSessionId] = useState<string>('');  // Empty initially, set from backend UUID
+  const [activeSessionId, setActiveSessionId] = useState<string>('1');  // Start with default session, update to UUID after first API call
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [currentStep, setCurrentStep] = useState<string>('');
@@ -63,8 +63,11 @@ export const ChatInterface: React.FC<{ onBack: () => void }> = ({ onBack }) => {
 
   // Connect to SSE when workflow starts, disconnect when it completes
   useEffect(() => {
-    if (!isTyping || !activeSessionId) {
-      // Close SSE connection when workflow completes or no session ID yet
+    // Only connect SSE if we have a backend UUID (contains hyphens), not the initial UI session '1'
+    const hasBackendUUID = activeSessionId && activeSessionId.includes('-');
+    
+    if (!isTyping || !hasBackendUUID) {
+      // Close SSE connection when workflow completes or no backend UUID yet
       if (eventSourceRef.current) {
         console.log('🔌 Closing SSE connection');
         eventSourceRef.current.close();
@@ -74,7 +77,7 @@ export const ChatInterface: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       return;
     }
 
-    // Connect to SSE stream with actual session UUID
+    // Connect to SSE stream with actual backend UUID
     const API_URL = window.location.origin;
     console.log(`🔌 Connecting SSE to session: ${activeSessionId}`);
     const eventSource = new EventSource(`${API_URL}/api/progress/stream/${activeSessionId}`);
@@ -211,9 +214,21 @@ export const ChatInterface: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       const data = await response.json();
       
       // CRITICAL: Store the actual session UUID returned from backend for SSE routing
-      if (data.session_id) {
+      if (data.session_id && data.session_id !== activeSessionId) {
         console.log(`🔑 Session UUID from backend: ${data.session_id}`);
-        // Update the active session to use this UUID for SSE connection
+        
+        // Migrate existing session to use backend UUID
+        const currentSession = sessions.find(s => s.id === activeSessionId);
+        if (currentSession) {
+          // Create new session with backend UUID and copy existing messages
+          const migratedSession: ChatSession = {
+            ...currentSession,
+            id: data.session_id,
+          };
+          setSessions(prev => [...prev.filter(s => s.id !== activeSessionId), migratedSession]);
+        }
+        
+        // Switch to the backend UUID session
         setActiveSessionId(data.session_id);
       }
       
