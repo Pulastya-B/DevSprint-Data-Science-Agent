@@ -42,7 +42,7 @@ export const ChatInterface: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       updatedAt: new Date(),
     }
   ]);
-  const [activeSessionId, setActiveSessionId] = useState('1');
+  const [activeSessionId, setActiveSessionId] = useState<string>('');  // Empty initially, set from backend UUID
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [currentStep, setCurrentStep] = useState<string>('');
@@ -63,8 +63,8 @@ export const ChatInterface: React.FC<{ onBack: () => void }> = ({ onBack }) => {
 
   // Connect to SSE when workflow starts, disconnect when it completes
   useEffect(() => {
-    if (!isTyping) {
-      // Close SSE connection when workflow completes
+    if (!isTyping || !activeSessionId) {
+      // Close SSE connection when workflow completes or no session ID yet
       if (eventSourceRef.current) {
         console.log('🔌 Closing SSE connection');
         eventSourceRef.current.close();
@@ -74,10 +74,10 @@ export const ChatInterface: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       return;
     }
 
-    // Connect to SSE stream
+    // Connect to SSE stream with actual session UUID
     const API_URL = window.location.origin;
-    const sessionKey = activeSessionId || 'default';
-    const eventSource = new EventSource(`${API_URL}/api/progress/stream/${sessionKey}`);
+    console.log(`🔌 Connecting SSE to session: ${activeSessionId}`);
+    const eventSource = new EventSource(`${API_URL}/api/progress/stream/${activeSessionId}`);
 
     eventSource.onopen = () => {
       console.log('✅ SSE connection established');

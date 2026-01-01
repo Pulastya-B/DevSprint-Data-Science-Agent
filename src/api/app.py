@@ -52,9 +52,6 @@ app.add_middleware(
 # Agent itself is stateless - no conversation memory between requests
 agent: Optional[DataScienceCopilot] = None
 
-# Global progress tracking with SSE support
-progress_store: Dict[str, List[Dict[str, Any]]] = {}
-
 # SSE event queues for real-time streaming
 class ProgressEventManager:
     """Manages SSE connections and progress events for real-time updates."""
@@ -321,37 +318,11 @@ async def run_analysis(
         logger.info(f"Follow-up request without file, using session memory")
         logger.info(f"Task: {task_description}")
         
-        # Initialize progress tracking
-        session_key = session_id or "default"
-        progress_store[session_key] = []
-        
-        def progress_callback(tool_name: str, status: str):
-            """Callback to track progress and send SSE events"""
-            # Store in legacy progress store
-            progress_store[session_key].append({
-                "tool": tool_name,
-                "status": status,
-                "timestamp": time.time()
-            })
-            
-            # Emit event to progress_manager (synchronous, works in any context)
-            event_type = "tool_executing" if status == "running" else "tool_completed" if status == "completed" else "tool_failed"
-            event_data = {
-                "type": event_type,
-                "tool": tool_name,
-                "status": status,
-                "message": f"🔧 Executing: {tool_name.replace('_', ' ').title()}" if status == "running" else 
-                           f"✓ Completed: {tool_name.replace('_', ' ').title()}" if status == "completed" else
-                           f"❌ Failed: {tool_name.replace('_', ' ').title()}"
-            }
-            progress_manager.emit(session_key, event_data)
-        
-        # Set progress callback on existing agent
-        agent.progress_callback = progress_callback
-        
         # Get the agent's actual session UUID for SSE routing
         actual_session_id = agent.session.session_id if hasattr(agent, 'session') and agent.session else "default"
-        print(f"[SSE] Using agent session UUID: {actual_session_id}")
+        print(f"[SSE] Follow-up using agent session UUID: {actual_session_id}")
+        
+        # NO progress_callback - orchestrator emits directly to UUID
         
         try:
             # Agent's session memory should resolve file_path from context
@@ -365,8 +336,8 @@ async def run_analysis(
             
             logger.info(f"Follow-up analysis completed: {result.get('status')}")
             
-            # Send completion event via SSE
-            progress_manager.emit(session_key, {
+            # Send completion event via SSE using actual session UUID
+            progress_manager.emit(actual_session_id, {
                 "type": "analysis_complete",
                 "status": result.get("status"),
                 "message": "✅ Analysis completed successfully!"
@@ -440,37 +411,11 @@ async def run_analysis(
         
         logger.info(f"File saved successfully: {file.filename} ({os.path.getsize(temp_file_path)} bytes)")
         
-        # Initialize progress tracking for this session
-        session_key = session_id or "default"
-        progress_store[session_key] = []
-        
-        def progress_callback(tool_name: str, status: str):
-            """Callback to track progress and send SSE events"""
-            # Store in legacy progress store
-            progress_store[session_key].append({
-                "tool": tool_name,
-                "status": status,
-                "timestamp": time.time()
-            })
-            
-            # Emit event to progress_manager (synchronous, works in any context)
-            event_type = "tool_executing" if status == "running" else "tool_completed" if status == "completed" else "tool_failed"
-            event_data = {
-                "type": event_type,
-                "tool": tool_name,
-                "status": status,
-                "message": f"🔧 Executing: {tool_name.replace('_', ' ').title()}" if status == "running" else 
-                           f"✓ Completed: {tool_name.replace('_', ' ').title()}" if status == "completed" else
-                           f"❌ Failed: {tool_name.replace('_', ' ').title()}"
-            }
-            progress_manager.emit(session_key, event_data)
-        
-        # Set progress callback on existing agent
-        agent.progress_callback = progress_callback
-        
-        # Get the agent's actual session UUID for SSE routing
+        # Get the agent's actual session UUID for SSE routing (BEFORE analyze())
         actual_session_id = agent.session.session_id if hasattr(agent, 'session') and agent.session else "default"
-        print(f"[SSE] Using agent session UUID: {actual_session_id}")
+        print(f"[SSE] File upload using agent session UUID: {actual_session_id}")
+        
+        # NO progress_callback - orchestrator emits directly to UUID
         
         # Call existing agent logic
         logger.info(f"Starting analysis with task: {task_description}")
@@ -512,12 +457,11 @@ async def run_analysis(
         
         serializable_result = make_json_serializable(result)
         
-        # Return result with progress tracking and ACTUAL session UUID for SSE
+        # Return result with ACTUAL session UUID for SSE
         return JSONResponse(
             content={
                 "success": result.get("status") == "success",
                 "result": serializable_result,
-                "progress": progress_store.get(session_key, []),
                 "session_id": actual_session_id,  # Return UUID for SSE connection
                 "metadata": {
                     "filename": file.filename,
