@@ -746,20 +746,29 @@ export const ChatInterface: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                           <h4 className="text-xs font-bold uppercase tracking-wider text-white/60">Visualizations ({allPlots.length})</h4>
                         </div>
                         <div className="space-y-2">
-                          {allPlots.map((plot, idx) => (
-                            <button
-                              key={idx}
-                              onClick={() => setReportModalUrl(plot.url)}
-                              className="w-full p-3 rounded-lg bg-white/5 border border-white/10 hover:bg-emerald-500/10 hover:border-emerald-500/30 transition-all text-left group"
-                            >
-                              <div className="flex items-center justify-between">
-                                <span className="text-sm text-white/80 truncate flex-1">{plot.title}</span>
-                                <ChevronRight className="w-4 h-4 text-white/40 group-hover:text-emerald-400 transition-all" />
-                              </div>
-                              <span className="text-xs text-white/40 mt-1 block">{plot.type || 'interactive'}</span>
-                            </button>
-                          ))}
-                        </div>
+                          {allPlots.map((plot, idx) => {
+                            // Ensure URL is properly formatted
+                            let plotUrl = plot.url;
+                            if (plotUrl && plotUrl.startsWith('./outputs/')) {
+                              plotUrl = plotUrl.replace('./outputs/', '/outputs/');
+                            } else if (plotUrl && !plotUrl.startsWith('/outputs/')) {
+                              plotUrl = `/outputs/${plotUrl.replace(/^outputs\//, '')}`;
+                            }
+                            
+                            return (
+                              <button
+                                key={idx}
+                                onClick={() => setReportModalUrl(plotUrl || plot.url)}
+                                className="w-full p-3 rounded-lg bg-white/5 border border-white/10 hover:bg-emerald-500/10 hover:border-emerald-500/30 transition-all text-left group"
+                              >
+                                <div className="flex items-center justify-between">
+                                  <span className="text-sm text-white/80 truncate flex-1">{plot.title}</span>
+                                  <ChevronRight className="w-4 h-4 text-white/40 group-hover:text-emerald-400 transition-all" />
+                                </div>
+                                <span className="text-xs text-white/40 mt-1 block">{plot.type || 'interactive'}</span>
+                              </button>
+                            );
+                          })}\n                        </div>
                       </div>
                     )}
                     
@@ -774,21 +783,27 @@ export const ChatInterface: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                           {uniqueDataFiles.map((file, idx) => {
                             // Extract filename from path
                             const fileName = file.split('/').pop() || file;
-                            // Create download URL
-                            const downloadUrl = file.startsWith('/') ? file : `/${file}`;
+                            // Create proper download URL
+                            let downloadUrl = file;
+                            if (downloadUrl.startsWith('./outputs/')) {
+                              downloadUrl = downloadUrl.replace('./outputs/', '/outputs/');
+                            } else if (!downloadUrl.startsWith('/outputs/')) {
+                              downloadUrl = `/outputs/${file.replace(/^outputs\//, '')}`;
+                            }
                             
                             return (
-                              <button
+                              <a
                                 key={idx}
-                                onClick={() => window.open(downloadUrl, '_blank')}
-                                className="w-full p-3 rounded-lg bg-white/5 border border-white/10 hover:bg-blue-500/10 hover:border-blue-500/30 transition-all text-left group"
+                                href={downloadUrl}
+                                download={fileName}
+                                className="block w-full p-3 rounded-lg bg-white/5 border border-white/10 hover:bg-blue-500/10 hover:border-blue-500/30 transition-all group"
                               >
                                 <div className="flex items-center justify-between">
                                   <span className="text-sm text-white/80 truncate flex-1">{fileName}</span>
                                   <ChevronRight className="w-4 h-4 text-white/40 group-hover:text-blue-400 transition-all" />
                                 </div>
                                 <span className="text-xs text-white/40 mt-1 block">Click to download</span>
-                              </button>
+                              </a>
                             );
                           })}
                         </div>

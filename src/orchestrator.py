@@ -1099,16 +1099,13 @@ You are a DOER. Complete workflows based on user intent."""
                     "url": f"/outputs/{nested_result['output_path'].replace('./outputs/', '')}"
                 })
         
-        # Build enhanced text summary - start with metrics then LLM explanation
-        summary_lines = [
-            f"## 📊 Analysis Complete",
-            ""
-        ]
+        # Build STRICT response template to prevent malformed output
+        summary_lines = []
         
-        # Show all baseline models comparison FIRST (before LLM summary)
+        # SECTION 1: Model Performance (if models were trained)
         if "all_models" in metrics and metrics["all_models"]:
             summary_lines.extend([
-                "### 🔬 Baseline Models Comparison",
+                "## 🎯 Model Performance",
                 ""
             ])
             
@@ -1124,48 +1121,69 @@ You are a DOER. Complete workflows based on user intent."""
                 rmse = model_metrics.get("rmse", 0)
                 mae = model_metrics.get("mae", 0)
                 
-                # Highlight the best model with emoji
+                # Highlight the best model
                 is_best = (
                     "best_model" in metrics and 
                     metrics["best_model"].get("name", "") == model_name
                 )
-                prefix = "🏆 " if is_best else "  "
+                prefix = "🏆 " if is_best else "📊 "
                 
                 summary_lines.append(
                     f"{prefix}**{model_name.replace('_', ' ').title()}**: "
-                    f"R²={r2:.4f}, RMSE={rmse:.4f}, MAE={mae:.4f}"
+                    f"R²={r2:.4f} | RMSE={rmse:.4f} | MAE={mae:.4f}"
                 )
             
-            summary_lines.append("")
+            summary_lines.extend(["", ""])
         
-        # Show tuned model separately if hyperparameter tuning was done
+        # SECTION 2: Tuning Results (if hyperparameter tuning was done)
         if "tuned_model" in metrics:
             tuned = metrics["tuned_model"]
             summary_lines.extend([
-                "### ⚙️ Hyperparameter Tuning Results",
-                f"- **Model Type**: {tuned.get('model_type', 'N/A')}",
-                f"- **Optimized Score**: {tuned.get('best_score', 0):.4f}",
+                "## ⚙️ Hyperparameter Tuning",
+                "",
+                f"**Model**: {tuned.get('model_type', 'Unknown').title()}",
+                f"**Optimized Score**: {tuned.get('best_score', 0):.4f}",
+                "",
                 ""
             ])
         
+        # SECTION 3: Cross-Validation (if performed)
         if "cross_validation" in metrics:
             cv = metrics["cross_validation"]
             summary_lines.extend([
-                "### ✅ Cross-Validation Results",
-                f"- **Mean Score**: {cv['mean_score']:.4f} (± {cv['std_score']:.4f})",
+                "## ✅ Cross-Validation",
+                "",
+                f"**Mean Score**: {cv['mean_score']:.4f} ± {cv['std_score']:.4f}",
+                "",
                 ""
             ])
         
-        # Add LLM's explanation after metrics
+        # SECTION 4: Analysis Summary (LLM explanation - cleaned)
         if llm_summary and llm_summary.strip():
-            summary_lines.extend([
-                "---",
-                "",
-                "### 📝 Analysis Summary",
-                "",
-                llm_summary,
-                ""
-            ])
+            # Clean LLM summary aggressively
+            cleaned_summary = llm_summary
+            # Remove all file path patterns
+            import re
+            cleaned_summary = re.sub(r'\./outputs/[^\s\)\]]+', '', cleaned_summary)
+            cleaned_summary = re.sub(r'/outputs/[^\s\)\]]+', '', cleaned_summary)
+            cleaned_summary = re.sub(r'`[^`]*\.(csv|pkl|html|png|json)[^`]*`', '', cleaned_summary)
+            cleaned_summary = re.sub(r'\([^\)]*\.(csv|pkl|html|png|json)[^\)]*\)', '', cleaned_summary)
+            cleaned_summary = re.sub(r'Printed in logs.*?\)', '', cleaned_summary, flags=re.IGNORECASE)
+            cleaned_summary = re.sub(r'\(see above\)', '', cleaned_summary, flags=re.IGNORECASE)
+            cleaned_summary = re.sub(r'see above', '', cleaned_summary, flags=re.IGNORECASE)
+            # Remove broken tables
+            cleaned_summary = re.sub(r'^\s*\|\s*\|\s*$', '', cleaned_summary, flags=re.MULTILINE)
+            cleaned_summary = re.sub(r'^\s*[-|]+\s*$', '', cleaned_summary, flags=re.MULTILINE)
+            cleaned_summary = re.sub(r'\n{3,}', '\n\n', cleaned_summary)
+            cleaned_summary = cleaned_summary.strip()
+            
+            if cleaned_summary:
+                summary_lines.extend([
+                    "## 📝 Workflow Summary",
+                    "",
+                    cleaned_summary,
+                    ""
+                ])
         
         # Add artifact links
         if artifacts["models"]:
