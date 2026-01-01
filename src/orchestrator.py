@@ -2428,6 +2428,22 @@ You are a DOER. Complete workflows based on user intent."""
                         tool_name = tool_call.function.name
                         tool_args = json.loads(tool_call.function.arguments)
                         tool_call_id = tool_call.id
+                        
+                        # CRITICAL FIX: Sanitize tool_name (API sometimes returns garbage)
+                        # Tool names should be simple alphanumeric + underscore only
+                        if not isinstance(tool_name, str) or len(tool_name) > 100:
+                            print(f"⚠️  CORRUPTED TOOL NAME DETECTED: {str(tool_name)[:200]}")
+                            # Try to extract actual tool name from garbage
+                            import re
+                            # Look for valid tool name pattern at the end
+                            match = re.search(r'([a-z_]+)[\"\']?\s*$', str(tool_name), re.IGNORECASE)
+                            if match:
+                                tool_name = match.group(1)
+                                print(f"✓ Recovered tool name: {tool_name}")
+                            else:
+                                print(f"❌ Cannot recover tool name, skipping this tool call")
+                                continue
+                        
                     elif self.provider == "gemini":
                         tool_name = tool_call.name
                         # Convert protobuf args to Python dict
