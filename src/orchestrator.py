@@ -21,6 +21,7 @@ from .session_memory import SessionMemory
 from .session_store import SessionStore
 from .workflow_state import WorkflowState
 from .utils.schema_extraction import extract_schema_local, infer_task_type
+from .progress_manager import progress_manager
 from .tools import (
     # Basic Tools (13) - UPDATED: Added get_smart_summary + 3 wrangling tools
     profile_dataset,
@@ -2234,6 +2235,16 @@ You are a DOER. Complete workflows based on user intent."""
                             tokens_used = response.usage.total_tokens
                             self.tokens_this_minute += tokens_used
                             print(f"📊 Tokens: {tokens_used} this call | {self.tokens_this_minute}/{self.tpm_limit} this minute")
+                            
+                            # Emit token update for SSE streaming
+                            if hasattr(self, 'session') and self.session:
+                                progress_manager.emit(self.session.session_id, {
+                                    'type': 'token_update',
+                                    'message': f"📊 Tokens: {tokens_used} this call | {self.tokens_this_minute}/{self.tpm_limit} this minute",
+                                    'tokens_used': tokens_used,
+                                    'tokens_this_minute': self.tokens_this_minute,
+                                    'tpm_limit': self.tpm_limit
+                                })
                         
                         response_message = response.choices[0].message
                         tool_calls = response_message.tool_calls
@@ -2264,6 +2275,16 @@ You are a DOER. Complete workflows based on user intent."""
                             tokens_used = response.usage.total_tokens
                             self.tokens_this_minute += tokens_used
                             print(f"📊 Tokens: {tokens_used} this call | {self.tokens_this_minute}/{self.tpm_limit} this minute")
+                            
+                            # Emit token update for SSE streaming
+                            if hasattr(self, 'session') and self.session:
+                                progress_manager.emit(self.session.session_id, {
+                                    'type': 'token_update',
+                                    'message': f"📊 Tokens: {tokens_used} this call | {self.tokens_this_minute}/{self.tpm_limit} this minute",
+                                    'tokens_used': tokens_used,
+                                    'tokens_this_minute': self.tokens_this_minute,
+                                    'tpm_limit': self.tpm_limit
+                                })
                         
                         response_message = response.choices[0].message
                         tool_calls = response_message.tool_calls
@@ -2318,6 +2339,16 @@ You are a DOER. Complete workflows based on user intent."""
                                 tokens_used = response.usage.total_tokens
                                 self.tokens_this_minute += tokens_used
                                 print(f"📊 Tokens: {tokens_used} this call | {self.tokens_this_minute}/{self.tpm_limit} this minute")
+                                
+                                # Emit token update for SSE streaming
+                                if hasattr(self, 'session') and self.session:
+                                    progress_manager.emit(self.session.session_id, {
+                                        'type': 'token_update',
+                                        'message': f"📊 Tokens: {tokens_used} this call | {self.tokens_this_minute}/{self.tpm_limit} this minute",
+                                        'tokens_used': tokens_used,
+                                        'tokens_this_minute': self.tokens_this_minute,
+                                        'tpm_limit': self.tpm_limit
+                                    })
                             
                             response_message = response.choices[0].message
                             tool_calls = response_message.tool_calls
@@ -2987,6 +3018,15 @@ You are a DOER. Complete workflows based on user intent."""
                     except:
                         print(f"   Arguments: {tool_args}")
                     
+                    # Emit progress event for SSE streaming
+                    if hasattr(self, 'session') and self.session:
+                        progress_manager.emit(self.session.session_id, {
+                            'type': 'tool_executing',
+                            'tool': tool_name,
+                            'message': f"🔧 Executing: {tool_name}",
+                            'arguments': tool_args
+                        })
+                    
                     # Execute tool
                     tool_result = self._execute_tool(tool_name, tool_args)
                     
@@ -2997,6 +3037,16 @@ You are a DOER. Complete workflows based on user intent."""
                         print(f"   ❌ FAILED: {tool_name}")
                         print(f"   ⚠️  Error Type: {error_type}")
                         print(f"   ⚠️  Error Message: {error_msg}")
+                        
+                        # Emit failure event for SSE streaming
+                        if hasattr(self, 'session') and self.session:
+                            progress_manager.emit(self.session.session_id, {
+                                'type': 'tool_failed',
+                                'tool': tool_name,
+                                'message': f"❌ FAILED: {tool_name}",
+                                'error': error_msg,
+                                'error_type': error_type
+                            })
                         
                         # Add recovery guidance with last successful file
                         last_successful_file = self._get_last_successful_file(workflow_history)
@@ -3061,6 +3111,14 @@ You are a DOER. Complete workflows based on user intent."""
                             print(f"   {error_msg}\n")
                     else:
                         print(f"   ✓ Completed: {tool_name}")
+                        
+                        # Emit completion event for SSE streaming
+                        if hasattr(self, 'session') and self.session:
+                            progress_manager.emit(self.session.session_id, {
+                                'type': 'tool_completed',
+                                'tool': tool_name,
+                                'message': f"✓ Completed: {tool_name}"
+                            })
                     
                     # Track in workflow
                     workflow_history.append({
