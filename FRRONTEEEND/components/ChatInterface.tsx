@@ -61,23 +61,19 @@ export const ChatInterface: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     }
   }, [activeSession.messages, isTyping]);
 
-  // Connect to SSE when workflow starts, disconnect when it completes
+  // Connect to SSE when we receive a valid backend UUID
   useEffect(() => {
-    // Only connect SSE if we have a backend UUID (contains hyphens), not the initial UI session '1'
-    const hasBackendUUID = activeSessionId && activeSessionId.includes('-');
-    
-    if (!isTyping || !hasBackendUUID) {
-      // Close SSE connection when workflow completes or no backend UUID yet
-      if (eventSourceRef.current) {
-        console.log('🔌 Closing SSE connection');
-        eventSourceRef.current.close();
-        eventSourceRef.current = null;
-      }
-      setCurrentStep('');
+    // Only connect if we have a backend UUID (contains hyphens)
+    if (!activeSessionId || !activeSessionId.includes('-')) {
       return;
     }
 
-    // Connect to SSE stream with actual backend UUID
+    // Don't reconnect if already connected to this session
+    if (eventSourceRef.current) {
+      return;
+    }
+
+    // Connect to SSE stream - will receive history + any new events
     const API_URL = window.location.origin;
     console.log(`🔌 Connecting SSE to session: ${activeSessionId}`);
     const eventSource = new EventSource(`${API_URL}/api/progress/stream/${activeSessionId}`);
@@ -122,7 +118,7 @@ export const ChatInterface: React.FC<{ onBack: () => void }> = ({ onBack }) => {
 
     eventSourceRef.current = eventSource;
 
-    // Cleanup on unmount or when isTyping changes to false
+    // Cleanup on unmount or session change
     return () => {
       if (eventSourceRef.current) {
         console.log('🧹 Cleaning up SSE connection');
@@ -130,7 +126,7 @@ export const ChatInterface: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         eventSourceRef.current = null;
       }
     };
-  }, [isTyping, activeSessionId]);
+  }, [activeSessionId]);
 
   const handleSend = async () => {
     if ((!input.trim() && !uploadedFile) || isTyping) return;
@@ -146,7 +142,7 @@ export const ChatInterface: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     const newMessages = [...activeSession.messages, userMessage];
     updateSession(activeSessionId, newMessages);
     setInput('');
-    setIsTyping(true);
+    // DON'T set isTyping yet - wait until we have UUID from backend
 
     try {
       
@@ -213,7 +209,7 @@ export const ChatInterface: React.FC<{ onBack: () => void }> = ({ onBack }) => {
 
       const data = await response.json();
       
-      // CRITICAL: Store the actual session UUID returned from backend for SSE routing
+      // CRITICAL: Get UUID from backend FIRST, then start SSE
       if (data.session_id && data.session_id !== activeSessionId) {
         console.log(`🔑 Session UUID from backend: ${data.session_id}`);
         
@@ -231,6 +227,9 @@ export const ChatInterface: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         // Switch to the backend UUID session
         setActiveSessionId(data.session_id);
       }
+      
+      // NOW start SSE - after we have the UUID
+      setIsTyping(true);
       
       let assistantContent = '';
       let reports: Array<{name: string, path: string}> = [];
