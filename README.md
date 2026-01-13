@@ -1,15 +1,4 @@
----
-title: DevSprint Data Science Agent
-emoji: 🤖
-colorFrom: blue
-colorTo: purple
-sdk: docker
-pinned: false
-license: mit
-app_port: 7860
----
-
-# DevSprint Data Science Agent 🤖
+# Data Science Agent 🤖
 
 An intelligent AI agent for automated data science workflows, powered by Google Gemini 2.5 Flash with 82+ specialized tools for data analysis, visualization, and machine learning.
 
