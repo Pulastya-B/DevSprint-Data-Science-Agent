@@ -1,6 +1,6 @@
 # Data Science Agent 🤖
 
-An intelligent AI agent for automated data science workflows, powered by Google Gemini 2.5 Flash with 82+ specialized tools for data analysis, visualization, and machine learning.
+An intelligent AI agent for automated data science workflows, powered by Mistral Large with 82+ specialized tools for data analysis, visualization, and machine learning.
 
 ## Features
 
