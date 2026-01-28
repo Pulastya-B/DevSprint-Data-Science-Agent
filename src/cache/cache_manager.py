@@ -1,6 +1,7 @@
 """
 Cache Manager for Data Science Copilot
-Uses SQLite for persistent caching of API responses and computation results.
+Uses SQLite for persistent caching with hierarchical support.
+Supports individual tool result caching and cache warming.
 """
 
 import hashlib
@@ -8,7 +9,7 @@ import json
 import sqlite3
 import time
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Optional, Dict, List
 import pickle
 
 
@@ -16,8 +17,11 @@ class CacheManager:
     """
     Manages caching of LLM responses and expensive computations.
     
-    Uses SQLite for persistence and supports TTL-based invalidation.
-    Cache keys are generated from file hashes and operation parameters.
+    Features:
+    - Hierarchical caching: file_hash → [profile, quality, features, etc.]
+    - Individual tool result caching (not full workflows)
+    - Cache warming on file upload
+    - TTL-based invalidation
     """
     
     def __init__(self, db_path: str = "./cache_db/cache.db", ttl_seconds: int = 86400):
@@ -38,11 +42,12 @@ class CacheManager:
         self._init_db()
     
     def _init_db(self) -> None:
-        """Create cache table if it doesn't exist."""
+        """Create cache tables if they don't exist."""
         try:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
             
+            # Main cache table for individual tool results
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS cache (
                     key TEXT PRIMARY KEY,
@@ -53,10 +58,33 @@ class CacheManager:
                 )
             """)
             
-            # Create index on expires_at for efficient cleanup
+            # Hierarchical cache table for file-based operations
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS hierarchical_cache (
+                    file_hash TEXT NOT NULL,
+                    tool_name TEXT NOT NULL,
+                    tool_args TEXT,
+                    result BLOB NOT NULL,
+                    created_at INTEGER NOT NULL,
+                    expires_at INTEGER NOT NULL,
+                    PRIMARY KEY (file_hash, tool_name, tool_args)
+                )
+            """)
+            
+            # Create indices for efficient lookup
             cursor.execute("""
                 CREATE INDEX IF NOT EXISTS idx_expires_at 
                 ON cache(expires_at)
+            """)
+            
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_file_hash 
+                ON hierarchical_cache(file_hash)
+            """)
+            
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_hierarchical_expires 
+                ON hierarchical_cache(expires_at)
             """)
             
             conn.commit()
@@ -84,8 +112,30 @@ class CacheManager:
                 """)
                 
                 cursor.execute("""
+                    CREATE TABLE hierarchical_cache (
+                        file_hash TEXT NOT NULL,
+                        tool_name TEXT NOT NULL,
+                        tool_args TEXT,
+                        result BLOB NOT NULL,
+                        created_at INTEGER NOT NULL,
+                        expires_at INTEGER NOT NULL,
+                        PRIMARY KEY (file_hash, tool_name, tool_args)
+                    )
+                """)
+                
+                cursor.execute("""
                     CREATE INDEX idx_expires_at 
                     ON cache(expires_at)
+                """)
+                
+                cursor.execute("""
+                    CREATE INDEX idx_file_hash 
+                    ON hierarchical_cache(file_hash)
+                """)
+                
+                cursor.execute("""
+                    CREATE INDEX idx_hierarchical_expires 
+                    ON hierarchical_cache(expires_at)
                 """)
                 
                 conn.commit()
@@ -290,3 +340,222 @@ class CacheManager:
                 hasher.update(chunk)
         
         return hasher.hexdigest()
+    
+    # ========================================
+    # HIERARCHICAL CACHING (NEW)
+    # ========================================
+    
+    def get_tool_result(self, file_hash: str, tool_name: str, tool_args: Dict[str, Any] = None) -> Optional[Any]:
+        """
+        Get cached result for a specific tool applied to a file.
+        
+        Args:
+            file_hash: MD5 hash of the file
+            tool_name: Name of the tool
+            tool_args: Arguments passed to the tool (excluding file_path)
+            
+        Returns:
+            Cached tool result if exists and not expired, None otherwise
+        """
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            current_time = int(time.time())
+            tool_args_str = json.dumps(tool_args or {}, sort_keys=True)
+            
+            cursor.execute("""
+                SELECT result, expires_at 
+                FROM hierarchical_cache 
+                WHERE file_hash = ? AND tool_name = ? AND tool_args = ? AND expires_at > ?
+            """, (file_hash, tool_name, tool_args_str, current_time))
+            
+            result = cursor.fetchone()
+            conn.close()
+            
+            if result:
+                result_blob, expires_at = result
+                cached_result = pickle.loads(result_blob)
+                print(f"📦 Cache HIT: {tool_name} for file {file_hash[:8]}...")
+                return cached_result
+            else:
+                print(f"📭 Cache MISS: {tool_name} for file {file_hash[:8]}...")
+                return None
+                
+        except Exception as e:
+            print(f"⚠️ Hierarchical cache read error: {e}")
+            return None
+    
+    def set_tool_result(self, file_hash: str, tool_name: str, result: Any, 
+                       tool_args: Dict[str, Any] = None, ttl_override: Optional[int] = None) -> None:
+        """
+        Cache result for a specific tool applied to a file.
+        
+        Args:
+            file_hash: MD5 hash of the file
+            tool_name: Name of the tool
+            result: Tool result to cache
+            tool_args: Arguments passed to the tool (excluding file_path)
+            ttl_override: Optional override for TTL (seconds)
+        """
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            current_time = int(time.time())
+            ttl = ttl_override if ttl_override is not None else self.ttl_seconds
+            expires_at = current_time + ttl
+            
+            tool_args_str = json.dumps(tool_args or {}, sort_keys=True)
+            result_blob = pickle.dumps(result)
+            
+            cursor.execute("""
+                INSERT OR REPLACE INTO hierarchical_cache 
+                (file_hash, tool_name, tool_args, result, created_at, expires_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (file_hash, tool_name, tool_args_str, result_blob, current_time, expires_at))
+            
+            conn.commit()
+            conn.close()
+            print(f"💾 Cached: {tool_name} for file {file_hash[:8]}...")
+            
+        except Exception as e:
+            print(f"⚠️ Hierarchical cache write error: {e}")
+    
+    def get_all_tool_results_for_file(self, file_hash: str) -> Dict[str, Any]:
+        """
+        Get all cached tool results for a specific file.
+        
+        Args:
+            file_hash: MD5 hash of the file
+            
+        Returns:
+            Dictionary mapping tool_name → result for all cached results
+        """
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            current_time = int(time.time())
+            
+            cursor.execute("""
+                SELECT tool_name, tool_args, result
+                FROM hierarchical_cache
+                WHERE file_hash = ? AND expires_at > ?
+            """, (file_hash, current_time))
+            
+            results = {}
+            for row in cursor.fetchall():
+                tool_name, tool_args_str, result_blob = row
+                tool_args = json.loads(tool_args_str)
+                result = pickle.loads(result_blob)
+                
+                # Create unique key for tool + args combination
+                if tool_args:
+                    key = f"{tool_name}_{hashlib.md5(tool_args_str.encode()).hexdigest()[:8]}"
+                else:
+                    key = tool_name
+                    
+                results[key] = {
+                    "tool_name": tool_name,
+                    "tool_args": tool_args,
+                    "result": result
+                }
+            
+            conn.close()
+            
+            if results:
+                print(f"📦 Found {len(results)} cached results for file {file_hash[:8]}...")
+            
+            return results
+            
+        except Exception as e:
+            print(f"⚠️ Error retrieving file cache results: {e}")
+            return {}
+    
+    def warm_cache_for_file(self, file_path: str, tools_to_warm: List[str] = None) -> Dict[str, bool]:
+        """
+        Warm cache by pre-computing common tool results for a file.
+        
+        This is typically called on file upload to speed up first analysis.
+        
+        Args:
+            file_path: Path to the file
+            tools_to_warm: List of tool names to pre-compute (defaults to basic profiling tools)
+            
+        Returns:
+            Dictionary mapping tool_name → success status
+        """
+        if tools_to_warm is None:
+            # Default tools to warm: basic profiling operations
+            tools_to_warm = [
+                "profile_dataset",
+                "detect_data_quality_issues",
+                "analyze_correlations"
+            ]
+        
+        file_hash = self.generate_file_hash(file_path)
+        results = {}
+        
+        print(f"🔥 Warming cache for file {file_hash[:8]}... ({len(tools_to_warm)} tools)")
+        
+        # Import here to avoid circular dependency
+        from ..orchestrator import DataScienceOrchestrator
+        
+        try:
+            # Create temporary orchestrator for cache warming
+            orchestrator = DataScienceOrchestrator(use_cache=False)  # Don't use cache during warming
+            
+            for tool_name in tools_to_warm:
+                try:
+                    # Execute tool
+                    result = orchestrator._execute_tool(tool_name, {"file_path": file_path})
+                    
+                    # Cache the result
+                    if result.get("success", True):
+                        self.set_tool_result(file_hash, tool_name, result)
+                        results[tool_name] = True
+                        print(f"   ✓ Warmed: {tool_name}")
+                    else:
+                        results[tool_name] = False
+                        print(f"   ✗ Failed: {tool_name}")
+                        
+                except Exception as e:
+                    results[tool_name] = False
+                    print(f"   ✗ Error warming {tool_name}: {e}")
+            
+            print(f"✅ Cache warming complete: {sum(results.values())}/{len(tools_to_warm)} successful")
+            
+        except Exception as e:
+            print(f"❌ Cache warming failed: {e}")
+        
+        return results
+    
+    def invalidate_file_cache(self, file_hash: str) -> int:
+        """
+        Invalidate all cached results for a specific file.
+        
+        Args:
+            file_hash: MD5 hash of the file
+            
+        Returns:
+            Number of entries invalidated
+        """
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            cursor.execute("DELETE FROM hierarchical_cache WHERE file_hash = ?", (file_hash,))
+            deleted = cursor.rowcount
+            
+            conn.commit()
+            conn.close()
+            
+            if deleted > 0:
+                print(f"🗑️ Invalidated {deleted} cached results for file {file_hash[:8]}...")
+            
+            return deleted
+            
+        except Exception as e:
+            print(f"⚠️ Error invalidating file cache: {e}")
+            return 0

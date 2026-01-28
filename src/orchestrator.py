@@ -17,6 +17,9 @@ from dotenv import load_dotenv
 
 from .cache.cache_manager import CacheManager
 from .tools.tools_registry import TOOLS, get_all_tool_names, get_tools_by_category
+from .tools.agent_tool_mapping import (get_tools_for_agent, filter_tools_by_names, 
+                                        get_agent_description, suggest_next_agent)
+from .reasoning.reasoning_trace import get_reasoning_trace, reset_reasoning_trace
 from .session_memory import SessionMemory
 from .session_store import SessionStore
 from .workflow_state import WorkflowState
@@ -183,13 +186,19 @@ class DataScienceCopilot:
         self.use_compact_prompts = use_compact_prompts
         
         if self.provider == "mistral":
-            # Initialize Mistral client (updated to new SDK)
+            # Initialize Mistral client
             api_key = mistral_api_key or os.getenv("MISTRAL_API_KEY")
             if not api_key:
                 raise ValueError("Mistral API key must be provided or set in MISTRAL_API_KEY env var")
             
-            from mistralai import Mistral  # New SDK (v1.x)
-            self.mistral_client = Mistral(api_key=api_key.strip())
+            # Try new SDK first (v1.x), fall back to old SDK (v0.x)
+            try:
+                from mistralai import Mistral  # New SDK (v1.x)
+                self.mistral_client = Mistral(api_key=api_key.strip())
+            except ImportError:
+                # Fall back to old SDK (v0.x)
+                from mistralai.client import MistralClient
+                self.mistral_client = MistralClient(api_key=api_key.strip())
             
             self.model = os.getenv("MISTRAL_MODEL", "mistral-large-latest")
             self.reasoning_effort = reasoning_effort
@@ -1253,6 +1262,128 @@ You receive quality reports from EDA agent and deliver clean data to modeling ag
             elif status.startswith("error"):
                 print(f"❌ [Parallel] Failed: {tool_name}")
     
+    # 🤝 INTER-AGENT COMMUNICATION: Methods for agent hand-offs
+    def _should_hand_off(self, current_agent: str, completed_tools: List[str], 
+                        workflow_history: List[Dict]) -> Optional[str]:
+        """
+        Determine if workflow should hand off to a different specialist agent.
+        
+        Args:
+            current_agent: Currently active agent
+            completed_tools: List of tool names executed so far
+            workflow_history: Full workflow history
+            
+        Returns:
+            Name of agent to hand off to, or None to stay with current agent
+        """
+        # Suggest next agent based on completed work
+        suggested_agent = suggest_next_agent(current_agent, completed_tools)
+        
+        # Hand off if different from current agent
+        if suggested_agent and suggested_agent != current_agent:
+            return suggested_agent
+        
+        return None
+    
+    def _hand_off_to_agent(self, target_agent: str, context: Dict[str, Any], 
+                          iteration: int) -> Dict[str, Any]:
+        """
+        Hand off workflow to a different specialist agent.
+        
+        Args:
+            target_agent: Agent to hand off to
+            context: Shared context (dataset info, completed steps, etc.)
+            iteration: Current iteration number
+            
+        Returns:
+            Dictionary with hand-off details
+        """
+        if target_agent not in self.specialist_agents:
+            print(f"⚠️ Invalid hand-off target: {target_agent}")
+            return {"success": False, "error": "Invalid target agent"}
+        
+        # Update active agent
+        old_agent = self.active_agent
+        self.active_agent = target_agent
+        
+        agent_config = self.specialist_agents[target_agent]
+        
+        print(f"\n🔄 AGENT HAND-OFF (iteration {iteration})")
+        print(f"   From: {old_agent}")
+        print(f"   To: {target_agent} {agent_config['emoji']}")
+        print(f"   Reason: {context.get('reason', 'Workflow progression')}")
+        
+        # Reload tools for new agent
+        new_tools = self._compress_tools_registry(agent_name=target_agent)
+        print(f"   📦 Reloaded {len(new_tools)} tools for {target_agent}")
+        
+        # Emit hand-off event
+        if self.progress_callback:
+            self.progress_callback({
+                "type": "agent_handoff",
+                "from_agent": old_agent,
+                "to_agent": target_agent,
+                "agent_name": agent_config['name'],
+                "emoji": agent_config['emoji'],
+                "reason": context.get('reason', 'Workflow progression'),
+                "tools_count": len(new_tools)
+            })
+        
+        return {
+            "success": True,
+            "old_agent": old_agent,
+            "new_agent": target_agent,
+            "new_tools": new_tools,
+            "system_prompt": agent_config["system_prompt"]
+        }
+    
+    def _get_agent_chain_suggestions(self, task_description: str, 
+                                     current_agent: str) -> List[str]:
+        """
+        Get suggested agent chain for complex workflows.
+        
+        Args:
+            task_description: User's task description
+            current_agent: Currently active agent
+            
+        Returns:
+            List of agent names in suggested execution order
+        """
+        task_lower = task_description.lower()
+        
+        # Detect workflow type from task description
+        if "full" in task_lower or "complete" in task_lower or "end-to-end" in task_lower:
+            # Full ML pipeline
+            return [
+                "data_quality_agent",
+                "preprocessing_agent",
+                "visualization_agent",
+                "modeling_agent",
+                "production_agent"
+            ]
+        elif "train" in task_lower or "model" in task_lower:
+            # ML-focused workflow
+            return [
+                "data_quality_agent",
+                "preprocessing_agent",
+                "modeling_agent"
+            ]
+        elif "visualiz" in task_lower or "plot" in task_lower or "chart" in task_lower:
+            # Visualization-focused
+            return [
+                "data_quality_agent",
+                "visualization_agent"
+            ]
+        elif "clean" in task_lower or "preprocess" in task_lower:
+            # Data cleaning focused
+            return [
+                "data_quality_agent",
+                "preprocessing_agent"
+            ]
+        else:
+            # Default single agent
+            return [current_agent]
+    
     def _generate_enhanced_summary(
         self, 
         workflow_history: List[Dict], 
@@ -2006,14 +2137,28 @@ You receive quality reports from EDA agent and deliver clean data to modeling ag
         """Format tool result for LLM consumption (alias for summarize)."""
         return self._summarize_tool_result(tool_result)
     
-    def _compress_tools_registry(self) -> List[Dict]:
+    def _compress_tools_registry(self, agent_name: str = None) -> List[Dict]:
         """
         Create compressed version of tools registry.
-        Keeps ALL 46 tools but removes verbose parameter descriptions.
+        Optionally filter to only include tools relevant to a specific agent.
+        
+        Args:
+            agent_name: If provided, only include tools relevant to this agent
+        
+        Returns:
+            Compressed and optionally filtered tools list
         """
+        # If agent specified, filter tools first
+        if agent_name:
+            tool_names = get_tools_for_agent(agent_name)
+            tools_to_compress = filter_tools_by_names(self.tools_registry, tool_names)
+            print(f"🎯 Agent-specific tools: {len(tools_to_compress)} tools for {agent_name}")
+        else:
+            tools_to_compress = self.tools_registry
+        
         compressed = []
         
-        for tool in self.tools_registry:
+        for tool in tools_to_compress:
             # Compress parameters by removing descriptions
             params = tool["function"]["parameters"]
             compressed_params = {
@@ -2561,10 +2706,27 @@ You receive quality reports from EDA agent and deliver clean data to modeling ag
             # 🤖 MULTI-AGENT ARCHITECTURE: Route to specialist agent
             selected_agent = self._select_specialist_agent(task_description)
             self.active_agent = selected_agent
+            current_agent = selected_agent  # Track for dynamic tool loading
+            
+            # 📝 Record agent selection in reasoning trace
+            if self.semantic_layer.enabled:
+                # Get confidence from semantic routing
+                agent_descriptions = {name: config["description"] for name, config in self.specialist_agents.items()}
+                _, confidence = self.semantic_layer.route_to_agent(task_description, agent_descriptions)
+                self.reasoning_trace.record_agent_selection(
+                    task=task_description,
+                    selected_agent=selected_agent,
+                    confidence=confidence,
+                    alternatives=agent_descriptions
+                )
             
             agent_config = self.specialist_agents[selected_agent]
             print(f"\n{agent_config['emoji']} Delegating to: {agent_config['name']}")
             print(f"   Specialization: {agent_config['description']}")
+            
+            # 🎯 DYNAMIC TOOL LOADING: Load only tools relevant to this agent
+            tools_to_use = self._compress_tools_registry(agent_name=selected_agent)
+            print(f"   📦 Loaded {len(tools_to_use)} agent-specific tools")
             
             # Use specialist's system prompt
             system_prompt = agent_config["system_prompt"]
@@ -2575,7 +2737,8 @@ You receive quality reports from EDA agent and deliver clean data to modeling ag
                     "type": "agent_assigned",
                     "agent": agent_config['name'],
                     "emoji": agent_config['emoji'],
-                    "description": agent_config['description']
+                    "description": agent_config['description'],
+                    "tools_count": len(tools_to_use)
                 })
         
         
@@ -2714,8 +2877,11 @@ You receive quality reports from EDA agent and deliver clean data to modeling ag
         iteration = 0
         tool_call_counter = {}  # Track how many times each tool has been called
         
-        # Prepare tools once
-        tools_to_use = self._compress_tools_registry()
+        # current_agent and tools_to_use are set above in agent selection
+        # If compact prompts used, prepare general tools here
+        if self.use_compact_prompts:
+            current_agent = None
+            tools_to_use = self._compress_tools_registry(agent_name="general_agent")
         
         # For Gemini, use the existing model without tools (text-only mode)
         # Gemini tool schema is incompatible with OpenAI/Groq format
@@ -2831,14 +2997,27 @@ You receive quality reports from EDA agent and deliver clean data to modeling ag
                 # Call LLM with function calling (provider-specific)
                 if self.provider == "mistral":
                     try:
-                        response = self.mistral_client.chat.complete(
-                            model=self.model,
-                            messages=messages,
-                            tools=tools_to_use,
-                            tool_choice="auto",
-                            temperature=0.1,
-                            max_tokens=4096
-                        )
+                        # Support both new SDK (v1.x) and old SDK (v0.x)
+                        if hasattr(self.mistral_client, 'chat') and hasattr(self.mistral_client.chat, 'complete'):
+                            # New SDK (v1.x)
+                            response = self.mistral_client.chat.complete(
+                                model=self.model,
+                                messages=messages,
+                                tools=tools_to_use,
+                                tool_choice="auto",
+                                temperature=0.1,
+                                max_tokens=4096
+                            )
+                        else:
+                            # Old SDK (v0.x)
+                            response = self.mistral_client.chat(
+                                model=self.model,
+                                messages=messages,
+                                tools=tools_to_use,
+                                tool_choice="auto",
+                                temperature=0.1,
+                                max_tokens=4096
+                            )
                         
                         self.api_calls_made += 1
                         self.last_api_call_time = time.time()
@@ -3025,6 +3204,8 @@ You receive quality reports from EDA agent and deliver clean data to modeling ag
                         "artifacts": artifacts_data,
                         "plots": plots_data,
                         "workflow_history": workflow_history,
+                        "reasoning_trace": self.reasoning_trace.get_trace(),
+                        "reasoning_summary": self.reasoning_trace.get_trace_summary(),
                         "iterations": iteration,
                         "api_calls": self.api_calls_made,
                         "execution_time": round(time.time() - start_time, 2)
@@ -3941,6 +4122,40 @@ You receive quality reports from EDA agent and deliver clean data to modeling ag
                         "arguments": tool_args,
                         "result": tool_result
                     })
+                    
+                    # 🤝 INTER-AGENT COMMUNICATION: Check if should hand off to specialist
+                    if not self.use_compact_prompts:  # Only for multi-agent mode
+                        completed_tool_names = [step["tool"] for step in workflow_history]
+                        target_agent = self._should_hand_off(
+                            current_agent=self.active_agent,
+                            completed_tools=completed_tool_names,
+                            workflow_history=workflow_history
+                        )
+                        
+                        if target_agent:
+                            hand_off_result = self._hand_off_to_agent(
+                                target_agent=target_agent,
+                                context={
+                                    "completed_tools": completed_tool_names,
+                                    "reason": "Workflow progression - ready for next phase"
+                                },
+                                iteration=iteration
+                            )
+                            
+                            if hand_off_result["success"]:
+                                # Update tools for new agent
+                                tools_to_use = hand_off_result["new_tools"]
+                                
+                                # Update system prompt for new agent
+                                messages[0] = {"role": "system", "content": hand_off_result["system_prompt"]}
+                                
+                                # 📝 Record hand-off in reasoning trace
+                                self.reasoning_trace.record_agent_handoff(
+                                    from_agent=hand_off_result["old_agent"],
+                                    to_agent=hand_off_result["new_agent"],
+                                    reason="Workflow progression - ready for next phase",
+                                    iteration=iteration
+                                )
                     
                     # 🗂️ UPDATE WORKFLOW STATE (reduces need to send full history to LLM)
                     self._update_workflow_state(tool_name, tool_result)
