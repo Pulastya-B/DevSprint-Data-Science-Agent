@@ -2990,12 +2990,11 @@ You receive quality reports from EDA agent and deliver clean data to modeling ag
                 response_message = None
                 
                 # 💰 TOKEN BUDGET: Enforce context window limits before LLM call
-                if self.token_manager.enabled:
-                    messages, token_count = self.token_manager.enforce_budget(
-                        messages=messages,
-                        system_prompt=system_prompt
-                    )
-                    print(f"💰 Token budget: {token_count}/{self.token_manager.max_tokens} tokens")
+                messages, token_count = self.token_manager.enforce_budget(
+                    messages=messages,
+                    system_prompt=system_prompt
+                )
+                print(f"💰 Token budget: {token_count}/{self.token_manager.max_tokens} ({(token_count/self.token_manager.max_tokens*100):.1f}%)")
                 
                 # Call LLM with function calling (provider-specific)
                 if self.provider == "mistral":
