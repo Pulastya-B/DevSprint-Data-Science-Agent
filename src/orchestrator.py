@@ -3307,7 +3307,7 @@ You receive quality reports from EDA agent and deliver clean data to modeling ag
                                         workflow_state={
                                             'iteration': iteration,
                                             'workflow_history': workflow_history,
-                                            'current_file': self.dataset_path,
+                                            'current_file': file_path,
                                             'task_description': task_description,
                                             'target_col': target_col
                                         },
@@ -4019,7 +4019,7 @@ You receive quality reports from EDA agent and deliver clean data to modeling ag
                             workflow_state={
                                 'iteration': iteration,
                                 'workflow_history': workflow_history,
-                                'current_file': self.dataset_path,
+                                'current_file': file_path,
                                 'task_description': task_description,
                                 'target_col': target_col
                             },
