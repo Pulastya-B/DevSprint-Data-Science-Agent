@@ -307,6 +307,9 @@ class DataScienceCopilot:
             self.session = None
             print("⚠️  Session memory disabled")
         
+        # 🔍 Initialize reasoning trace for decision tracking
+        self.reasoning_trace = get_reasoning_trace()
+        
         # Tools registry
         self.tools_registry = TOOLS
         self.tool_functions = self._build_tool_functions_map()
