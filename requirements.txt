@@ -53,11 +53,14 @@ holidays>=0.38
 lime==0.2.0.1
 fairlearn==0.10.0
 
-# NLP (Optional - Uncomment for advanced NLP tools)
+# NLP & Semantic Layer (REQUIRED for column understanding and agent routing)
+sentence-transformers>=2.2.2  # For semantic column embeddings and agent routing
+tiktoken>=0.5.2  # For accurate token counting in budget management
+
+# Advanced NLP (Optional - Uncomment for advanced NLP tools)
 # These are optional but recommended for full NLP capabilities
 # spacy==3.7.2  # For named entity recognition (perform_named_entity_recognition)
 # transformers==4.35.2  # For transformer-based sentiment & topic modeling
-# sentence-transformers==2.2.2  # For semantic text similarity
 # bertopic==0.16.0  # For advanced topic modeling
 
 # Computer Vision (Optional - Uncomment for CV tools)

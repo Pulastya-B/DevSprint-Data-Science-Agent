@@ -112,6 +112,11 @@ export const ChatInterface: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         // Handle different event types
         if (data.type === 'connected') {
           console.log('🔗 Connected to progress stream');
+        } else if (data.type === 'agent_assigned') {
+          // 🤖 Multi-Agent: Display which specialist agent is handling the task
+          const agentMessage = `${data.emoji} **${data.agent}** assigned\n_${data.description}_`;
+          setCurrentStep(agentMessage);
+          console.log(`🤖 Agent assigned: ${data.agent}`);
         } else if (data.type === 'tool_executing') {
           setCurrentStep(data.message || `🔧 Executing: ${data.tool}`);
         } else if (data.type === 'tool_completed') {
@@ -307,7 +312,7 @@ export const ChatInterface: React.FC<{ onBack: () => void }> = ({ onBack }) => {
           // For now, just send the task which should work with session memory
         }
         
-        formData.append('use_cache', 'true');
+        formData.append('use_cache', 'false');  // Disabled to show multi-agent execution
         formData.append('max_iterations', '20');
         
         response = await fetch(`${API_URL}/run-async`, {

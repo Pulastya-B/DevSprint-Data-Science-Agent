@@ -157,8 +157,9 @@ async def startup_event():
     try:
         logger.info("Initializing DataScienceCopilot...")
         provider = os.getenv("LLM_PROVIDER", "mistral")
-        # Auto-enable compact prompts for Mistral/Groq (smaller context windows)
-        use_compact = provider.lower() in ["mistral", "groq"]
+        # Disable compact prompts to enable multi-agent architecture
+        # Multi-agent system has focused prompts per specialist (~3K tokens each)
+        use_compact = False  # Always use multi-agent routing
         
         agent = DataScienceCopilot(
             reasoning_effort="medium",
@@ -166,8 +167,7 @@ async def startup_event():
             use_compact_prompts=use_compact
         )
         logger.info(f"✅ Agent initialized with provider: {agent.provider}")
-        if use_compact:
-            logger.info("🔧 Compact prompts enabled for small context window")
+        logger.info("🤖 Multi-agent architecture enabled with 5 specialists")
     except Exception as e:
         logger.error(f"❌ Failed to initialize agent: {e}")
         raise
@@ -336,7 +336,7 @@ async def run_analysis_async(
     file: Optional[UploadFile] = File(None),
     task_description: str = Form(...),
     target_col: Optional[str] = Form(None),
-    use_cache: bool = Form(True),
+    use_cache: bool = Form(False),  # Disabled to show multi-agent in action
     max_iterations: int = Form(20)
 ) -> JSONResponse:
     """
@@ -386,7 +386,7 @@ async def run_analysis(
     file: Optional[UploadFile] = File(None, description="Dataset file (CSV or Parquet) - optional for follow-up requests"),
     task_description: str = Form(..., description="Natural language task description"),
     target_col: Optional[str] = Form(None, description="Target column name for prediction"),
-    use_cache: bool = Form(True, description="Enable caching for expensive operations"),
+    use_cache: bool = Form(False, description="Enable caching for expensive operations"),  # Disabled to show multi-agent
     max_iterations: int = Form(20, description="Maximum workflow iterations"),
     session_id: Optional[str] = Form(None, description="Session ID for follow-up requests")
 ) -> JSONResponse:

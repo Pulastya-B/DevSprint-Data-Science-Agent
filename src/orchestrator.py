@@ -22,6 +22,14 @@ from .session_store import SessionStore
 from .workflow_state import WorkflowState
 from .utils.schema_extraction import extract_schema_local, infer_task_type
 from .progress_manager import progress_manager
+
+# New systems for improvements
+from .utils.semantic_layer import get_semantic_layer
+from .utils.error_recovery import get_recovery_manager, retry_with_fallback
+from .utils.token_budget import get_token_manager
+from .utils.parallel_executor import get_parallel_executor, ToolExecution, TOOL_WEIGHTS, ToolWeight
+import asyncio
+from difflib import get_close_matches
 from .tools import (
     # Basic Tools (13) - UPDATED: Added get_smart_summary + 3 wrangling tools
     profile_dataset,
@@ -171,17 +179,18 @@ class DataScienceCopilot:
         # Determine provider
         self.provider = provider or os.getenv("LLM_PROVIDER", "mistral").lower()
         
-        # Set compact prompts: Auto-enable for Groq/Mistral, manual for others
-        self.use_compact_prompts = use_compact_prompts or (self.provider in ["groq", "mistral"])
+        # Use compact prompts as specified (multi-agent has focused prompts per specialist)
+        self.use_compact_prompts = use_compact_prompts
         
         if self.provider == "mistral":
-            # Initialize Mistral client (OpenAI-compatible)
+            # Initialize Mistral client (updated to new SDK)
             api_key = mistral_api_key or os.getenv("MISTRAL_API_KEY")
             if not api_key:
                 raise ValueError("Mistral API key must be provided or set in MISTRAL_API_KEY env var")
             
-            from mistralai.client import MistralClient  # type: ignore
-            self.mistral_client = MistralClient(api_key=api_key.strip())
+            from mistralai import Mistral  # New SDK (v1.x)
+            self.mistral_client = Mistral(api_key=api_key.strip())
+            
             self.model = os.getenv("MISTRAL_MODEL", "mistral-large-latest")
             self.reasoning_effort = reasoning_effort
             self.gemini_model = None
@@ -234,6 +243,25 @@ class DataScienceCopilot:
         # Initialize cache
         cache_path = cache_db_path or os.getenv("CACHE_DB_PATH", "./cache_db/cache.db")
         self.cache = CacheManager(db_path=cache_path)
+        
+        # 🧠 Initialize semantic layer for column understanding and agent routing
+        self.semantic_layer = get_semantic_layer()
+        
+        # 🛡️ Initialize error recovery manager
+        self.recovery_manager = get_recovery_manager()
+        
+        # 📊 Initialize token budget manager
+        # Calculate max tokens based on provider
+        provider_max_tokens = {
+            "mistral": 128000,  # Mistral Large
+            "groq": 32768,     # Llama 3.3 70B
+            "gemini": 1000000  # Gemini 2.5 Flash
+        }
+        max_context = provider_max_tokens.get(self.provider, 128000)
+        self.token_manager = get_token_manager(model=self.model, max_tokens=max_context)
+        
+        # ⚡ Initialize parallel executor
+        self.parallel_executor = get_parallel_executor()
         
         # 🧠 Initialize session memory
         self.use_session_memory = use_session_memory
@@ -299,6 +327,10 @@ class DataScienceCopilot:
         
         # Workflow state for context management (reduces token usage)
         self.workflow_state = WorkflowState()
+        
+        # Multi-Agent Architecture - Specialist Agents
+        self.specialist_agents = self._initialize_specialist_agents()
+        self.active_agent = "Orchestrator"  # Track which agent is working
         
         # Ensure output directories exist
         Path("./outputs").mkdir(exist_ok=True)
@@ -906,6 +938,232 @@ All visualizations, reports, and the trained model are available via the buttons
 
 You are a DOER. Complete workflows based on user intent."""
     
+    def _initialize_specialist_agents(self) -> Dict[str, Dict]:
+        """Initialize specialist agent configurations with focused system prompts."""
+        return {
+            "eda_agent": {
+                "name": "EDA Specialist",
+                "emoji": "🔬",
+                "description": "Expert in data profiling, quality checks, and exploratory analysis",
+                "system_prompt": """You are the EDA Specialist Agent - an expert in exploratory data analysis.
+
+**Your Expertise:**
+- Data profiling and statistical summaries
+- Data quality assessment and anomaly detection
+- Correlation analysis and feature relationships
+- Distribution analysis and outlier detection
+- Missing data patterns and strategies
+
+**Your Tools (13 EDA-focused):**
+- profile_dataset, detect_data_quality_issues, analyze_correlations
+- get_smart_summary, detect_anomalies, perform_statistical_tests
+- perform_eda_analysis, generate_ydata_profiling_report
+- profile_bigquery_table, query_bigquery
+
+**Your Approach:**
+1. Always start with comprehensive data profiling
+2. Identify quality issues before recommending fixes
+3. Generate visualizations to reveal patterns
+4. Provide actionable insights about data characteristics
+5. Recommend next steps for data preparation
+
+You work collaboratively with other specialists and hand off cleaned data to preprocessing and modeling agents.""",
+                "tool_keywords": ["profile", "eda", "quality", "correlat", "anomal", "statistic", "distribution", "explore", "understand", "detect", "outlier"]
+            },
+            
+            "modeling_agent": {
+                "name": "ML Modeling Specialist",
+                "emoji": "🤖",
+                "description": "Expert in model training, tuning, and evaluation",
+                "system_prompt": """You are the ML Modeling Specialist Agent - an expert in machine learning.
+
+**Your Expertise:**
+- Model selection and baseline training
+- Hyperparameter tuning and optimization
+- Ensemble methods and advanced algorithms
+- Cross-validation strategies
+- Model evaluation and performance metrics
+
+**CRITICAL: Target Column Validation**
+BEFORE calling any training tools, you MUST:
+1. Use profile_dataset to see actual column names
+2. Verify the target column exists in the dataset
+3. NEVER hallucinate or guess column names
+4. If unsure, ask the user to specify the target column
+
+**Your Tools (6 modeling-focused):**
+- train_baseline_models, hyperparameter_tuning
+- train_ensemble_models, perform_cross_validation
+- generate_model_report, detect_model_issues
+
+**Your Approach:**
+1. FIRST: Profile the dataset to see actual columns (if not done)
+2. VALIDATE: Confirm target column exists
+3. Start with baseline models to establish performance floor
+4. Use automated hyperparameter tuning for optimization
+5. Try ensemble methods for performance boost
+6. Validate with proper cross-validation
+7. Generate comprehensive model reports with metrics
+8. Detect and address model issues (overfitting, bias, etc.)
+
+**Common Errors to Avoid:**
+❌ Calling train_baseline_models with non-existent target column
+❌ Guessing column names like "Occupation", "Target", "Label"
+❌ Using execute_python_code when dedicated tools exist
+✅ Always verify column names from profile_dataset first
+
+You receive preprocessed data from data engineering agents and collaborate with visualization agents for model performance plots.""",
+                "tool_keywords": ["train", "model", "hyperparameter", "ensemble", "cross-validation", "predict", "classify", "regress"]
+            },
+            
+            "viz_agent": {
+                "name": "Visualization Specialist",
+                "emoji": "📊",
+                "description": "Expert in creating plots, dashboards, and visual insights",
+                "system_prompt": """You are the Visualization Specialist Agent - an expert in data visualization.
+
+**Your Expertise:**
+- Interactive Plotly visualizations
+- Statistical matplotlib plots
+- Business intelligence dashboards
+- Model performance visualizations
+- Time series and geospatial plots
+
+**Your Tools (8 visualization-focused):**
+- create_plotly_scatter, create_plotly_heatmap, create_plotly_line
+- create_matplotlib_plots, create_combined_plots
+- generate_data_quality_plots, create_shap_plots
+- generate_ydata_profiling_report (visual report)
+
+**Your Approach:**
+1. Choose the right visualization type for the data
+2. Create interactive plots when possible (Plotly)
+3. Use appropriate color schemes and layouts
+4. Generate comprehensive visual reports
+5. Highlight key insights through visual storytelling
+
+You collaborate with all agents to visualize their outputs - EDA results, model performance, feature importance, etc.""",
+                "tool_keywords": ["plot", "visualiz", "chart", "graph", "heatmap", "scatter", "dashboard", "matplotlib", "plotly", "create", "generate", "show", "display"]
+            },
+            
+            "insight_agent": {
+                "name": "Business Insights Specialist",
+                "emoji": "💡",
+                "description": "Expert in interpreting results and generating business recommendations",
+                "system_prompt": """You are the Business Insights Specialist Agent - an expert in translating data into action.
+
+**Your Expertise:**
+- Root cause analysis and causal inference
+- What-if scenario analysis
+- Feature contribution interpretation
+- Business intelligence and cohort analysis
+- Actionable recommendations from ML results
+
+**Your Tools (10 insight-focused):**
+- analyze_root_cause, detect_causal_relationships
+- generate_business_insights, explain_predictions
+- perform_cohort_analysis, perform_rfm_analysis
+- perform_customer_segmentation, analyze_customer_churn
+- detect_model_issues (interpret issues)
+
+**Your Approach:**
+1. Translate statistical findings into business language
+2. Identify root causes of patterns in data
+3. Run what-if scenarios for decision support
+4. Generate specific, actionable recommendations
+5. Explain model predictions in human terms
+
+You synthesize outputs from all other agents and provide the final business narrative.""",
+                "tool_keywords": ["insight", "recommend", "explain", "interpret", "why", "cause", "what-if", "business", "segment", "churn"]
+            },
+            
+            "preprocessing_agent": {
+                "name": "Data Engineering Specialist",
+                "emoji": "⚙️",
+                "description": "Expert in data cleaning, preprocessing, and feature engineering",
+                "system_prompt": """You are the Data Engineering Specialist Agent - an expert in data preparation.
+
+**Your Expertise:**
+- Missing value handling and outlier treatment
+- Feature scaling and normalization
+- Imbalanced data handling (SMOTE, etc.)
+- Feature engineering and transformation
+- Data type conversion and encoding
+
+**Your Tools (15 preprocessing-focused):**
+- clean_missing_values, handle_outliers, handle_imbalanced_data
+- perform_feature_scaling, encode_categorical
+- create_interaction_features, create_aggregation_features
+- auto_feature_engineering, create_time_features
+- force_numeric_conversion, smart_type_inference
+- merge_datasets, concat_datasets, reshape_dataset
+
+**Your Approach:**
+1. Fix data quality issues identified by EDA agent
+2. Handle missing values with appropriate strategies
+3. Treat outliers based on domain context
+4. Engineer features to boost model performance
+5. Prepare clean, model-ready data
+
+You receive quality reports from EDA agent and deliver clean data to modeling agent.""",
+                "tool_keywords": ["clean", "preprocess", "feature", "encod", "scal", "outlier", "missing", "transform", "engineer"]
+            }
+        }
+    
+    def _select_specialist_agent(self, task_description: str) -> str:
+        """
+        Route task to appropriate specialist agent.
+        
+        Uses SBERT semantic similarity if available, falls back to keyword matching.
+        """
+        # Try semantic routing first (more accurate)
+        if self.semantic_layer.enabled:
+            try:
+                # Build agent descriptions for semantic matching
+                agent_descriptions = {
+                    agent_key: f"{agent_config['name']}: {agent_config['description']}"
+                    for agent_key, agent_config in self.specialist_agents.items()
+                }
+                
+                best_agent, confidence = self.semantic_layer.route_to_agent(
+                    task_description, 
+                    agent_descriptions
+                )
+                
+                agent_config = self.specialist_agents[best_agent]
+                print(f"🧠 Semantic routing → {agent_config['emoji']} {agent_config['name']} (confidence: {confidence:.2f})")
+                
+                return best_agent
+                
+            except Exception as e:
+                print(f"⚠️ Semantic routing failed: {e}, falling back to keyword matching")
+        
+        # Fallback: Keyword-based routing (original method)
+        task_lower = task_description.lower()
+        
+        # Score each agent based on keyword matches
+        scores = {}
+        for agent_key, agent_config in self.specialist_agents.items():
+            score = sum(1 for keyword in agent_config["tool_keywords"] if keyword in task_lower)
+            scores[agent_key] = score
+        
+        # Get agent with highest score
+        if max(scores.values()) > 0:
+            best_agent = max(scores.items(), key=lambda x: x[1])[0]
+            agent_config = self.specialist_agents[best_agent]
+            print(f"🔑 Keyword routing → {agent_config['emoji']} {agent_config['name']} ({scores[best_agent]} matches)")
+            return best_agent
+        
+        # Default to EDA agent for exploratory tasks
+        print("📊 Default routing → 🔬 EDA Specialist")
+        return "eda_agent"
+    
+    def _get_agent_system_prompt(self, agent_key: str) -> str:
+        """Get system prompt for specialist agent, fallback to main prompt."""
+        if agent_key in self.specialist_agents:
+            return self.specialist_agents[agent_key]["system_prompt"]
+        return self._build_system_prompt()  # Fallback to main orchestrator prompt
+    
     def _generate_cache_key(self, file_path: str, task_description: str, 
                            target_col: Optional[str] = None) -> str:
         """Generate cache key for a workflow."""
@@ -958,6 +1216,42 @@ You are a DOER. Complete workflows based on user intent."""
         }
         
         return next_steps.get(stuck_tool, "generate_eda_plots OR train_baseline_models")
+    
+    # 🚀 PARALLEL EXECUTION: Helper methods for concurrent tool execution
+    def _execute_tool_sync(self, tool_name: str, tool_args: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Synchronous wrapper for _execute_tool to be used in async context.
+        This allows the parallel executor to run tools concurrently.
+        """
+        return self._execute_tool(tool_name, tool_args)
+    
+    async def _async_progress_callback(self, tool_name: str, status: str):
+        """
+        Async progress callback for parallel execution.
+        Emits SSE events for real-time progress tracking.
+        """
+        if hasattr(self, 'session') and self.session:
+            session_id = self.session.session_id
+            if status == "started":
+                print(f"🚀 [Parallel] Started: {tool_name}")
+                from .api.app import progress_manager
+                progress_manager.emit(session_id, {
+                    'type': 'tool_executing',
+                    'tool': tool_name,
+                    'message': f"🚀 [Parallel] Executing: {tool_name}",
+                    'parallel': True
+                })
+            elif status == "completed":
+                print(f"✓ [Parallel] Completed: {tool_name}")
+                from .api.app import progress_manager
+                progress_manager.emit(session_id, {
+                    'type': 'tool_completed',
+                    'tool': tool_name,
+                    'message': f"✓ [Parallel] Completed: {tool_name}",
+                    'parallel': True
+                })
+            elif status.startswith("error"):
+                print(f"❌ [Parallel] Failed: {tool_name}")
     
     def _generate_enhanced_summary(
         self, 
@@ -1432,6 +1726,7 @@ You are a DOER. Complete workflows based on user intent."""
             "plots": plots
         }
     
+    @retry_with_fallback(tool_name=None)  # 🛡️ ERROR RECOVERY: Auto-retry with fallback
     def _execute_tool(self, tool_name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
         """
         Execute a single tool function.
@@ -1455,6 +1750,54 @@ You are a DOER. Complete workflows based on user intent."""
                 self.progress_callback(tool_name, "running")
             
             tool_func = self.tool_functions[tool_name]
+            
+            # CRITICAL: Validate column names for modeling tools (prevent hallucinations)
+            if tool_name in ["train_baseline_models", "hyperparameter_tuning", "train_ensemble_models"]:
+                if "target_col" in arguments and arguments["target_col"]:
+                    target_col = arguments["target_col"]
+                    file_path = arguments.get("file_path", "")
+                    
+                    # Validate target column exists in dataset
+                    try:
+                        import polars as pl
+                        df = pl.read_csv(file_path) if file_path.endswith('.csv') else pl.read_parquet(file_path)
+                        actual_columns = df.columns
+                        
+                        if target_col not in actual_columns:
+                            print(f"⚠️  HALLUCINATED TARGET COLUMN: '{target_col}'")
+                            print(f"   Actual columns: {actual_columns}")
+                            
+                            # 🧠 Try semantic matching first (better than fuzzy)
+                            corrected_col = None
+                            if self.semantic_layer.enabled:
+                                try:
+                                    match = self.semantic_layer.semantic_column_match(target_col, actual_columns, threshold=0.6)
+                                    if match:
+                                        corrected_col, confidence = match
+                                        print(f"   🧠 Semantic match: {corrected_col} (confidence: {confidence:.2f})")
+                                except Exception as e:
+                                    print(f"   ⚠️ Semantic matching failed: {e}")
+                            
+                            # Fallback to fuzzy matching if semantic didn't work
+                            if not corrected_col:
+                                close_matches = get_close_matches(target_col, actual_columns, n=1, cutoff=0.6)
+                                if close_matches:
+                                    corrected_col = close_matches[0]
+                                    print(f"   ✓ Fuzzy match: {corrected_col}")
+                            
+                            if corrected_col:
+                                arguments["target_col"] = corrected_col
+                            else:
+                                return {
+                                    "success": False,
+                                    "tool": tool_name,
+                                    "arguments": arguments,
+                                    "error": f"Target column '{target_col}' does not exist. Available columns: {actual_columns}",
+                                    "error_type": "ColumnNotFoundError",
+                                    "hint": "Please specify the correct target column name from the dataset."
+                                }
+                    except Exception as validation_error:
+                        print(f"⚠️  Could not validate target column: {validation_error}")
             
             # Fix common parameter mismatches from LLM hallucinations
             if tool_name == "generate_ydata_profiling_report":
@@ -2119,6 +2462,15 @@ You are a DOER. Complete workflows based on user intent."""
         """
         start_time = time.time()
         
+        # 🛡️ ERROR RECOVERY: Check for resumable checkpoint
+        session_id = self.http_session_key or "default"
+        if self.recovery_manager.checkpoint_manager.can_resume(session_id):
+            checkpoint = self.recovery_manager.checkpoint_manager.load_checkpoint(session_id)
+            if checkpoint:
+                print(f"📂 Resuming from checkpoint (iteration {checkpoint['iteration']}, last tool: {checkpoint['last_tool']})")
+                # Note: Full workflow state restoration would go here if needed
+                # For now, we just log the resume capability
+        
         # 🧠 RESOLVE AMBIGUITY USING SESSION MEMORY (BEFORE SCHEMA EXTRACTION)
         # This ensures follow-up requests can find the file before we try to extract schema
         original_file_path = file_path
@@ -2155,10 +2507,31 @@ You are a DOER. Complete workflows based on user intent."""
         schema_info = extract_schema_local(file_path, sample_rows=3)
         
         if 'error' not in schema_info:
+            # 🧠 SEMANTIC LAYER: Enrich dataset info with column embeddings
+            if self.semantic_layer.enabled:
+                try:
+                    schema_info = self.semantic_layer.enrich_dataset_info(schema_info, file_path, sample_size=100)
+                    print(f"🧠 Semantic layer enriched {len(schema_info.get('column_embeddings', {}))} columns")
+                except Exception as e:
+                    print(f"⚠️ Semantic enrichment failed: {e}")
+            
             # Update workflow state with schema
             self.workflow_state.update_dataset_info(schema_info)
             print(f"✅ Schema extracted: {schema_info['num_rows']} rows × {schema_info['num_columns']} cols")
             print(f"   File size: {schema_info['file_size_mb']} MB")
+            
+            # 🧠 SEMANTIC LAYER: Infer target column if not provided
+            if not target_col and self.semantic_layer.enabled:
+                try:
+                    inferred = self.semantic_layer.infer_target_column(
+                        schema_info.get('column_embeddings', {}),
+                        task_description
+                    )
+                    if inferred:
+                        target_col, confidence = inferred
+                        print(f"💡 Inferred target column: {target_col} (confidence: {confidence:.2f})")
+                except Exception as e:
+                    print(f"⚠️ Target inference failed: {e}")
             
             # Infer task type if target column provided
             if target_col and target_col in schema_info['columns']:
@@ -2185,7 +2558,26 @@ You are a DOER. Complete workflows based on user intent."""
             system_prompt = build_compact_system_prompt(user_query=task_description)
             print("🔧 Using compact prompt for small context window")
         else:
-            system_prompt = self._build_system_prompt()
+            # 🤖 MULTI-AGENT ARCHITECTURE: Route to specialist agent
+            selected_agent = self._select_specialist_agent(task_description)
+            self.active_agent = selected_agent
+            
+            agent_config = self.specialist_agents[selected_agent]
+            print(f"\n{agent_config['emoji']} Delegating to: {agent_config['name']}")
+            print(f"   Specialization: {agent_config['description']}")
+            
+            # Use specialist's system prompt
+            system_prompt = agent_config["system_prompt"]
+            
+            # Emit agent info for UI display
+            if self.progress_callback:
+                self.progress_callback({
+                    "type": "agent_assigned",
+                    "agent": agent_config['name'],
+                    "emoji": agent_config['emoji'],
+                    "description": agent_config['description']
+                })
+        
         
         # 🎯 PROACTIVE INTENT DETECTION - Tell LLM which tools to use BEFORE it tries wrong ones
         task_lower = task_description.lower()
@@ -2279,13 +2671,24 @@ You are a DOER. Complete workflows based on user intent."""
         if self.workflow_state.dataset_info:
             # Include schema summary instead of raw data
             info = self.workflow_state.dataset_info
+            # Create explicit column list for validation
+            all_columns = ', '.join([f"'{col}'" for col in list(info['columns'].keys())[:15]])
+            if len(info['columns']) > 15:
+                all_columns += f"... ({len(info['columns'])} total)"
+            
             state_context = f"""
 **Dataset Schema** (extracted locally):
 - Rows: {info['num_rows']:,} | Columns: {info['num_columns']}
 - Size: {info['file_size_mb']} MB
-- Numeric columns: {len(info['numeric_columns'])}
-- Categorical columns: {len(info['categorical_columns'])}
-- Sample columns: {', '.join(list(info['columns'].keys())[:8])}{'...' if len(info['columns']) > 8 else ''}
+- Numeric columns ({len(info['numeric_columns'])}): {', '.join([f"'{c}'" for c in info['numeric_columns'][:10]])}{'...' if len(info['numeric_columns']) > 10 else ''}
+- Categorical columns ({len(info['categorical_columns'])}): {', '.join([f"'{c}'" for c in info['categorical_columns'][:10]])}{'...' if len(info['categorical_columns']) > 10 else ''}
+
+**IMPORTANT - Exact Column Names:**
+{all_columns}
+
+⚠️ When calling modeling tools, use EXACT column names from above.
+⚠️ DO NOT hallucinate column names like "Target", "Label", "Occupation" unless they appear above.
+⚠️ If unsure about target column, use profile_dataset first to inspect data.
 """
         
         user_message = f"""Please analyze the dataset and complete the following task:
@@ -2417,10 +2820,18 @@ You are a DOER. Complete workflows based on user intent."""
                 final_content = None
                 response_message = None
                 
+                # 💰 TOKEN BUDGET: Enforce context window limits before LLM call
+                if self.token_manager.enabled:
+                    messages, token_count = self.token_manager.enforce_budget(
+                        messages=messages,
+                        system_prompt=system_prompt
+                    )
+                    print(f"💰 Token budget: {token_count}/{self.token_manager.max_tokens} tokens")
+                
                 # Call LLM with function calling (provider-specific)
                 if self.provider == "mistral":
                     try:
-                        response = self.mistral_client.chat(
+                        response = self.mistral_client.chat.complete(
                             model=self.model,
                             messages=messages,
                             tools=tools_to_use,
@@ -2632,6 +3043,132 @@ You are a DOER. Complete workflows based on user intent."""
                 if self.provider in ["groq", "mistral"]:
                     messages.append(response_message)
                 
+                # 🚀 PARALLEL EXECUTION: Detect multiple independent tool calls
+                if len(tool_calls) > 1 and self.parallel_executor.enabled:
+                    print(f"🚀 Detected {len(tool_calls)} tool calls - attempting parallel execution")
+                    
+                    # Extract tool executions with proper weight classification
+                    tool_executions = []
+                    heavy_tools = []
+                    for idx, tc in enumerate(tool_calls):
+                        if self.provider in ["groq", "mistral"]:
+                            tool_name = tc.function.name
+                            tool_args_raw = tc.function.arguments
+                            # Sanitize tool name
+                            import re
+                            tool_name = re.sub(r'[^\x00-\x7F]+', '', str(tool_name))
+                            match = re.search(r'([a-z_][a-z0-9_]*)', tool_name, re.IGNORECASE)
+                            if match:
+                                tool_name = match.group(1)
+                            
+                            if tool_name in self.tool_functions:
+                                tool_args = json.loads(tool_args_raw)
+                                weight = TOOL_WEIGHTS.get(tool_name, ToolWeight.MEDIUM)
+                                
+                                # Track heavy tools
+                                if weight == ToolWeight.HEAVY:
+                                    heavy_tools.append(tool_name)
+                                
+                                tool_executions.append(ToolExecution(
+                                    tool_name=tool_name,
+                                    arguments=tool_args,
+                                    weight=weight,
+                                    dependencies=set(),
+                                    execution_id=f"{tool_name}_{idx}"
+                                ))
+                        elif self.provider == "gemini":
+                            tool_name = tc.name
+                            tool_args = {key: value for key, value in tc.args.items()}
+                            if tool_name in self.tool_functions:
+                                weight = TOOL_WEIGHTS.get(tool_name, ToolWeight.MEDIUM)
+                                
+                                # Track heavy tools
+                                if weight == ToolWeight.HEAVY:
+                                    heavy_tools.append(tool_name)
+                                
+                                tool_executions.append(ToolExecution(
+                                    tool_name=tool_name,
+                                    arguments=tool_args,
+                                    weight=weight,
+                                    dependencies=set(),
+                                    execution_id=f"{tool_name}_{idx}"
+                                ))
+                    
+                    # ⚠️ CRITICAL: Prevent multiple heavy tools from running in parallel
+                    if len(heavy_tools) > 1:
+                        print(f"⚠️ Multiple HEAVY tools detected: {heavy_tools}")
+                        print(f"   These will run SEQUENTIALLY to prevent resource exhaustion")
+                        print(f"   Heavy tools: {', '.join(heavy_tools)}")
+                        # Fall through to sequential execution
+                    elif len(tool_executions) > 1 and len(heavy_tools) <= 1:
+                        try:
+                            results = asyncio.run(self.parallel_executor.execute_all(
+                                tool_executions=tool_executions,
+                                tool_executor=self._execute_tool_sync,
+                                progress_callback=self._async_progress_callback
+                            ))
+                            
+                            print(f"✓ Parallel execution completed: {len(results)} tools")
+                            
+                            # Add results to messages and workflow history
+                            for tool_exec, tool_result in zip(tool_executions, results):
+                                tool_name = tool_exec.tool_name
+                                tool_args = tool_exec.arguments
+                                tool_call_id = tool_exec.execution_id
+                                
+                                # Save checkpoint
+                                if tool_result.get("success", True):
+                                    session_id = self.http_session_key or "default"
+                                    self.recovery_manager.checkpoint_manager.save_checkpoint(
+                                        session_id=session_id,
+                                        workflow_state={
+                                            'iteration': iteration,
+                                            'workflow_history': workflow_history,
+                                            'current_file': self.dataset_path,
+                                            'task_description': task_description,
+                                            'target_col': target_col
+                                        },
+                                        tool_name=tool_name,
+                                        iteration_count=iteration
+                                    )
+                                
+                                # Track in workflow
+                                workflow_history.append({
+                                    "iteration": iteration,
+                                    "tool": tool_name,
+                                    "arguments": tool_args,
+                                    "result": tool_result
+                                })
+                                
+                                # Update workflow state
+                                self._update_workflow_state(tool_name, tool_result)
+                                
+                                # Add to messages with compression
+                                clean_tool_result = self._make_json_serializable(tool_result)
+                                compressed_result = self._compress_tool_result(tool_name, clean_tool_result)
+                                
+                                if self.provider in ["mistral", "groq"]:
+                                    messages.append({
+                                        "role": "tool",
+                                        "tool_call_id": tool_call_id,
+                                        "name": tool_name,
+                                        "content": json.dumps(compressed_result)
+                                    })
+                                elif self.provider == "gemini":
+                                    messages.append({
+                                        "role": "tool",
+                                        "name": tool_name,
+                                        "content": json.dumps(compressed_result)
+                                    })
+                            
+                            # Skip sequential execution
+                            continue
+                            
+                        except Exception as e:
+                            print(f"⚠️ Parallel execution failed: {e}")
+                            print("   Falling back to sequential execution")
+                
+                # Sequential execution (fallback or single tool)
                 for tool_call in tool_calls:
                     # Extract tool name and args (provider-specific)
                     if self.provider in ["groq", "mistral"]:
@@ -2639,9 +3176,42 @@ You are a DOER. Complete workflows based on user intent."""
                         tool_args = json.loads(tool_call.function.arguments)
                         tool_call_id = tool_call.id
                         
-                        # CRITICAL FIX: Sanitize tool_name (API sometimes returns garbage)
-                        # Tool names should be simple alphanumeric + underscore only
-                        if not isinstance(tool_name, str) or len(tool_name) > 100:
+                        # CRITICAL FIX 1: Sanitize tool_name (remove any non-ASCII or prefix garbage)
+                        import re
+                        # Remove any non-ASCII characters and leading garbage
+                        tool_name_cleaned = re.sub(r'[^\x00-\x7F]+', '', str(tool_name))
+                        # Extract just the alphanumeric_underscore pattern
+                        match = re.search(r'([a-z_][a-z0-9_]*)', tool_name_cleaned, re.IGNORECASE)
+                        if match:
+                            tool_name = match.group(1)
+                        
+                        # CRITICAL FIX 2: Validate tool exists before execution
+                        if tool_name not in self.tool_functions:
+                            print(f"⚠️  INVALID TOOL NAME: '{tool_name}' (original: {tool_call.function.name})")
+                            print(f"   Available tools: {', '.join(list(self.tool_functions.keys())[:10])}...")
+                            
+                            # Try fuzzy matching to recover
+                            from difflib import get_close_matches
+                            close_matches = get_close_matches(tool_name, self.tool_functions.keys(), n=1, cutoff=0.6)
+                            if close_matches:
+                                tool_name = close_matches[0]
+                                print(f"   ✓ Recovered using fuzzy match: {tool_name}")
+                            else:
+                                print(f"   ❌ Cannot recover tool name, skipping")
+                                messages.append({
+                                    "role": "tool",
+                                    "tool_call_id": tool_call_id,
+                                    "name": "invalid_tool",
+                                    "content": json.dumps({
+                                        "error": f"Invalid tool: {tool_call.function.name}",
+                                        "message": "Tool does not exist in registry. Available tools can be found in the tools list.",
+                                        "hint": "Check spelling and use exact tool names from the tools registry."
+                                    })
+                                })
+                                continue
+                        
+                        # CRITICAL FIX 3: Check for corrupted tool names (length check)
+                        if len(str(tool_call.function.name)) > 100:
                             print(f"⚠️  CORRUPTED TOOL NAME DETECTED: {str(tool_name)[:200]}")
                             # Try to extract actual tool name from garbage
                             import re
@@ -3139,8 +3709,22 @@ You are a DOER. Complete workflows based on user intent."""
                     # Skip loop detection for execute_python_code in code-only tasks
                     should_check_loops = not (is_code_only_task and tool_name == "execute_python_code")
                     
-                    # Check for loops (same tool called 2+ times consecutively)
-                    if should_check_loops and tool_call_counter[tool_name] >= 2:
+                    # AGGRESSIVE: For execute_python_code with same args, detect after 1 retry
+                    loop_threshold = 2
+                    if tool_name == "execute_python_code":
+                        # Check if same code being executed repeatedly
+                        if workflow_history:
+                            last_exec_steps = [s for s in workflow_history if s["tool"] == "execute_python_code"]
+                            if len(last_exec_steps) >= 1:
+                                last_code = last_exec_steps[-1].get("arguments", {}).get("code", "")
+                                current_code = tool_args.get("code", "")
+                                # If same/similar code, be more aggressive
+                                if last_code and current_code and len(set(last_code.split()) & set(current_code.split())) > len(current_code.split()) * 0.7:
+                                    loop_threshold = 1  # Stop after first retry with similar code
+                                    print(f"⚠️  Detected repeated similar code execution")
+                    
+                    # Check for loops (same tool called threshold+ times consecutively)
+                    if should_check_loops and tool_call_counter[tool_name] >= loop_threshold:
                         # Check if the last call was also this tool (consecutive repetition)
                         if workflow_history and workflow_history[-1]["tool"] == tool_name:
                             print(f"\n⚠️  LOOP DETECTED: {tool_name} called {tool_call_counter[tool_name]} times consecutively!")
@@ -3243,6 +3827,22 @@ You are a DOER. Complete workflows based on user intent."""
                     
                     # Execute tool
                     tool_result = self._execute_tool(tool_name, tool_args)
+                    
+                    # 📂 CHECKPOINT: Save progress after successful tool execution
+                    if tool_result.get("success", True):
+                        session_id = self.http_session_key or "default"
+                        self.recovery_manager.checkpoint_manager.save_checkpoint(
+                            session_id=session_id,
+                            workflow_state={
+                                'iteration': iteration,
+                                'workflow_history': workflow_history,
+                                'current_file': self.dataset_path,
+                                'task_description': task_description,
+                                'target_col': target_col
+                            },
+                            tool_name=tool_name,
+                            iteration_count=iteration
+                        )
                     
                     # Check for errors and display them prominently
                     if not tool_result.get("success", True):
