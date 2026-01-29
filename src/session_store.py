@@ -98,7 +98,7 @@ class SessionStore:
     def _make_json_serializable(self, obj: Any) -> Any:
         """
         Convert objects to JSON-serializable format.
-        Handles matplotlib Figures, plotly Figures, numpy arrays, and other non-serializable types.
+        Handles matplotlib Figures, plotly Figures, numpy arrays, datetime objects, and other non-serializable types.
         """
         try:
             import numpy as np
@@ -112,6 +112,10 @@ class SessionStore:
         # Handle lists recursively
         elif isinstance(obj, (list, tuple)):
             return [self._make_json_serializable(item) for item in obj]
+        
+        # Handle datetime objects
+        elif isinstance(obj, (datetime, timedelta)):
+            return obj.isoformat()
         
         # Handle matplotlib Figure objects
         elif hasattr(obj, '__class__') and 'Figure' in obj.__class__.__name__:

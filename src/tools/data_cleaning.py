@@ -250,14 +250,14 @@ def clean_missing_values(file_path: str, strategy,
     return report
 
 
-def handle_outliers(file_path: str, method: str, columns: List[str], 
+def handle_outliers(file_path: str, strategy: str, columns: List[str], 
                    output_path: str) -> Dict[str, Any]:
     """
     Detect and handle outliers in numeric columns.
     
     Args:
         file_path: Path to CSV or Parquet file
-        method: Method to handle outliers ('clip', 'winsorize', 'remove')
+        strategy: Method to handle outliers ('clip', 'cap', 'winsorize', 'remove')
         columns: List of columns to check, or ['all'] for all numeric columns
         output_path: Path to save cleaned dataset
         
@@ -299,7 +299,7 @@ def handle_outliers(file_path: str, method: str, columns: List[str],
     
     report = {
         "original_rows": len(df),
-        "method": method,
+        "strategy": strategy,
         "columns_processed": {}
     }
     
@@ -333,14 +333,14 @@ def handle_outliers(file_path: str, method: str, columns: List[str],
             }
             continue
         
-        # Apply method
-        if method == "clip":
-            # Clip values to bounds
+        # Apply strategy
+        if strategy == "clip" or strategy == "cap":
+            # Clip/cap values to bounds
             df = df.with_columns(
                 pl.col(col).clip(lower_bound, upper_bound).alias(col)
             )
         
-        elif method == "winsorize":
+        elif strategy == "winsorize":
             # Winsorize: cap at 1st and 99th percentiles
             p1 = col_data.quantile(0.01)
             p99 = col_data.quantile(0.99)
@@ -348,7 +348,7 @@ def handle_outliers(file_path: str, method: str, columns: List[str],
                 pl.col(col).clip(p1, p99).alias(col)
             )
         
-        elif method == "remove":
+        elif strategy == "remove":
             # Remove rows with outliers
             df = df.filter(~outliers_mask)
         
