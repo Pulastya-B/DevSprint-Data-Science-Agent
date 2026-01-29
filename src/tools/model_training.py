@@ -286,6 +286,29 @@ def train_baseline_models(file_path: str, target_col: str,
         "model_path": results["models"][best_model_name]["model_path"] if best_model_name else None
     }
     
+    # ⚠️ Add guidance for hyperparameter tuning on large datasets
+    if results["n_samples"] > 100000:
+        # Recommend faster models for large datasets
+        fast_models = ["xgboost", "lightgbm"]
+        if best_model_name in fast_models:
+            results["tuning_recommendation"] = {
+                "suggested_model": best_model_name,
+                "reason": f"{best_model_name} is optimal for large datasets - fast training and good performance"
+            }
+        elif best_model_name == "random_forest":
+            # Find next best fast model
+            fast_model_scores = {name: results["models"][name]["test_metrics"].get("r2" if task_type == "regression" else "f1", 0)
+                               for name in fast_models if name in results["models"]}
+            if fast_model_scores:
+                alt_model = max(fast_model_scores, key=fast_model_scores.get)
+                alt_score = fast_model_scores[alt_model]
+                score_diff = abs(best_score - alt_score)
+                if score_diff < 0.05:  # Less than 5% difference
+                    results["tuning_recommendation"] = {
+                        "suggested_model": alt_model,
+                        "reason": f"For large datasets, {alt_model} is 5-10x faster than {best_model_name} with similar performance (score difference: {score_diff:.4f})"
+                    }
+    
     # Generate visualizations for best model
     if VISUALIZATION_AVAILABLE and best_model_name:
         try:

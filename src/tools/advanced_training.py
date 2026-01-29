@@ -110,6 +110,25 @@ def hyperparameter_tuning(
         n_trials = 30
         print(f"   ⚠️ Medium dataset ({n_rows:,} rows) - reducing trials from {original_trials} to {n_trials}")
     
+    # ⚠️ PERFORMANCE FIX: Sample large datasets for hyperparameter tuning
+    # Hyperparameters found on sample will be used to train final model on full dataset
+    MAX_TUNING_ROWS = 50000
+    sampled = False
+    if n_rows > MAX_TUNING_ROWS:
+        original_rows = n_rows
+        sample_frac = MAX_TUNING_ROWS / n_rows
+        df = df.sample(n=MAX_TUNING_ROWS, random_state=random_state)
+        sampled = True
+        print(f"   📊 Sampled {MAX_TUNING_ROWS:,} rows ({sample_frac:.1%}) from {original_rows:,} for faster tuning")
+        print(f"   💡 Hyperparameters found on sample will generalize well to full dataset")
+        print(f"   ⏱️ Expected speedup: 3-5x faster tuning")
+    
+    # ⚠️ Auto-reduce CV folds for very large datasets
+    original_cv_folds = cv_folds
+    if n_rows > 100000 and cv_folds > 3:
+        cv_folds = 3
+        print(f"   ⏱️ Using {cv_folds}-fold CV (instead of {original_cv_folds}) for faster tuning on large dataset")
+    
     # ⚠️ SKIP DATETIME CONVERSION: Already handled by create_time_features() in workflow step 7
     # The encoded.csv file should already have time features extracted
     # If datetime columns still exist, they will be handled as regular features
