@@ -2997,7 +2997,7 @@ You receive quality reports from EDA agent and deliver clean data to modeling ag
             
             try:
                 # 🚀 SMART CONVERSATION PRUNING (Mistral-compatible)
-                # Keep only: system + user + last 4 exchanges (8 messages)
+                # Keep only: system + user + last 12 exchanges (24 messages) - INCREASED FOR BETTER CONTEXT
                 # CRITICAL: Maintain valid message ordering for Mistral API
                 
                 # Helper function to get role from message (handles dict or ChatMessage object)
@@ -3012,7 +3012,7 @@ You receive quality reports from EDA agent and deliver clean data to modeling ag
                         return bool(msg.get('tool_calls'))
                     return bool(getattr(msg, 'tool_calls', None))
                 
-                if len(messages) > 10:
+                if len(messages) > 26:
                     # Keep: system prompt [0], user query [1], last valid exchanges
                     system_msg = messages[0]
                     user_msg = messages[1]
@@ -3043,7 +3043,7 @@ You receive quality reports from EDA agent and deliver clean data to modeling ag
                             i += 1
                     
                     messages = [system_msg, user_msg] + cleaned_recent
-                    print(f"✂️  Pruned conversation (keeping last 4 exchanges, ~4K tokens saved)")
+                    print(f"✂️  Pruned conversation (keeping last 12 exchanges for better context preservation)")
                     
                     # 🎯 INJECT TARGET COLUMN REMINDER after pruning (prevent LLM from forgetting)
                     if target_col and self.workflow_state.task_type:
@@ -3058,11 +3058,11 @@ You receive quality reports from EDA agent and deliver clean data to modeling ag
                     len(str(m.get('content', '') if isinstance(m, dict) else getattr(m, 'content', ''))) // 4 
                     for m in messages
                 )
-                if estimated_tokens > 8000:
-                    # Emergency pruning - keep only last 2 exchanges
+                if estimated_tokens > 15000:
+                    # Emergency pruning - keep only last 8 exchanges
                     system_msg = messages[0]
                     user_msg = messages[1]
-                    recent_msgs = messages[-4:]
+                    recent_msgs = messages[-16:]
                     
                     # CRITICAL: Keep complete tool call/response groups together
                     cleaned_recent = []
@@ -3086,7 +3086,7 @@ You receive quality reports from EDA agent and deliver clean data to modeling ag
                             i += 1
                     
                     messages = [system_msg, user_msg] + cleaned_recent
-                    print(f"⚠️  Emergency pruning (conversation > 8K tokens)")
+                    print(f"⚠️  Emergency pruning (conversation > 15K tokens, keeping last 8 exchanges)")
                 
                 # 💰 Token budget management (TPM limit)
                 if self.provider in ["mistral", "groq"]:
