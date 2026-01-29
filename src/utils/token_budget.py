@@ -72,15 +72,30 @@ class TokenBudgetManager:
             # Fallback estimation: ~4 chars per token
             return len(text) // 4
     
-    def count_message_tokens(self, message: Dict[str, str]) -> int:
-        """Count tokens in a message (includes role overhead)."""
+    def count_message_tokens(self, message) -> int:
+        """
+        Count tokens in a message (includes role overhead).
+        
+        Args:
+            message: Either a dict or a Pydantic ChatMessage object
+        """
         # Format: <|role|>content<|endofmessage|>
         # Approximately 4 tokens overhead per message
-        content_tokens = self.count_tokens(message.get("content", ""))
-        role_tokens = self.count_tokens(message.get("role", ""))
+        
+        # Handle both dict and Pydantic object formats
+        if isinstance(message, dict):
+            content = message.get("content", "")
+            role = message.get("role", "")
+        else:
+            # Pydantic object (like ChatMessage from Mistral SDK)
+            content = getattr(message, "content", "")
+            role = getattr(message, "role", "")
+        
+        content_tokens = self.count_tokens(str(content))
+        role_tokens = self.count_tokens(str(role))
         return content_tokens + role_tokens + 4
     
-    def count_messages_tokens(self, messages: List[Dict[str, str]]) -> int:
+    def count_messages_tokens(self, messages: List) -> int:
         """Count total tokens in message list."""
         return sum(self.count_message_tokens(msg) for msg in messages)
     
@@ -303,12 +318,17 @@ class TokenBudgetManager:
         # Still too large - truncate system prompt
         print("⚠️ Truncating system prompt to fit budget")
         system_msg = essential_messages[0]
-        system_content = system_msg["content"]
+        
+        # Handle both dict and Pydantic object formats
+        if isinstance(system_msg, dict):
+            system_content = system_msg["content"]
+        else:
+            system_content = getattr(system_msg, "content", "")
         
         # Keep first 1000 chars of system prompt
         truncated_system = {
             "role": "system",
-            "content": system_content[:1000] + "\n\n... (truncated due to context limit) ..."
+            "content": str(system_content)[:1000] + "\n\n... (truncated due to context limit) ..."
         }
         
         return [truncated_system] + essential_messages[1:]
@@ -344,13 +364,21 @@ class TokenBudgetManager:
         # Convert to ConversationMessage objects
         conv_messages = []
         for i, msg in enumerate(messages):
-            msg_type = "system" if i == 0 and msg["role"] == "system" else "normal"
-            if "tool" in msg.get("content", "").lower() or "function" in msg.get("content", "").lower():
+            # Handle both dict and Pydantic object formats
+            if isinstance(msg, dict):
+                role = msg.get("role", "")
+                content = msg.get("content", "")
+            else:
+                role = getattr(msg, "role", "")
+                content = getattr(msg, "content", "")
+            
+            msg_type = "system" if i == 0 and role == "system" else "normal"
+            if "tool" in str(content).lower() or "function" in str(content).lower():
                 msg_type = "tool_result"
             
             conv_msg = ConversationMessage(
-                role=msg["role"],
-                content=msg["content"],
+                role=role,
+                content=str(content),
                 message_type=msg_type
             )
             conv_messages.append(conv_msg)
