@@ -3311,8 +3311,8 @@ You receive quality reports from EDA agent and deliver clean data to modeling ag
                                             'task_description': task_description,
                                             'target_col': target_col
                                         },
-                                        tool_name=tool_name,
-                                        iteration_count=iteration
+                                        last_tool=tool_name,
+                                        iteration=iteration
                                     )
                                 
                                 # Track in workflow
@@ -4023,8 +4023,8 @@ You receive quality reports from EDA agent and deliver clean data to modeling ag
                                 'task_description': task_description,
                                 'target_col': target_col
                             },
-                            tool_name=tool_name,
-                            iteration_count=iteration
+                            last_tool=tool_name,
+                            iteration=iteration
                         )
                     
                     # Check for errors and display them prominently

@@ -109,11 +109,11 @@ class SemanticLayer:
         
         # Add statistics
         if stats:
-            if 'mean' in stats:
+            if 'mean' in stats and stats['mean'] is not None:
                 description_parts.append(f"Mean: {stats['mean']:.2f}")
-            if 'unique_count' in stats:
+            if 'unique_count' in stats and stats['unique_count'] is not None:
                 description_parts.append(f"Unique values: {stats['unique_count']}")
-            if 'null_percentage' in stats:
+            if 'null_percentage' in stats and stats['null_percentage'] is not None:
                 description_parts.append(f"Missing: {stats['null_percentage']:.1f}%")
         
         # Combine into single text
