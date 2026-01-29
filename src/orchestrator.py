@@ -2700,16 +2700,19 @@ You receive quality reports from EDA agent and deliver clean data to modeling ag
         Returns:
             Analysis results including summary and tool outputs
         """
+        # 🛡️ SAFETY: Ensure max_iterations is never None (prevent NoneType comparison errors)
+        if max_iterations is None:
+            max_iterations = 20
+            print(f"⚠️  max_iterations was None, defaulting to 20")
+        
         start_time = time.time()
         
-        # 🛡️ ERROR RECOVERY: Check for resumable checkpoint
+        # 🧹 CLEAR OLD CHECKPOINTS: Start fresh for each new workflow
+        # This prevents stale checkpoint resumption when user starts a new query
         session_id = self.http_session_key or "default"
         if self.recovery_manager.checkpoint_manager.can_resume(session_id):
-            checkpoint = self.recovery_manager.checkpoint_manager.load_checkpoint(session_id)
-            if checkpoint:
-                print(f"📂 Resuming from checkpoint (iteration {checkpoint['iteration']}, last tool: {checkpoint['last_tool']})")
-                # Note: Full workflow state restoration would go here if needed
-                # For now, we just log the resume capability
+            print(f"🗑️  Clearing old checkpoint to start fresh workflow")
+            self.recovery_manager.checkpoint_manager.clear_checkpoint(session_id)
         
         # 🧠 RESOLVE AMBIGUITY USING SESSION MEMORY (BEFORE SCHEMA EXTRACTION)
         # This ensures follow-up requests can find the file before we try to extract schema
