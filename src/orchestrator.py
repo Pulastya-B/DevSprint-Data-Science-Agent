@@ -2953,24 +2953,41 @@ You receive quality reports from EDA agent and deliver clean data to modeling ag
                         return msg.get('role', '')
                     return getattr(msg, 'role', '')
                 
+                # Helper to check if message has tool_calls
+                def has_tool_calls(msg):
+                    if isinstance(msg, dict):
+                        return bool(msg.get('tool_calls'))
+                    return bool(getattr(msg, 'tool_calls', None))
+                
                 if len(messages) > 10:
                     # Keep: system prompt [0], user query [1], last valid exchanges
                     system_msg = messages[0]
                     user_msg = messages[1]
                     recent_msgs = messages[-8:]
                     
-                    # Ensure no orphaned tool messages after pruning
-                    # Mistral requires: assistant → tool → assistant → user (never tool after user)
+                    # CRITICAL: Keep complete tool call/response groups together
+                    # Mistral requires: assistant (with tool_calls) → tool responses → assistant → user
                     cleaned_recent = []
-                    for i, msg in enumerate(recent_msgs):
-                        # Skip tool messages that aren't preceded by assistant
-                        if get_role(msg) == 'tool':
-                            # Check if previous message is assistant
-                            if i > 0 and get_role(recent_msgs[i-1]) == 'assistant':
-                                cleaned_recent.append(msg)
-                            # Otherwise skip this orphaned tool message
-                        else:
+                    i = 0
+                    while i < len(recent_msgs):
+                        msg = recent_msgs[i]
+                        role = get_role(msg)
+                        
+                        if role == 'assistant' and has_tool_calls(msg):
+                            # This assistant has tool calls - must keep it AND all following tool responses
                             cleaned_recent.append(msg)
+                            i += 1
+                            # Collect all consecutive tool responses
+                            while i < len(recent_msgs) and get_role(recent_msgs[i]) == 'tool':
+                                cleaned_recent.append(recent_msgs[i])
+                                i += 1
+                        elif role == 'tool':
+                            # Orphaned tool message (no preceding assistant with tool_calls) - skip it
+                            i += 1
+                        else:
+                            # Regular message (assistant without tool_calls, user, system)
+                            cleaned_recent.append(msg)
+                            i += 1
                     
                     messages = [system_msg, user_msg] + cleaned_recent
                     print(f"✂️  Pruned conversation (keeping last 4 exchanges, ~4K tokens saved)")
@@ -2986,14 +3003,26 @@ You receive quality reports from EDA agent and deliver clean data to modeling ag
                     user_msg = messages[1]
                     recent_msgs = messages[-4:]
                     
-                    # Clean orphaned tool messages
+                    # CRITICAL: Keep complete tool call/response groups together
                     cleaned_recent = []
-                    for i, msg in enumerate(recent_msgs):
-                        if get_role(msg) == 'tool':
-                            if i > 0 and get_role(recent_msgs[i-1]) == 'assistant':
-                                cleaned_recent.append(msg)
+                    i = 0
+                    while i < len(recent_msgs):
+                        msg = recent_msgs[i]
+                        role = get_role(msg)
+                        
+                        if role == 'assistant' and has_tool_calls(msg):
+                            # Keep assistant with tool calls AND all its tool responses
+                            cleaned_recent.append(msg)
+                            i += 1
+                            while i < len(recent_msgs) and get_role(recent_msgs[i]) == 'tool':
+                                cleaned_recent.append(recent_msgs[i])
+                                i += 1
+                        elif role == 'tool':
+                            # Skip orphaned tool message
+                            i += 1
                         else:
                             cleaned_recent.append(msg)
+                            i += 1
                     
                     messages = [system_msg, user_msg] + cleaned_recent
                     print(f"⚠️  Emergency pruning (conversation > 8K tokens)")
