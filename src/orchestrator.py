@@ -344,11 +344,25 @@ class DataScienceCopilot:
         self.specialist_agents = self._initialize_specialist_agents()
         self.active_agent = "Orchestrator"  # Track which agent is working
         
+        # Determine output directory based on environment
+        # In production (HuggingFace/Cloud Run), use /tmp for ephemeral storage
+        if os.path.exists("/tmp") and os.access("/tmp", os.W_OK):
+            self.output_base = Path("/tmp/data_science_agent/outputs")
+        else:
+            self.output_base = Path("./outputs")
+        
+        # Set environment variable for tools to use
+        os.environ["DS_AGENT_OUTPUT_DIR"] = str(self.output_base)
+        
         # Ensure output directories exist
-        Path("./outputs").mkdir(exist_ok=True)
-        Path("./outputs/models").mkdir(exist_ok=True)
-        Path("./outputs/reports").mkdir(exist_ok=True)
-        Path("./outputs/data").mkdir(exist_ok=True)
+        self.output_base.mkdir(parents=True, exist_ok=True)
+        (self.output_base / "models").mkdir(exist_ok=True)
+        (self.output_base / "reports").mkdir(exist_ok=True)
+        (self.output_base / "data").mkdir(exist_ok=True)
+        (self.output_base / "plots").mkdir(exist_ok=True)
+        (self.output_base / "plots" / "interactive").mkdir(exist_ok=True)
+        
+        print(f"📁 Output directory: {self.output_base}")
     
     def _build_tool_functions_map(self) -> Dict[str, callable]:
         """Build mapping of tool names to their functions - All 75 tools."""

@@ -833,19 +833,43 @@ async def general_exception_handler(request, exc):
 async def serve_output_files(file_path: str):
     """
     Serve generated output files (reports, plots, models, etc.).
+    Checks multiple locations: ./outputs, /tmp/data_science_agent/outputs, and /tmp/data_science_agent.
     """
-    output_path = Path("./outputs") / file_path
+    # Locations to check (in order of priority)
+    search_paths = [
+        Path("./outputs") / file_path,  # Local development
+        Path("/tmp/data_science_agent/outputs") / file_path,  # Production with subdirs
+        Path("/tmp/data_science_agent") / file_path,  # Production flat
+        Path("/tmp/data_science_agent/outputs") / Path(file_path).name,  # Production filename only
+    ]
     
-    if not output_path.exists():
+    output_path = None
+    for path in search_paths:
+        if path.exists() and path.is_file():
+            output_path = path
+            break
+    
+    if output_path is None:
         raise HTTPException(status_code=404, detail=f"File not found: {file_path}")
     
-    if not output_path.is_file():
-        raise HTTPException(status_code=400, detail="Path is not a file")
-    
     # Security: prevent directory traversal
-    try:
-        output_path.resolve().relative_to(Path("./outputs").resolve())
-    except ValueError:
+    resolved_path = output_path.resolve()
+    allowed_bases = [
+        Path("./outputs").resolve(),
+        Path("/tmp/data_science_agent").resolve()
+    ]
+    
+    # Check if path is within allowed directories
+    is_allowed = False
+    for base in allowed_bases:
+        try:
+            resolved_path.relative_to(base)
+            is_allowed = True
+            break
+        except ValueError:
+            continue
+    
+    if not is_allowed:
         raise HTTPException(status_code=403, detail="Access denied")
     
     # Determine media type based on file extension

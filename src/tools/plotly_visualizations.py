@@ -170,18 +170,23 @@ def generate_interactive_histogram(
 
 def generate_interactive_correlation_heatmap(
     file_path: str,
-    output_path: str = "./outputs/plots/interactive/correlation_heatmap.html"
+    output_path: str = None
 ) -> Dict[str, Any]:
     """
     Create interactive correlation heatmap with Plotly.
     
     Args:
         file_path: Path to dataset
-        output_path: Path to save HTML file
+        output_path: Path to save HTML file (auto-determined if None)
         
     Returns:
         Dictionary with plot info
     """
+    # Auto-determine output path based on environment
+    if output_path is None:
+        output_base = os.getenv("DS_AGENT_OUTPUT_DIR", "./outputs")
+        output_path = f"{output_base}/plots/interactive/correlation_heatmap.html"
+    
     # Validation
     validate_file_exists(file_path)
     validate_file_format(file_path)
