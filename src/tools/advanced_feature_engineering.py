@@ -93,7 +93,23 @@ def create_interaction_features(
         ]).to_dicts()[0]
         columns = sorted(variances.keys(), key=lambda x: variances[x], reverse=True)[:20]
     
-    X = df[columns].to_numpy()
+    # Handle NaN values before transformation
+    print(f"🧬 Checking for NaN values...")
+    df_subset = df.select(columns)
+    has_nulls = df_subset.null_count().sum_horizontal()[0] > 0
+    
+    if has_nulls:
+        print(f"⚠️ Found NaN values, imputing with column medians...")
+        # Impute NaN with median for each column
+        impute_exprs = []
+        for col in columns:
+            median_val = df_subset[col].median()
+            if median_val is None:  # All NaN
+                median_val = 0.0
+            impute_exprs.append(pl.col(col).fill_null(median_val).alias(col))
+        df_subset = df_subset.select(impute_exprs)
+    
+    X = df_subset.to_numpy()
     original_features = len(columns)
     
     # Create interaction features based on method

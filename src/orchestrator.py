@@ -1987,6 +1987,11 @@ You receive quality reports from EDA agent and deliver clean data to modeling ag
                     # Convert directory to full file path
                     arguments["output_path"] = f"{output_dir}/ydata_profile.html"
             
+            # Fix target_column → target_col (common LLM mistake)
+            if "target_column" in arguments and "target_col" not in arguments:
+                arguments["target_col"] = arguments.pop("target_column")
+                print(f"   ✓ Parameter remapped: target_column → target_col")
+            
             # General parameter corrections for common LLM hallucinations
             if "output" in arguments and "output_path" not in arguments:
                 # Many tools use 'output_path' but LLM uses 'output'

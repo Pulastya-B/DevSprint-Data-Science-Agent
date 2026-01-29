@@ -1,0 +1,494 @@
+🔍 Extracting dataset schema locally (no LLM)...
+[SSE] ENDPOINT: Client connected for session_id=7ffcf0da-b4b3-494f-ad4b-23ab48642dd7
+[SSE] Queue registered, total subscribers: 1
+INFO:     10.16.14.243:13412 - "GET /api/progress/stream/7ffcf0da-b4b3-494f-ad4b-23ab48642dd7 HTTP/1.1" 200 OK
+[SSE] SENDING connection event to client
+[SSE] Sending 10 history events
+ERROR:src.api.app:SSE error for session 7ffcf0da-b4b3-494f-ad4b-23ab48642dd7: Object of type DataScienceCopilot is not JSON serializable
+INFO:src.api.app:SSE stream closed for session 7ffcf0da-b4b3-494f-ad4b-23ab48642dd7
+🧠 Semantic layer: Embedded 22 columns
+   Found 21 similar column pairs (potential duplicates)
+🧠 Semantic layer enriched 22 columns
+✅ Schema extracted: 175947 rows × 22 cols
+   File size: 30.38 MB
+🧠 Semantic routing → 🤖 ML Modeling Specialist (confidence: 0.29)
+📝 Reasoning: Selected modeling_agent (confidence: 0.26)
+
+🤖 Delegating to: ML Modeling Specialist
+   Specialization: Expert in model training, tuning, and evaluation
+🎯 Agent-specific tools: 15 tools for modeling_agent
+   📦 Loaded 15 agent-specific tools
+💾 Saved to session: dataset=/tmp/data_science_agent/usgs_earthquake_data_2000_2025.csv, target=None
+🔄 Token budget reset (was 10506/500000)
+💰 Token budget: 0/500000 (0%)
+📊 Token Budget Check: 1,075 / 120,000 tokens
+✅ Within budget
+💰 Token budget: 1075/128000 (0.8%)
+[SSE] ENDPOINT: Client connected for session_id=7ffcf0da-b4b3-494f-ad4b-23ab48642dd7
+[SSE] Queue registered, total subscribers: 1
+INFO:     10.16.14.243:11633 - "GET /api/progress/stream/7ffcf0da-b4b3-494f-ad4b-23ab48642dd7 HTTP/1.1" 200 OK
+[SSE] SENDING connection event to client
+[SSE] Sending 10 history events
+ERROR:src.api.app:SSE error for session 7ffcf0da-b4b3-494f-ad4b-23ab48642dd7: Object of type DataScienceCopilot is not JSON serializable
+INFO:src.api.app:SSE stream closed for session 7ffcf0da-b4b3-494f-ad4b-23ab48642dd7
+INFO:httpx:HTTP Request: POST https://api.mistral.ai/v1/chat/completions "HTTP/1.1 200 OK"
+📊 Tokens: 3057 this call | 3057/500000 this minute
+[SSE] PROGRESS_MANAGER EMIT: session=7ffcf0da-b4b3-494f-ad4b-23ab48642dd7, event_type=token_update, msg=📊 Tokens: 3057 this call | 3057/500000 this minute
+[SSE] History stored, total events for 7ffcf0da-b4b3-494f-ad4b-23ab48642dd7: 14
+[SSE] Found 0 subscribers for 7ffcf0da-b4b3-494f-ad4b-23ab48642dd7
+
+🔧 Executing: profile_dataset
+   Arguments: {
+  "file_path": "/tmp/data_science_agent/usgs_earthquake_data_2000_2025.csv"
+}
+[SSE] EMIT tool_executing: session=7ffcf0da-b4b3-494f-ad4b-23ab48642dd7, tool=profile_dataset
+[SSE] PROGRESS_MANAGER EMIT: session=7ffcf0da-b4b3-494f-ad4b-23ab48642dd7, event_type=tool_executing, msg=🔧 Executing: profile_dataset
+[SSE] History stored, total events for 7ffcf0da-b4b3-494f-ad4b-23ab48642dd7: 15
+[SSE] Found 0 subscribers for 7ffcf0da-b4b3-494f-ad4b-23ab48642dd7
+[SSE] ENDPOINT: Client connected for session_id=7ffcf0da-b4b3-494f-ad4b-23ab48642dd7
+[SSE] Queue registered, total subscribers: 1
+INFO:     10.16.42.137:64075 - "GET /api/progress/stream/7ffcf0da-b4b3-494f-ad4b-23ab48642dd7 HTTP/1.1" 200 OK
+[SSE] SENDING connection event to client
+[SSE] Sending 10 history events
+[SSE] Starting event stream loop for session 7ffcf0da-b4b3-494f-ad4b-23ab48642dd7
+💾 Checkpoint saved: iteration 1, last tool: profile_dataset
+   ✓ Completed: profile_dataset
+[SSE] PROGRESS_MANAGER EMIT: session=7ffcf0da-b4b3-494f-ad4b-23ab48642dd7, event_type=tool_completed, msg=✓ Completed: profile_dataset
+[SSE] History stored, total events for 7ffcf0da-b4b3-494f-ad4b-23ab48642dd7: 16
+[SSE] Found 1 subscribers for 7ffcf0da-b4b3-494f-ad4b-23ab48642dd7
+[SSE] Successfully queued event to subscriber 1
+💰 Token budget: 3057/500000 (1%)
+📊 Token Budget Check: 1,505 / 120,000 tokens
+✅ Within budget
+💰 Token budget: 1505/128000 (1.2%)
+[SSE] GOT event from queue: tool_completed
+INFO:httpx:HTTP Request: POST https://api.mistral.ai/v1/chat/completions "HTTP/1.1 200 OK"
+📊 Tokens: 3672 this call | 6729/500000 this minute
+[SSE] PROGRESS_MANAGER EMIT: session=7ffcf0da-b4b3-494f-ad4b-23ab48642dd7, event_type=token_update, msg=📊 Tokens: 3672 this call | 6729/500000 this minute
+[SSE] History stored, total events for 7ffcf0da-b4b3-494f-ad4b-23ab48642dd7: 17
+[SSE] Found 1 subscribers for 7ffcf0da-b4b3-494f-ad4b-23ab48642dd7
+[SSE] Successfully queued event to subscriber 1
+
+🔧 Executing: detect_data_quality_issues
+   Arguments: {
+  "file_path": "/tmp/data_science_agent/usgs_earthquake_data_2000_2025.csv"
+}
+[SSE] EMIT tool_executing: session=7ffcf0da-b4b3-494f-ad4b-23ab48642dd7, tool=detect_data_quality_issues
+[SSE] PROGRESS_MANAGER EMIT: session=7ffcf0da-b4b3-494f-ad4b-23ab48642dd7, event_type=tool_executing, msg=🔧 Executing: detect_data_quality_issues
+[SSE] History stored, total events for 7ffcf0da-b4b3-494f-ad4b-23ab48642dd7: 18
+[SSE] Found 1 subscribers for 7ffcf0da-b4b3-494f-ad4b-23ab48642dd7
+[SSE] Successfully queued event to subscriber 1
+[SSE] GOT event from queue: token_update
+[SSE] GOT event from queue: tool_executing
+💾 Checkpoint saved: iteration 2, last tool: detect_data_quality_issues
+   ✓ Completed: detect_data_quality_issues
+[SSE] PROGRESS_MANAGER EMIT: session=7ffcf0da-b4b3-494f-ad4b-23ab48642dd7, event_type=tool_completed, msg=✓ Completed: detect_data_quality_issues
+[SSE] History stored, total events for 7ffcf0da-b4b3-494f-ad4b-23ab48642dd7: 19
+[SSE] Found 1 subscribers for 7ffcf0da-b4b3-494f-ad4b-23ab48642dd7
+[SSE] Successfully queued event to subscriber 1
+💰 Token budget: 6729/500000 (1%)
+📊 Token Budget Check: 2,043 / 120,000 tokens
+✅ Within budget
+💰 Token budget: 2043/128000 (1.6%)
+[SSE] GOT event from queue: tool_completed
+INFO:httpx:HTTP Request: POST https://api.mistral.ai/v1/chat/completions "HTTP/1.1 200 OK"
+📊 Tokens: 4248 this call | 10977/500000 this minute
+[SSE] PROGRESS_MANAGER EMIT: session=7ffcf0da-b4b3-494f-ad4b-23ab48642dd7, event_type=token_update, msg=📊 Tokens: 4248 this call | 10977/500000 this minut
+[SSE] History stored, total events for 7ffcf0da-b4b3-494f-ad4b-23ab48642dd7: 20
+[SSE] Found 1 subscribers for 7ffcf0da-b4b3-494f-ad4b-23ab48642dd7
+[SSE] Successfully queued event to subscriber 1
+
+🔧 Executing: create_time_features
+   Arguments: {
+  "file_path": "/tmp/data_science_agent/usgs_earthquake_data_2000_2025.csv",
+  "date_col": "time",
+  "output_path": "/tmp/data_science_agent/usgs_earthquake_data_with_time_features.csv"
+}
+[SSE] EMIT tool_executing: session=7ffcf0da-b4b3-494f-ad4b-23ab48642dd7, tool=create_time_features
+[SSE] PROGRESS_MANAGER EMIT: session=7ffcf0da-b4b3-494f-ad4b-23ab48642dd7, event_type=tool_executing, msg=🔧 Executing: create_time_features
+[SSE] History stored, total events for 7ffcf0da-b4b3-494f-ad4b-23ab48642dd7: 21
+[SSE] Found 1 subscribers for 7ffcf0da-b4b3-494f-ad4b-23ab48642dd7
+[SSE] Successfully queued event to subscriber 1
+[SSE] GOT event from queue: token_update
+[SSE] GOT event from queue: tool_executing
+💾 Checkpoint saved: iteration 3, last tool: create_time_features
+   ✓ Completed: create_time_features
+[SSE] PROGRESS_MANAGER EMIT: session=7ffcf0da-b4b3-494f-ad4b-23ab48642dd7, event_type=tool_completed, msg=✓ Completed: create_time_features
+[SSE] History stored, total events for 7ffcf0da-b4b3-494f-ad4b-23ab48642dd7: 22
+[SSE] Found 1 subscribers for 7ffcf0da-b4b3-494f-ad4b-23ab48642dd7
+[SSE] Successfully queued event to subscriber 1
+✂️  Pruned conversation (keeping last 4 exchanges, ~4K tokens saved)
+💰 Token budget: 10977/500000 (2%)
+📊 Token Budget Check: 2,201 / 120,000 tokens
+✅ Within budget
+💰 Token budget: 2201/128000 (1.7%)
+[SSE] GOT event from queue: tool_completed
+INFO:httpx:HTTP Request: POST https://api.mistral.ai/v1/chat/completions "HTTP/1.1 200 OK"
+📊 Tokens: 4401 this call | 15378/500000 this minute
+[SSE] PROGRESS_MANAGER EMIT: session=7ffcf0da-b4b3-494f-ad4b-23ab48642dd7, event_type=token_update, msg=📊 Tokens: 4401 this call | 15378/500000 this minut
+[SSE] History stored, total events for 7ffcf0da-b4b3-494f-ad4b-23ab48642dd7: 23
+[SSE] Found 1 subscribers for 7ffcf0da-b4b3-494f-ad4b-23ab48642dd7
+[SSE] Successfully queued event to subscriber 1
+
+🔧 Executing: create_interaction_features
+   Arguments: {
+  "file_path": "/tmp/data_science_agent/usgs_earthquake_data_with_time_features.csv",
+  "method": "polynomial",
+  "degree": 2,
+  "max_features": 10,
+  "output_path": "/tmp/data_science_agent/usgs_earthquake_data_with_interactions.csv"
+}
+[SSE] EMIT tool_executing: session=7ffcf0da-b4b3-494f-ad4b-23ab48642dd7, tool=create_interaction_features
+[SSE] PROGRESS_MANAGER EMIT: session=7ffcf0da-b4b3-494f-ad4b-23ab48642dd7, event_type=tool_executing, msg=🔧 Executing: create_interaction_features
+[SSE] History stored, total events for 7ffcf0da-b4b3-494f-ad4b-23ab48642dd7: 24
+[SSE] Found 1 subscribers for 7ffcf0da-b4b3-494f-ad4b-23ab48642dd7
+[SSE] Successfully queued event to subscriber 1
+[SSE] GOT event from queue: token_update
+[SSE] GOT event from queue: tool_executing
+🔢 Auto-detected 23 numeric columns
+⚠️ Too many columns (23). Using top 20 by variance.
+🔄 Creating polynomial features (degree=2)...
+⚠️ <src.orchestrator.DataScienceCopilot object at 0x7f5609f60710> failed (attempt 1/2): Input X contains NaN.
+PolynomialFeatures does not accept missing values encoded as NaN natively. For
+   Retrying in 1.0s...
+🔢 Auto-detected 23 numeric columns
+⚠️ Too many columns (23). Using top 20 by variance.
+🔄 Creating polynomial features (degree=2)...
+❌ <src.orchestrator.DataScienceCopilot object at 0x7f5609f60710> failed after 2 attempts
+💡 Suggested fallback tools: []
+   ❌ FAILED: create_interaction_features
+   ⚠️  Error Type: Exception
+   ⚠️  Error Message: Input X contains NaN.
+PolynomialFeatures does not accept missing values encoded as NaN natively. For supervised learning, you might want to consider sklearn.ensemble.HistGradientBoostingClassifier and Regressor which accept missing values encoded as NaNs natively. Alternatively, it is possible to preprocess the data, for instance by using an imputer transformer in a pipeline or drop samples with missing values. See https://scikit-learn.org/stable/modules/impute.html You can find a list of all estimators that handle NaN values at the following page: https://scikit-learn.org/stable/modules/impute.html#estimators-that-handle-nan-values
+[SSE] PROGRESS_MANAGER EMIT: session=7ffcf0da-b4b3-494f-ad4b-23ab48642dd7, event_type=tool_failed, msg=❌ FAILED: create_interaction_features
+[SSE] History stored, total events for 7ffcf0da-b4b3-494f-ad4b-23ab48642dd7: 25
+[SSE] Found 1 subscribers for 7ffcf0da-b4b3-494f-ad4b-23ab48642dd7
+[SSE] Successfully queued event to subscriber 1
+   🔄 Recovery: Use /tmp/data_science_agent/usgs_earthquake_data_with_time_features.csv for next step
+✂️  Pruned conversation (keeping last 4 exchanges, ~4K tokens saved)
+💰 Token budget: 15378/500000 (3%)
+📊 Token Budget Check: 1,699 / 120,000 tokens
+✅ Within budget
+💰 Token budget: 1699/128000 (1.3%)
+[SSE] GOT event from queue: tool_failed
+📊 Tokens: 2108 this call | 17486/500000 this minute
+[SSE] PROGRESS_MANAGER EMIT: session=7ffcf0da-b4b3-494f-ad4b-23ab48642dd7, event_type=token_update, msg=📊 Tokens: 2108 this call | 17486/500000 this minut
+[SSE] History stored, total events for 7ffcf0da-b4b3-494f-ad4b-23ab48642dd7: 26
+[SSE] Found 1 subscribers for 7ffcf0da-b4b3-494f-ad4b-23ab48642dd7
+[SSE] Successfully queued event to subscriber 1
+
+🔧 Executing: clean_missing_values
+   Arguments: {
+  "file_path": "/tmp/data_science_agent/usgs_earthquake_data_with_time_features.csv",
+  "strategy": "median",
+  "output_path": "/tmp/data_science_agent/usgs_earthquake_data_imputed.csv"
+}
+[SSE] EMIT tool_executing: session=7ffcf0da-b4b3-494f-ad4b-23ab48642dd7, tool=clean_missing_values
+[SSE] PROGRESS_MANAGER EMIT: session=7ffcf0da-b4b3-494f-ad4b-23ab48642dd7, event_type=tool_executing, msg=🔧 Executing: clean_missing_values
+[SSE] History stored, total events for 7ffcf0da-b4b3-494f-ad4b-23ab48642dd7: 27
+[SSE] Found 1 subscribers for 7ffcf0da-b4b3-494f-ad4b-23ab48642dd7
+[SSE] Successfully queued event to subscriber 1
+INFO:httpx:HTTP Request: POST https://api.mistral.ai/v1/chat/completions "HTTP/1.1 200 OK"
+[SSE] GOT event from queue: token_update
+[SSE] GOT event from queue: tool_executing
+⚠️ <src.orchestrator.DataScienceCopilot object at 0x7f5609f60710> failed (attempt 1/2): 'str' object has no attribute 'items'
+   Retrying in 1.0s...
+❌ <src.orchestrator.DataScienceCopilot object at 0x7f5609f60710> failed after 2 attempts
+💡 Suggested fallback tools: []
+   ❌ FAILED: clean_missing_values
+   ⚠️  Error Type: Exception
+   ⚠️  Error Message: 'str' object has no attribute 'items'
+[SSE] PROGRESS_MANAGER EMIT: session=7ffcf0da-b4b3-494f-ad4b-23ab48642dd7, event_type=tool_failed, msg=❌ FAILED: clean_missing_values
+[SSE] History stored, total events for 7ffcf0da-b4b3-494f-ad4b-23ab48642dd7: 28
+[SSE] Found 1 subscribers for 7ffcf0da-b4b3-494f-ad4b-23ab48642dd7
+[SSE] Successfully queued event to subscriber 1
+   🔄 Recovery: Use /tmp/data_science_agent/usgs_earthquake_data_with_time_features.csv for next step
+✂️  Pruned conversation (keeping last 4 exchanges, ~4K tokens saved)
+💰 Token budget: 17486/500000 (3%)
+📊 Token Budget Check: 1,789 / 120,000 tokens
+✅ Within budget
+💰 Token budget: 1789/128000 (1.4%)
+[SSE] GOT event from queue: tool_failed
+📊 Tokens: 2198 this call | 19684/500000 this minute
+[SSE] PROGRESS_MANAGER EMIT: session=7ffcf0da-b4b3-494f-ad4b-23ab48642dd7, event_type=token_update, msg=📊 Tokens: 2198 this call | 19684/500000 this minut
+[SSE] History stored, total events for 7ffcf0da-b4b3-494f-ad4b-23ab48642dd7: 29
+[SSE] Found 1 subscribers for 7ffcf0da-b4b3-494f-ad4b-23ab48642dd7
+[SSE] Successfully queued event to subscriber 1
+
+⚠️  LOOP DETECTED: clean_missing_values called 2 times consecutively!
+   This indicates the workflow is stuck. Skipping and forcing progression.
+   Last successful file: /tmp/data_science_agent/usgs_earthquake_data_with_time_features.csv
+INFO:httpx:HTTP Request: POST https://api.mistral.ai/v1/chat/completions "HTTP/1.1 200 OK"
+✂️  Pruned conversation (keeping last 4 exchanges, ~4K tokens saved)
+💰 Token budget: 19684/500000 (4%)
+⏳ Rate limiting: waiting 0.1s...
+📊 Token Budget Check: 1,697 / 120,000 tokens
+✅ Within budget
+💰 Token budget: 1697/128000 (1.3%)
+[SSE] GOT event from queue: token_update
+INFO:httpx:HTTP Request: POST https://api.mistral.ai/v1/chat/completions "HTTP/1.1 200 OK"
+📊 Tokens: 3975 this call | 23659/500000 this minute
+[SSE] PROGRESS_MANAGER EMIT: session=7ffcf0da-b4b3-494f-ad4b-23ab48642dd7, event_type=token_update, msg=📊 Tokens: 3975 this call | 23659/500000 this minut
+[SSE] History stored, total events for 7ffcf0da-b4b3-494f-ad4b-23ab48642dd7: 30
+[SSE] Found 1 subscribers for 7ffcf0da-b4b3-494f-ad4b-23ab48642dd7
+[SSE] Successfully queued event to subscriber 1
+
+🔧 Executing: profile_dataset
+   Arguments: {
+  "file_path": "/tmp/data_science_agent/usgs_earthquake_data_with_time_features.csv"
+}
+[SSE] EMIT tool_executing: session=7ffcf0da-b4b3-494f-ad4b-23ab48642dd7, tool=profile_dataset
+[SSE] PROGRESS_MANAGER EMIT: session=7ffcf0da-b4b3-494f-ad4b-23ab48642dd7, event_type=tool_executing, msg=🔧 Executing: profile_dataset
+[SSE] History stored, total events for 7ffcf0da-b4b3-494f-ad4b-23ab48642dd7: 31
+[SSE] Found 1 subscribers for 7ffcf0da-b4b3-494f-ad4b-23ab48642dd7
+[SSE] Successfully queued event to subscriber 1
+[SSE] GOT event from queue: token_update
+[SSE] GOT event from queue: tool_executing
+💾 Checkpoint saved: iteration 7, last tool: profile_dataset
+   ✓ Completed: profile_dataset
+[SSE] PROGRESS_MANAGER EMIT: session=7ffcf0da-b4b3-494f-ad4b-23ab48642dd7, event_type=tool_completed, msg=✓ Completed: profile_dataset
+[SSE] History stored, total events for 7ffcf0da-b4b3-494f-ad4b-23ab48642dd7: 32
+[SSE] Found 1 subscribers for 7ffcf0da-b4b3-494f-ad4b-23ab48642dd7
+[SSE] Successfully queued event to subscriber 1
+✂️  Pruned conversation (keeping last 4 exchanges, ~4K tokens saved)
+💰 Token budget: 23659/500000 (5%)
+📊 Token Budget Check: 1,643 / 120,000 tokens
+✅ Within budget
+💰 Token budget: 1643/128000 (1.3%)
+[SSE] GOT event from queue: tool_completed
+INFO:httpx:HTTP Request: POST https://api.mistral.ai/v1/chat/completions "HTTP/1.1 200 OK"
+📊 Tokens: 3938 this call | 27597/500000 this minute
+[SSE] PROGRESS_MANAGER EMIT: session=7ffcf0da-b4b3-494f-ad4b-23ab48642dd7, event_type=token_update, msg=📊 Tokens: 3938 this call | 27597/500000 this minut
+[SSE] History stored, total events for 7ffcf0da-b4b3-494f-ad4b-23ab48642dd7: 33
+[SSE] Found 1 subscribers for 7ffcf0da-b4b3-494f-ad4b-23ab48642dd7
+[SSE] Successfully queued event to subscriber 1
+
+🔧 Executing: create_interaction_features
+   Arguments: {
+  "file_path": "/tmp/data_science_agent/usgs_earthquake_data_with_time_features.csv",
+  "method": "polynomial",
+  "degree": 2,
+  "max_features": 20,
+  "output_path": "/tmp/data_science_agent/usgs_earthquake_data_with_interaction_features.csv"
+}
+[SSE] EMIT tool_executing: session=7ffcf0da-b4b3-494f-ad4b-23ab48642dd7, tool=create_interaction_features
+[SSE] PROGRESS_MANAGER EMIT: session=7ffcf0da-b4b3-494f-ad4b-23ab48642dd7, event_type=tool_executing, msg=🔧 Executing: create_interaction_features
+[SSE] History stored, total events for 7ffcf0da-b4b3-494f-ad4b-23ab48642dd7: 34
+[SSE] Found 1 subscribers for 7ffcf0da-b4b3-494f-ad4b-23ab48642dd7
+[SSE] Successfully queued event to subscriber 1
+[SSE] GOT event from queue: token_update
+[SSE] GOT event from queue: tool_executing
+🔢 Auto-detected 23 numeric columns
+⚠️ Too many columns (23). Using top 20 by variance.
+🔄 Creating polynomial features (degree=2)...
+⚠️ <src.orchestrator.DataScienceCopilot object at 0x7f5609f60710> failed (attempt 1/2): Input X contains NaN.
+PolynomialFeatures does not accept missing values encoded as NaN natively. For
+   Retrying in 1.0s...
+🔢 Auto-detected 23 numeric columns
+⚠️ Too many columns (23). Using top 20 by variance.
+🔄 Creating polynomial features (degree=2)...
+❌ <src.orchestrator.DataScienceCopilot object at 0x7f5609f60710> failed after 2 attempts
+💡 Suggested fallback tools: []
+   ❌ FAILED: create_interaction_features
+   ⚠️  Error Type: Exception
+   ⚠️  Error Message: Input X contains NaN.
+PolynomialFeatures does not accept missing values encoded as NaN natively. For supervised learning, you might want to consider sklearn.ensemble.HistGradientBoostingClassifier and Regressor which accept missing values encoded as NaNs natively. Alternatively, it is possible to preprocess the data, for instance by using an imputer transformer in a pipeline or drop samples with missing values. See https://scikit-learn.org/stable/modules/impute.html You can find a list of all estimators that handle NaN values at the following page: https://scikit-learn.org/stable/modules/impute.html#estimators-that-handle-nan-values
+[SSE] PROGRESS_MANAGER EMIT: session=7ffcf0da-b4b3-494f-ad4b-23ab48642dd7, event_type=tool_failed, msg=❌ FAILED: create_interaction_features
+[SSE] History stored, total events for 7ffcf0da-b4b3-494f-ad4b-23ab48642dd7: 35
+[SSE] Found 1 subscribers for 7ffcf0da-b4b3-494f-ad4b-23ab48642dd7
+[SSE] Successfully queued event to subscriber 1
+   🔄 Recovery: Use /tmp/data_science_agent/usgs_earthquake_data_with_time_features.csv for next step
+✂️  Pruned conversation (keeping last 4 exchanges, ~4K tokens saved)
+🔄 Token budget reset (was 27597/500000)
+💰 Token budget: 0/500000 (0%)
+📊 Token Budget Check: 1,781 / 120,000 tokens
+✅ Within budget
+💰 Token budget: 1781/128000 (1.4%)
+[SSE] GOT event from queue: tool_failed
+INFO:httpx:HTTP Request: POST https://api.mistral.ai/v1/chat/completions "HTTP/1.1 200 OK"
+📊 Tokens: 4039 this call | 4039/500000 this minute
+[SSE] PROGRESS_MANAGER EMIT: session=7ffcf0da-b4b3-494f-ad4b-23ab48642dd7, event_type=token_update, msg=📊 Tokens: 4039 this call | 4039/500000 this minute
+[SSE] History stored, total events for 7ffcf0da-b4b3-494f-ad4b-23ab48642dd7: 36
+[SSE] Found 1 subscribers for 7ffcf0da-b4b3-494f-ad4b-23ab48642dd7
+[SSE] Successfully queued event to subscriber 1
+
+🔧 Executing: detect_data_quality_issues
+   Arguments: {
+  "file_path": "/tmp/data_science_agent/usgs_earthquake_data_with_time_features.csv"
+}
+[SSE] EMIT tool_executing: session=7ffcf0da-b4b3-494f-ad4b-23ab48642dd7, tool=detect_data_quality_issues
+[SSE] PROGRESS_MANAGER EMIT: session=7ffcf0da-b4b3-494f-ad4b-23ab48642dd7, event_type=tool_executing, msg=🔧 Executing: detect_data_quality_issues
+[SSE] History stored, total events for 7ffcf0da-b4b3-494f-ad4b-23ab48642dd7: 37
+[SSE] Found 1 subscribers for 7ffcf0da-b4b3-494f-ad4b-23ab48642dd7
+[SSE] Successfully queued event to subscriber 1
+[SSE] GOT event from queue: token_update
+[SSE] GOT event from queue: tool_executing
+💾 Checkpoint saved: iteration 9, last tool: detect_data_quality_issues
+   ✓ Completed: detect_data_quality_issues
+[SSE] PROGRESS_MANAGER EMIT: session=7ffcf0da-b4b3-494f-ad4b-23ab48642dd7, event_type=tool_completed, msg=✓ Completed: detect_data_quality_issues
+[SSE] History stored, total events for 7ffcf0da-b4b3-494f-ad4b-23ab48642dd7: 38
+[SSE] Found 1 subscribers for 7ffcf0da-b4b3-494f-ad4b-23ab48642dd7
+[SSE] Successfully queued event to subscriber 1
+✂️  Pruned conversation (keeping last 4 exchanges, ~4K tokens saved)
+💰 Token budget: 4039/500000 (1%)
+📊 Token Budget Check: 1,843 / 120,000 tokens
+✅ Within budget
+💰 Token budget: 1843/128000 (1.4%)
+[SSE] GOT event from queue: tool_completed
+INFO:httpx:HTTP Request: POST https://api.mistral.ai/v1/chat/completions "HTTP/1.1 200 OK"
+📊 Tokens: 4264 this call | 8303/500000 this minute
+[SSE] PROGRESS_MANAGER EMIT: session=7ffcf0da-b4b3-494f-ad4b-23ab48642dd7, event_type=token_update, msg=📊 Tokens: 4264 this call | 8303/500000 this minute
+[SSE] History stored, total events for 7ffcf0da-b4b3-494f-ad4b-23ab48642dd7: 39
+[SSE] Found 1 subscribers for 7ffcf0da-b4b3-494f-ad4b-23ab48642dd7
+[SSE] Successfully queued event to subscriber 1
+
+🔧 Executing: execute_python_code
+   Arguments: {
+  "code": "import pandas as pd\nfrom sklearn.preprocessing import PolynomialFeatures\n\n# Load data\ndf = pd.read_csv('/tmp/data_science_agent/usgs_earthquake_data_with_time_features.csv')\n\n# Check for NaN\nprint('NaN count per column:')\nprint(df.isna().sum())\n\n# Select numeric columns for interaction features\nnumeric_cols = ['latitude', 'longitude', 'depth', 'mag']\nX = df[numeric_cols]\n\n# Create polynomial features\npoly = PolynomialFeatures(degree=2, include_bias=False, interaction_only=False)\nX_poly = poly.fit_transform(X)\n\n# Save to CSV\npoly_df = pd.DataFrame(X_poly, columns=poly.get_feature_names_out(numeric_cols))\noutput_path = '/tmp/data_science_agent/usgs_earthquake_data_with_interaction_features.csv'\npoly_df.to_csv(output_path, index=False)\n\nprint(f'Interaction features saved to: {output_path}')",
+  "working_directory": "/tmp/data_science_agent"
+}
+[SSE] EMIT tool_executing: session=7ffcf0da-b4b3-494f-ad4b-23ab48642dd7, tool=execute_python_code
+[SSE] PROGRESS_MANAGER EMIT: session=7ffcf0da-b4b3-494f-ad4b-23ab48642dd7, event_type=tool_executing, msg=🔧 Executing: execute_python_code
+[SSE] History stored, total events for 7ffcf0da-b4b3-494f-ad4b-23ab48642dd7: 40
+[SSE] Found 1 subscribers for 7ffcf0da-b4b3-494f-ad4b-23ab48642dd7
+[SSE] Successfully queued event to subscriber 1
+[SSE] GOT event from queue: token_update
+[SSE] GOT event from queue: tool_executing
+💾 Checkpoint saved: iteration 10, last tool: execute_python_code
+   ✓ Completed: execute_python_code
+[SSE] PROGRESS_MANAGER EMIT: session=7ffcf0da-b4b3-494f-ad4b-23ab48642dd7, event_type=tool_completed, msg=✓ Completed: execute_python_code
+[SSE] History stored, total events for 7ffcf0da-b4b3-494f-ad4b-23ab48642dd7: 41
+[SSE] Found 1 subscribers for 7ffcf0da-b4b3-494f-ad4b-23ab48642dd7
+[SSE] Successfully queued event to subscriber 1
+✂️  Pruned conversation (keeping last 4 exchanges, ~4K tokens saved)
+💰 Token budget: 8303/500000 (2%)
+📊 Token Budget Check: 1,811 / 120,000 tokens
+✅ Within budget
+💰 Token budget: 1811/128000 (1.4%)
+[SSE] GOT event from queue: tool_completed
+📊 Tokens: 2370 this call | 10673/500000 this minute
+[SSE] PROGRESS_MANAGER EMIT: session=7ffcf0da-b4b3-494f-ad4b-23ab48642dd7, event_type=token_update, msg=📊 Tokens: 2370 this call | 10673/500000 this minut
+[SSE] History stored, total events for 7ffcf0da-b4b3-494f-ad4b-23ab48642dd7: 42
+[SSE] Found 1 subscribers for 7ffcf0da-b4b3-494f-ad4b-23ab48642dd7
+[SSE] Successfully queued event to subscriber 1
+
+🔧 Executing: profile_dataset
+   Arguments: {
+  "file_path": "/tmp/data_science_agent/usgs_earthquake_data_with_interaction_features.csv"
+}
+[SSE] EMIT tool_executing: session=7ffcf0da-b4b3-494f-ad4b-23ab48642dd7, tool=profile_dataset
+[SSE] PROGRESS_MANAGER EMIT: session=7ffcf0da-b4b3-494f-ad4b-23ab48642dd7, event_type=tool_executing, msg=🔧 Executing: profile_dataset
+[SSE] History stored, total events for 7ffcf0da-b4b3-494f-ad4b-23ab48642dd7: 43
+[SSE] Found 1 subscribers for 7ffcf0da-b4b3-494f-ad4b-23ab48642dd7
+[SSE] Successfully queued event to subscriber 1
+INFO:httpx:HTTP Request: POST https://api.mistral.ai/v1/chat/completions "HTTP/1.1 200 OK"
+[SSE] GOT event from queue: token_update
+[SSE] GOT event from queue: tool_executing
+💾 Checkpoint saved: iteration 11, last tool: profile_dataset
+   ✓ Completed: profile_dataset
+[SSE] PROGRESS_MANAGER EMIT: session=7ffcf0da-b4b3-494f-ad4b-23ab48642dd7, event_type=tool_completed, msg=✓ Completed: profile_dataset
+[SSE] History stored, total events for 7ffcf0da-b4b3-494f-ad4b-23ab48642dd7: 44
+[SSE] Found 1 subscribers for 7ffcf0da-b4b3-494f-ad4b-23ab48642dd7
+[SSE] Successfully queued event to subscriber 1
+✂️  Pruned conversation (keeping last 4 exchanges, ~4K tokens saved)
+💰 Token budget: 10673/500000 (2%)
+📊 Token Budget Check: 1,824 / 120,000 tokens
+✅ Within budget
+💰 Token budget: 1824/128000 (1.4%)
+[SSE] GOT event from queue: tool_completed
+INFO:httpx:HTTP Request: POST https://api.mistral.ai/v1/chat/completions "HTTP/1.1 200 OK"
+📊 Tokens: 2438 this call | 13111/500000 this minute
+[SSE] PROGRESS_MANAGER EMIT: session=7ffcf0da-b4b3-494f-ad4b-23ab48642dd7, event_type=token_update, msg=📊 Tokens: 2438 this call | 13111/500000 this minut
+[SSE] History stored, total events for 7ffcf0da-b4b3-494f-ad4b-23ab48642dd7: 45
+[SSE] Found 1 subscribers for 7ffcf0da-b4b3-494f-ad4b-23ab48642dd7
+[SSE] Successfully queued event to subscriber 1
+
+🔧 Executing: train_baseline_models
+   Arguments: {
+  "file_path": "/tmp/data_science_agent/usgs_earthquake_data_with_interaction_features.csv",
+  "target_column": "mag",
+  "models": [
+    "linear_regression",
+    "decision_tree",
+    "random_forest"
+  ],
+  "test_size": 0.2,
+  "random_state": 42
+}
+[SSE] EMIT tool_executing: session=7ffcf0da-b4b3-494f-ad4b-23ab48642dd7, tool=train_baseline_models
+[SSE] PROGRESS_MANAGER EMIT: session=7ffcf0da-b4b3-494f-ad4b-23ab48642dd7, event_type=tool_executing, msg=🔧 Executing: train_baseline_models
+[SSE] History stored, total events for 7ffcf0da-b4b3-494f-ad4b-23ab48642dd7: 46
+[SSE] Found 1 subscribers for 7ffcf0da-b4b3-494f-ad4b-23ab48642dd7
+[SSE] Successfully queued event to subscriber 1
+⚠️ <src.orchestrator.DataScienceCopilot object at 0x7f5609f60710> failed (attempt 1/2): train_baseline_models() got an unexpected keyword argument 'target_column'
+   Retrying in 1.0s...
+[SSE] GOT event from queue: token_update
+[SSE] GOT event from queue: tool_executing
+❌ <src.orchestrator.DataScienceCopilot object at 0x7f5609f60710> failed after 2 attempts
+💡 Suggested fallback tools: []
+   ❌ FAILED: train_baseline_models
+   ⚠️  Error Type: Exception
+   ⚠️  Error Message: train_baseline_models() got an unexpected keyword argument 'target_column'
+[SSE] PROGRESS_MANAGER EMIT: session=7ffcf0da-b4b3-494f-ad4b-23ab48642dd7, event_type=tool_failed, msg=❌ FAILED: train_baseline_models
+[SSE] History stored, total events for 7ffcf0da-b4b3-494f-ad4b-23ab48642dd7: 47
+[SSE] Found 1 subscribers for 7ffcf0da-b4b3-494f-ad4b-23ab48642dd7
+[SSE] Successfully queued event to subscriber 1
+   🔄 Recovery: Use /tmp/data_science_agent/usgs_earthquake_data_with_time_features.csv for next step
+
+🔴 CRITICAL ERROR in train_baseline_models:
+   train_baseline_models() got an unexpected keyword argument 'target_column'
+
+⚠️ Invalid hand-off target: production_agent
+[DEBUG] train_baseline_models executed!
+[DEBUG]   tool_result keys: ['success', 'error', 'error_type', 'traceback', 'tool_name', 'attempts', 'fallback_suggestions', 'recovery_guidance']
+[DEBUG]   'best_model' in tool_result: False
+✂️  Pruned conversation (keeping last 4 exchanges, ~4K tokens saved)
+💰 Token budget: 13111/500000 (3%)
+📊 Token Budget Check: 1,704 / 120,000 tokens
+✅ Within budget
+💰 Token budget: 1704/128000 (1.3%)
+[SSE] GOT event from queue: tool_failed
+INFO:httpx:HTTP Request: POST https://api.mistral.ai/v1/chat/completions "HTTP/1.1 200 OK"
+📊 Tokens: 2246 this call | 15357/500000 this minute
+[SSE] PROGRESS_MANAGER EMIT: session=7ffcf0da-b4b3-494f-ad4b-23ab48642dd7, event_type=token_update, msg=📊 Tokens: 2246 this call | 15357/500000 this minut
+[SSE] History stored, total events for 7ffcf0da-b4b3-494f-ad4b-23ab48642dd7: 48
+[SSE] Found 1 subscribers for 7ffcf0da-b4b3-494f-ad4b-23ab48642dd7
+[SSE] Successfully queued event to subscriber 1
+
+⚠️  LOOP DETECTED: train_baseline_models called 2 times consecutively!
+   This indicates the workflow is stuck. Skipping and forcing progression.
+   Last successful file: /tmp/data_science_agent/usgs_earthquake_data_with_time_features.csv
+✂️  Pruned conversation (keeping last 4 exchanges, ~4K tokens saved)
+💰 Token budget: 15357/500000 (3%)
+⏳ Rate limiting: waiting 0.1s...
+📊 Token Budget Check: 1,675 / 120,000 tokens
+✅ Within budget
+💰 Token budget: 1675/128000 (1.3%)
+[SSE] GOT event from queue: token_update
+INFO:httpx:HTTP Request: POST https://api.mistral.ai/v1/chat/completions "HTTP/1.1 200 OK"
+📊 Tokens: 4016 this call | 19373/500000 this minute
+[SSE] PROGRESS_MANAGER EMIT: session=7ffcf0da-b4b3-494f-ad4b-23ab48642dd7, event_type=token_update, msg=📊 Tokens: 4016 this call | 19373/500000 this minut
+[SSE] History stored, total events for 7ffcf0da-b4b3-494f-ad4b-23ab48642dd7: 49
+[SSE] Found 1 subscribers for 7ffcf0da-b4b3-494f-ad4b-23ab48642dd7
+[SSE] Successfully queued event to subscriber 1
+
+🔧 Executing: hyperparameter_tuning
+   Arguments: {
+  "file_path": "/tmp/data_science_agent/usgs_earthquake_data_with_interaction_features.csv",
+  "target_col": "mag",
+  "model_type": "random_forest",
+  "n_trials": 50,
+  "task_type": "regression",
+  "output_path": "/tmp/data_science_agent/usgs_earthquake_tuned_model.pkl"
+}
+[SSE] EMIT tool_executing: session=7ffcf0da-b4b3-494f-ad4b-23ab48642dd7, tool=hyperparameter_tuning
+[SSE] PROGRESS_MANAGER EMIT: session=7ffcf0da-b4b3-494f-ad4b-23ab48642dd7, event_type=tool_executing, msg=🔧 Executing: hyperparameter_tuning
+[SSE] History stored, total events for 7ffcf0da-b4b3-494f-ad4b-23ab48642dd7: 50
+[SSE] Found 1 subscribers for 7ffcf0da-b4b3-494f-ad4b-23ab48642dd7
+[SSE] Successfully queued event to subscriber 1
+[SSE] GOT event from queue: token_update
+[SSE] GOT event from queue: tool_executing
+   ⚠️ Large dataset (175,947 rows) - reducing trials from 50 to 20 to prevent timeout
+   🔄 Converting Polars DataFrame to Pandas for XGBoost compatibility...
+🔧 Starting hyperparameter tuning with 20 trials...
+[I 2026-01-29 09:29:35,446] A new study created in memory with name: no-name-a973d4d8-f621-477d-8e4d-616c03abbc0c

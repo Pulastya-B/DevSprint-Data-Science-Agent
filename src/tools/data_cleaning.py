@@ -74,45 +74,62 @@ def clean_missing_values(file_path: str, strategy,
         "threshold_used": threshold
     }
     
-    # Handle "auto" mode - Smart threshold-based cleaning
-    if isinstance(strategy, str) and strategy == "auto":
-        # Step 1: Identify and drop high-missing columns (>threshold)
-        cols_to_drop = []
-        for col in df.columns:
-            null_count = df[col].null_count()
-            null_pct = null_count / len(df) if len(df) > 0 else 0
+    # Handle string strategy modes
+    if isinstance(strategy, str):
+        if strategy == "auto":
+            # Step 1: Identify and drop high-missing columns (>threshold)
+            cols_to_drop = []
+            for col in df.columns:
+                null_count = df[col].null_count()
+                null_pct = null_count / len(df) if len(df) > 0 else 0
+                
+                if null_pct > threshold:
+                    cols_to_drop.append(col)
+                    report["columns_dropped"].append({
+                        "column": col,
+                        "missing_percentage": round(null_pct * 100, 2),
+                        "reason": f"Missing >{threshold*100}% of values"
+                    })
             
-            if null_pct > threshold:
-                cols_to_drop.append(col)
-                report["columns_dropped"].append({
-                    "column": col,
-                    "missing_percentage": round(null_pct * 100, 2),
-                    "reason": f"Missing >{threshold*100}% of values"
-                })
+            # Drop high-missing columns
+            if cols_to_drop:
+                df = df.drop(cols_to_drop)
+                print(f"🗑️  Dropped {len(cols_to_drop)} columns with >{threshold*100}% missing:")
+                for col_info in report["columns_dropped"]:
+                    print(f"    - {col_info['column']} ({col_info['missing_percentage']}% missing)")
+            
+            # Step 2: Build strategy for remaining columns
+            strategy = {}
+            for col in df.columns:
+                if df[col].null_count() > 0:
+                    if col in id_cols:
+                        strategy[col] = "drop"  # Drop rows with missing IDs
+                    elif col in datetime_cols:
+                        strategy[col] = "forward_fill"  # Forward fill for time series
+                    elif col in numeric_cols:
+                        strategy[col] = "median"  # Median for numeric (robust to outliers)
+                    elif col in categorical_cols:
+                        strategy[col] = "mode"  # Mode for categorical
+                    else:
+                        strategy[col] = "mode"  # Default to mode
+            
+            print(f"🔧 Auto-detected strategies for {len(strategy)} remaining columns with missing values")
         
-        # Drop high-missing columns
-        if cols_to_drop:
-            df = df.drop(cols_to_drop)
-            print(f"🗑️  Dropped {len(cols_to_drop)} columns with >{threshold*100}% missing:")
-            for col_info in report["columns_dropped"]:
-                print(f"    - {col_info['column']} ({col_info['missing_percentage']}% missing)")
+        elif strategy in ["median", "mean", "mode", "forward_fill", "drop"]:
+            # Apply same strategy to all columns with missing values
+            strategy_dict = {}
+            for col in df.columns:
+                if df[col].null_count() > 0:
+                    strategy_dict[col] = strategy
+            strategy = strategy_dict
+            print(f"🔧 Applying '{list(strategy_dict.values())[0] if strategy_dict else strategy}' strategy to {len(strategy_dict)} columns with missing values")
         
-        # Step 2: Build strategy for remaining columns
-        strategy = {}
-        for col in df.columns:
-            if df[col].null_count() > 0:
-                if col in id_cols:
-                    strategy[col] = "drop"  # Drop rows with missing IDs
-                elif col in datetime_cols:
-                    strategy[col] = "forward_fill"  # Forward fill for time series
-                elif col in numeric_cols:
-                    strategy[col] = "median"  # Median for numeric (robust to outliers)
-                elif col in categorical_cols:
-                    strategy[col] = "mode"  # Mode for categorical
-                else:
-                    strategy[col] = "mode"  # Default to mode
-        
-        print(f"🔧 Auto-detected strategies for {len(strategy)} remaining columns with missing values")
+        else:
+            return {
+                "success": False,
+                "error": f"Invalid strategy '{strategy}'. Use 'auto', 'median', 'mean', 'mode', 'forward_fill', 'drop', or provide a dictionary.",
+                "error_type": "ValueError"
+            }
     
     # Process each column based on strategy
     for col, strat in strategy.items():

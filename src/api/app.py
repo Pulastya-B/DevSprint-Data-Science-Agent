@@ -35,7 +35,9 @@ logger = logging.getLogger(__name__)
 
 # JSON serializer that handles numpy types
 def safe_json_dumps(obj):
-    """Convert object to JSON string, handling numpy types."""
+    """Convert object to JSON string, handling numpy types, datetime, and all non-serializable objects."""
+    from datetime import datetime, date, timedelta
+    
     def convert(o):
         if isinstance(o, (np.integer, np.int64, np.int32)):
             return int(o)
@@ -43,10 +45,19 @@ def safe_json_dumps(obj):
             return float(o)
         elif isinstance(o, np.ndarray):
             return o.tolist()
+        elif isinstance(o, (datetime, date)):
+            return o.isoformat()
+        elif isinstance(o, timedelta):
+            return str(o)
         elif isinstance(o, dict):
             return {k: convert(v) for k, v in o.items()}
         elif isinstance(o, (list, tuple)):
             return [convert(item) for item in o]
+        elif hasattr(o, '__dict__') and not isinstance(o, (str, int, float, bool, type(None))):
+            # Non-serializable object (like DataScienceCopilot)
+            return f"<{o.__class__.__name__} object>"
+        elif hasattr(o, '__class__') and 'Figure' in o.__class__.__name__:
+            return f"<{o.__class__.__name__} object>"
         return o
     
     return json.dumps(convert(obj))
@@ -189,8 +200,8 @@ async def get_progress(session_id: str):
     """Get progress updates for a specific session (legacy polling endpoint)."""
     return {
         "session_id": session_id,
-        "steps": progress_store.get(session_id, []),
-        "current": event_manager.get_current_status(session_id)
+        "steps": progress_manager.get_history(session_id),
+        "current": {"status": "active" if progress_manager.get_subscriber_count(session_id) > 0 else "idle"}
     }
 
 
