@@ -1015,7 +1015,8 @@ BEFORE calling any training tools, you MUST:
 1. Use profile_dataset to see actual column names
 2. Verify the target column exists in the dataset
 3. NEVER hallucinate or guess column names
-4. If unsure, ask the user to specify the target column
+4. If target column was provided or inferred, proceed with modeling
+5. Only if NO target is available: analyze correlations to find best candidate
 
 **Your Tools (6 modeling-focused):**
 - train_baseline_models, hyperparameter_tuning
@@ -2021,6 +2022,14 @@ You receive quality reports from EDA agent and deliver clean data to modeling ag
                 if "train_data_path" not in arguments:
                     print(f"   ⚠️ WARNING: detect_model_issues requires 'train_data_path' parameter")
             
+            if tool_name == "create_statistical_features":
+                # LLM confuses this with geospatial features and adds lat_col/lon_col
+                for invalid_param in ["lat_col", "lon_col", "latitude", "longitude"]:
+                    if invalid_param in arguments:
+                        val = arguments.pop(invalid_param)
+                        print(f"   ✓ Stripped invalid parameter '{invalid_param}': {val}")
+                        print(f"   ℹ️ create_statistical_features creates row-wise stats (mean, std, min, max)")
+            
             # General parameter corrections for common LLM hallucinations
             if "output" in arguments and "output_path" not in arguments:
                 # Many tools use 'output_path' but LLM uses 'output'
@@ -2835,7 +2844,12 @@ You receive quality reports from EDA agent and deliver clean data to modeling ag
         wants_viz = any(kw in task_lower for kw in ["plot", "graph", "visualiz", "dashboard", "chart", "show", "display", "create", "generate"])
         wants_clean = any(kw in task_lower for kw in ["clean", "missing", "impute"])
         wants_features = any(kw in task_lower for kw in ["feature", "engineer", "time-based", "extract features"])
-        wants_train = any(kw in task_lower for kw in ["train", "model", "predict", "best model"])
+        wants_train = any(kw in task_lower for kw in ["train", "model", "predict", "best model", "classify", "regression", "forecast"])
+        
+        # 🎯 AUTO-ENABLE TRAINING: If we have a target column and it's numeric/categorical, assume full ML workflow
+        if target_col and not wants_viz and not wants_clean and self.workflow_state.task_type in ["regression", "classification"]:
+            print(f"   🎯 Auto-enabling ML training (detected {self.workflow_state.task_type} task with target='{target_col}')")
+            wants_train = True
         
         # 📊 DETECT SPECIFIC PLOT TYPE - Match user's exact visualization request
         plot_type_guidance = ""
@@ -2861,8 +2875,10 @@ You receive quality reports from EDA agent and deliver clean data to modeling ag
         
         if wants_train:
             # Full ML pipeline - ALWAYS run complete workflow for model training
+            target_info = f"\n🎯 **TARGET COLUMN**: '{target_col}' (Task: {self.workflow_state.task_type or 'auto'})\n" if target_col else "\n⚠️ **TARGET COLUMN**: Not specified - analyze correlations to find best candidate\n"
             workflow_guidance = (
-                "\n\n🎯 **WORKFLOW**: Full ML Pipeline (Training Requested)\n"
+                "\n\n🎯 **WORKFLOW**: Full ML Pipeline (Training Requested)"
+                f"{target_info}"
                 "Execute ALL steps for best model performance:\n"
                 "1. Profile dataset (understand data)\n"
                 "2. Clean missing values (data quality)\n"
@@ -3028,6 +3044,14 @@ You receive quality reports from EDA agent and deliver clean data to modeling ag
                     
                     messages = [system_msg, user_msg] + cleaned_recent
                     print(f"✂️  Pruned conversation (keeping last 4 exchanges, ~4K tokens saved)")
+                    
+                    # 🎯 INJECT TARGET COLUMN REMINDER after pruning (prevent LLM from forgetting)
+                    if target_col and self.workflow_state.task_type:
+                        target_reminder = {
+                            "role": "user",
+                            "content": f"📌 REMINDER: Target column is '{target_col}' (Task: {self.workflow_state.task_type})"
+                        }
+                        messages.insert(2, target_reminder)  # Insert after system + user query
                 
                 # 🔍 Token estimation and warning
                 estimated_tokens = sum(
@@ -3490,6 +3514,7 @@ You receive quality reports from EDA agent and deliver clean data to modeling ag
                                 "drop_columns": "execute_python_code",  # No drop_columns tool, use code
                                 "select_columns": "execute_python_code",  # No select_columns tool, use code
                                 "rename_columns": "execute_python_code",  # No rename_columns tool, use code
+                                "create_geospatial_features": "create_interaction_features",  # No geospatial tool, use interaction features
                                 "encode_categorical_variables": "encode_categorical",
                                 "train_model": "train_baseline_models",
                                 "train_models": "train_baseline_models",
@@ -4091,6 +4116,12 @@ You receive quality reports from EDA agent and deliver clean data to modeling ag
                             
                             # Otherwise, force LLM to move on with VERY STRONG warning
                             next_step = self._determine_next_step(tool_name, completed_tools)
+                            
+                            # 🎯 If data prep is done but no training yet, push toward modeling
+                            prep_done = any(t in completed_tools for t in ["encode_categorical", "create_time_features", "clean_missing_values"])
+                            no_training = "train_baseline_models" not in completed_tools
+                            if prep_done and no_training and target_col:
+                                next_step = f"train_baseline_models (target_col='{target_col}') - Data preparation complete, proceed to modeling!"
                             
                             # CRITICAL: Add mock tool response to maintain message balance
                             # (Mistral API requires: every tool call must have a matching tool response)
