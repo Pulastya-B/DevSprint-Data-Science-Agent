@@ -56,7 +56,8 @@ class SemanticLayer:
         if self.enabled:
             try:
                 print(f"🧠 Loading SBERT model: {model_name}...")
-                self.model = SentenceTransformer(model_name)
+                # Try loading with trust_remote_code for better compatibility
+                self.model = SentenceTransformer(model_name, trust_remote_code=True)
                 # Use GPU if available
                 if torch.cuda.is_available():
                     self.model = self.model.to('cuda')
@@ -65,6 +66,7 @@ class SemanticLayer:
                     print("✅ SBERT loaded on CPU")
             except Exception as e:
                 print(f"⚠️ Failed to load SBERT model: {e}")
+                print(f"   Falling back to keyword-based routing (semantic features disabled)")
                 self.enabled = False
         else:
             print("⚠️ SBERT semantic layer disabled (missing dependencies)")

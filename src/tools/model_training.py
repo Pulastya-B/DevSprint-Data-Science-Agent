@@ -128,6 +128,12 @@ def train_baseline_models(file_path: str, target_col: str,
     }
     
     # Train models based on task type
+    import sys
+    print(f"\n🚀 Training {6 if task_type == 'classification' else 6} baseline models...", flush=True)
+    print(f"   📊 Training set: {len(X_train):,} samples × {X_train.shape[1]} features", flush=True)
+    print(f"   📊 Test set: {len(X_test):,} samples", flush=True)
+    sys.stdout.flush()
+    
     if task_type == "classification":
         models = {
             "logistic_regression": LogisticRegression(max_iter=1000, random_state=random_state),
@@ -137,10 +143,17 @@ def train_baseline_models(file_path: str, target_col: str,
             "catboost": CatBoostClassifier(iterations=100, random_state=random_state, verbose=0, allow_writing_files=False)
         }
         
-        for model_name, model in models.items():
+        for idx, (model_name, model) in enumerate(models.items(), 1):
             try:
                 # Train
+                print(f"\n   [{idx}/{len(models)}] Training {model_name}...", flush=True)
+                sys.stdout.flush()
+                import time
+                start_time = time.time()
                 model.fit(X_train, y_train)
+                elapsed = time.time() - start_time
+                print(f"   ✓ {model_name} trained in {elapsed:.1f}s", flush=True)
+                sys.stdout.flush()
                 
                 # Predict
                 y_pred_train = model.predict(X_train)
@@ -206,10 +219,18 @@ def train_baseline_models(file_path: str, target_col: str,
             "catboost": CatBoostRegressor(iterations=100, random_state=random_state, verbose=0, allow_writing_files=False)
         }
         
-        for model_name, model in models.items():
+        for idx, (model_name, model) in enumerate(models.items(), 1):
             try:
                 # Train
+                import sys
+                print(f"\n   [{idx}/{len(models)}] Training {model_name}...", flush=True)
+                sys.stdout.flush()
+                import time
+                start_time = time.time()
                 model.fit(X_train, y_train)
+                elapsed = time.time() - start_time
+                print(f"   ✓ {model_name} trained in {elapsed:.1f}s", flush=True)
+                sys.stdout.flush()
                 
                 # Predict
                 y_pred_train = model.predict(X_train)
@@ -357,6 +378,20 @@ def train_baseline_models(file_path: str, target_col: str,
             results["visualization_generated"] = False
     else:
         results["visualization_generated"] = False
+    
+    # Print final summary
+    print(f"\n{'='*60}")
+    print(f"✅ TRAINING COMPLETE")
+    print(f"{'='*60}")
+    print(f"📊 Best Model: {best_model_name}")
+    if task_type == "regression":
+        print(f"📈 Test R²: {best_score:.4f}")
+        print(f"📉 Test RMSE: {results['models'][best_model_name]['test_metrics']['rmse']:.4f}")
+    else:
+        print(f"📈 Test F1: {best_score:.4f}")
+        print(f"📉 Test Accuracy: {results['models'][best_model_name]['test_metrics']['accuracy']:.4f}")
+    print(f"💾 Model saved: {results['best_model']['model_path']}")
+    print(f"{'='*60}\\n")
     
     return results
 

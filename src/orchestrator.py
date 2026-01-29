@@ -1316,7 +1316,7 @@ You receive quality reports from EDA agent and deliver clean data to modeling ag
             Dictionary with hand-off details
         """
         if target_agent not in self.specialist_agents:
-            print(f"⚠️ Invalid hand-off target: {target_agent}")
+            # Silently skip invalid hand-off targets (common during workflow transitions)
             return {"success": False, "error": "Invalid target agent"}
         
         # Update active agent
@@ -1999,6 +1999,11 @@ You receive quality reports from EDA agent and deliver clean data to modeling ag
                     models_val = arguments.pop("models")
                     print(f"   ✓ Stripped invalid parameter 'models': {models_val}")
                     print(f"   ℹ️ train_baseline_models trains all baseline models automatically")
+                # LLM often adds 'feature_columns' parameter that doesn't exist
+                if "feature_columns" in arguments:
+                    feature_cols = arguments.pop("feature_columns")
+                    print(f"   ✓ Stripped invalid parameter 'feature_columns': {feature_cols}")
+                    print(f"   ℹ️ train_baseline_models uses all numeric columns automatically")
             
             if tool_name == "generate_model_report":
                 # LLM uses 'file_path' instead of 'test_data_path'
@@ -3480,25 +3485,57 @@ You receive quality reports from EDA agent and deliver clean data to modeling ag
                             print(f"⚠️  INVALID TOOL NAME: '{tool_name}' (original: {tool_call.function.name})")
                             print(f"   Available tools: {', '.join(list(self.tool_functions.keys())[:10])}...")
                             
-                            # Try fuzzy matching to recover
-                            from difflib import get_close_matches
-                            close_matches = get_close_matches(tool_name, self.tool_functions.keys(), n=1, cutoff=0.6)
-                            if close_matches:
-                                tool_name = close_matches[0]
-                                print(f"   ✓ Recovered using fuzzy match: {tool_name}")
-                            else:
-                                print(f"   ❌ Cannot recover tool name, skipping")
-                                messages.append({
-                                    "role": "tool",
-                                    "tool_call_id": tool_call_id,
-                                    "name": "invalid_tool",
-                                    "content": json.dumps({
-                                        "error": f"Invalid tool: {tool_call.function.name}",
-                                        "message": "Tool does not exist in registry. Available tools can be found in the tools list.",
-                                        "hint": "Check spelling and use exact tool names from the tools registry."
+                            # Explicit mappings for common LLM hallucinations
+                            tool_name_mappings = {
+                                "drop_columns": "execute_python_code",  # No drop_columns tool, use code
+                                "select_columns": "execute_python_code",  # No select_columns tool, use code
+                                "rename_columns": "execute_python_code",  # No rename_columns tool, use code
+                                "encode_categorical_variables": "encode_categorical",
+                                "train_model": "train_baseline_models",
+                                "train_models": "train_baseline_models",
+                                "baseline_models": "train_baseline_models",
+                                "tune_hyperparameters": "hyperparameter_tuning",
+                                "hyperparameter_search": "hyperparameter_tuning",
+                            }
+                            
+                            if tool_name in tool_name_mappings:
+                                mapped_tool = tool_name_mappings[tool_name]
+                                if mapped_tool == "execute_python_code":
+                                    print(f"   ✓ Tool '{tool_name}' not available - LLM should use execute_python_code instead")
+                                    # Skip and let LLM handle with code
+                                    messages.append({
+                                        "role": "tool",
+                                        "tool_call_id": tool_call_id,
+                                        "name": tool_name,
+                                        "content": json.dumps({
+                                            "error": f"Tool '{tool_name}' does not exist",
+                                            "hint": "Use execute_python_code with pandas to perform this operation. Example: df.drop(columns=['col1', 'col2'])"
+                                        })
                                     })
-                                })
-                                continue
+                                    continue
+                                else:
+                                    tool_name = mapped_tool
+                                    print(f"   ✓ Mapped to: {tool_name}")
+                            else:
+                                # Try fuzzy matching to recover
+                                from difflib import get_close_matches
+                                close_matches = get_close_matches(tool_name, self.tool_functions.keys(), n=1, cutoff=0.6)
+                                if close_matches:
+                                    tool_name = close_matches[0]
+                                    print(f"   ✓ Recovered using fuzzy match: {tool_name}")
+                                else:
+                                    print(f"   ❌ Cannot recover tool name, skipping")
+                                    messages.append({
+                                        "role": "tool",
+                                        "tool_call_id": tool_call_id,
+                                        "name": "invalid_tool",
+                                        "content": json.dumps({
+                                            "error": f"Invalid tool: {tool_call.function.name}",
+                                            "message": "Tool does not exist in registry. Available tools can be found in the tools list.",
+                                            "hint": "Check spelling and use exact tool names from the tools registry."
+                                        })
+                                    })
+                                    continue
                         
                         # CRITICAL FIX 3: Check for corrupted tool names (length check)
                         if len(str(tool_call.function.name)) > 100:
