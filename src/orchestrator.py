@@ -1559,33 +1559,65 @@ You receive quality reports from EDA agent and deliver clean data to modeling ag
                     if not plot_title or plot_title == "Output Path":
                         plot_title = plot_path.split("/")[-1].replace("_", " ").replace(".html", "").replace(".png", "").title()
                     
+                    # Clean path for URL - handle both ./outputs and /tmp paths
+                    if plot_path.startswith('./outputs/'):
+                        url_path = plot_path.replace('./outputs/', '')
+                    elif plot_path.startswith('/tmp/data_science_agent/outputs/'):
+                        url_path = plot_path.replace('/tmp/data_science_agent/outputs/', '')
+                    elif plot_path.startswith('/tmp/data_science_agent/'):
+                        url_path = plot_path.replace('/tmp/data_science_agent/', '')
+                    else:
+                        # Just use filename for other paths
+                        url_path = plot_path.split('/')[-1]
+                    
                     plots.append({
                         "title": plot_title,
                         "path": plot_path,
-                        "url": f"/outputs/{plot_path.replace('./outputs/', '')}",
+                        "url": f"/outputs/{url_path}",
                         "type": "html" if plot_path.endswith(".html") else "image"
                     })
                     print(f"[DEBUG] Added plot to array:")
                     print(f"[DEBUG]   title: {plot_title}")
-                    print(f"[DEBUG]   url: /outputs/{plot_path.replace('./outputs/', '')}")
+                    print(f"[DEBUG]   url: /outputs/{url_path}")
                     print(f"[DEBUG]   type: {'html' if plot_path.endswith('.html') else 'image'}")
             
             # === COLLECT PLOT FILES (from plot_paths key) ===
             if "plot_paths" in nested_result:
                 for plot_path in nested_result["plot_paths"]:
+                    # Clean path for URL
+                    if plot_path.startswith('./outputs/'):
+                        url_path = plot_path.replace('./outputs/', '')
+                    elif plot_path.startswith('/tmp/data_science_agent/outputs/'):
+                        url_path = plot_path.replace('/tmp/data_science_agent/outputs/', '')
+                    elif plot_path.startswith('/tmp/data_science_agent/'):
+                        url_path = plot_path.replace('/tmp/data_science_agent/', '')
+                    else:
+                        url_path = plot_path.split('/')[-1]
+                    
                     plots.append({
                         "title": plot_path.split("/")[-1].replace("_", " ").replace(".png", "").replace(".html", "").title(),
                         "path": plot_path,
-                        "url": f"/outputs/{plot_path.replace('./outputs/', '')}",
+                        "url": f"/outputs/{url_path}",
                         "type": "html" if plot_path.endswith(".html") else "image"
                     })
             
             # === COLLECT DATA FILES ===
             if "output_path" in nested_result and nested_result["output_path"].endswith(".csv"):
+                data_path = nested_result["output_path"]
+                # Clean path for URL
+                if data_path.startswith('./outputs/'):
+                    url_path = data_path.replace('./outputs/', '')
+                elif data_path.startswith('/tmp/data_science_agent/outputs/'):
+                    url_path = data_path.replace('/tmp/data_science_agent/outputs/', '')
+                elif data_path.startswith('/tmp/data_science_agent/'):
+                    url_path = data_path.replace('/tmp/data_science_agent/', '')
+                else:
+                    url_path = data_path.split('/')[-1]
+                
                 artifacts["data_files"].append({
-                    "name": nested_result["output_path"].split("/")[-1],
-                    "path": nested_result["output_path"],
-                    "url": f"/outputs/{nested_result['output_path'].replace('./outputs/', '')}"
+                    "name": data_path.split("/")[-1],
+                    "path": data_path,
+                    "url": f"/outputs/{url_path}"
                 })
         
         # Build COMPREHENSIVE response template following user's format
@@ -3241,7 +3273,7 @@ You receive quality reports from EDA agent and deliver clean data to modeling ag
                     messages.append(response_message)
                 
                 # 🚀 PARALLEL EXECUTION: Detect multiple independent tool calls
-                if len(tool_calls) > 1 and self.parallel_executor.enabled:
+                if len(tool_calls) > 1:
                     print(f"🚀 Detected {len(tool_calls)} tool calls - attempting parallel execution")
                     
                     # Extract tool executions with proper weight classification
