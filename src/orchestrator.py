@@ -1992,6 +1992,30 @@ You receive quality reports from EDA agent and deliver clean data to modeling ag
                 arguments["target_col"] = arguments.pop("target_column")
                 print(f"   ✓ Parameter remapped: target_column → target_col")
             
+            # Fix tool-specific parameter mismatches from LLM hallucinations
+            if tool_name == "train_baseline_models":
+                # LLM often adds 'models' parameter that doesn't exist
+                if "models" in arguments:
+                    models_val = arguments.pop("models")
+                    print(f"   ✓ Stripped invalid parameter 'models': {models_val}")
+                    print(f"   ℹ️ train_baseline_models trains all baseline models automatically")
+            
+            if tool_name == "generate_model_report":
+                # LLM uses 'file_path' instead of 'test_data_path'
+                if "file_path" in arguments and "test_data_path" not in arguments:
+                    arguments["test_data_path"] = arguments.pop("file_path")
+                    print(f"   ✓ Parameter remapped: file_path → test_data_path")
+            
+            if tool_name == "detect_model_issues":
+                # LLM adds invalid split parameters
+                for invalid_param in ["train_target_path", "test_target_path"]:
+                    if invalid_param in arguments:
+                        val = arguments.pop(invalid_param)
+                        print(f"   ✓ Stripped invalid parameter '{invalid_param}': {val}")
+                # Ensure train_data_path is provided
+                if "train_data_path" not in arguments:
+                    print(f"   ⚠️ WARNING: detect_model_issues requires 'train_data_path' parameter")
+            
             # General parameter corrections for common LLM hallucinations
             if "output" in arguments and "output_path" not in arguments:
                 # Many tools use 'output_path' but LLM uses 'output'
@@ -2001,6 +2025,9 @@ You receive quality reports from EDA agent and deliver clean data to modeling ag
             for key, value in list(arguments.items()):
                 if isinstance(value, str) and value.lower() in ["none", "null", "undefined"]:
                     arguments[key] = None
+            
+            # Log final parameters before execution
+            print(f"   📋 Final parameters: {list(arguments.keys())}")
             
             result = tool_func(**arguments)
             
