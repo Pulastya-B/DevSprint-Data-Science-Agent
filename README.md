@@ -11,112 +11,239 @@ app_port: 7860
 
 # Data Science Agent 🤖
 
-An intelligent AI agent for automated data science workflows, powered by Google Gemini 2.5 Flash with 82+ specialized tools for data analysis, visualization, and machine learning.
+An intelligent **multi-agent AI system** for automated end-to-end data science workflows. Upload any dataset and watch the agent autonomously profile, clean, engineer features, train models, and generate insights—all through natural language.
 
-## Features
+## ✨ Key Features
 
-- 🔍 **Automated EDA**: YData profiling, statistical analysis, data quality reports
-- 📊 **Smart Visualizations**: Plotly dashboards, matplotlib plots, interactive charts
-- 🧹 **Data Cleaning**: Missing value handling, outlier detection, type conversion
-- 🛠️ **Feature Engineering**: Automated feature creation, encoding, scaling
-- 🤖 **ML Training**: AutoML with XGBoost, LightGBM, CatBoost, Neural Networks
-- 💬 **Natural Language Interface**: Chat-based interaction for complex workflows
-- 📈 **Business Intelligence**: KPI tracking, trend analysis, forecasting
+### 🧠 Multi-Agent Architecture
+- **5 Specialist Agents**: EDA, ML Modeling, Data Engineering, Visualization, Business Insights
+- **Semantic Routing**: SBERT-powered agent selection based on query intent
+- **Autonomous Workflows**: Full ML pipeline completion without manual intervention
 
-## Tech Stack
+### 📊 Complete ML Pipeline
+- **Data Profiling**: YData profiling, statistical analysis, data quality reports
+- **Data Cleaning**: Missing values, outliers, type conversion, deduplication
+- **Feature Engineering**: 50+ feature types (time, interactions, aggregations, encodings)
+- **Model Training**: 6 baseline models (Ridge, Lasso, Random Forest, XGBoost, LightGBM, CatBoost)
+- **Hyperparameter Tuning**: Optuna-based optimization with early stopping
+- **Visualizations**: Plotly dashboards, matplotlib plots, feature importance, residuals
 
-- **Backend**: FastAPI + Python 3.12
-- **LLM**: Google Gemini 2.5 Flash (text-based tool calling)
-- **Data Processing**: Polars (high-performance dataframes)
-- **Frontend**: React 19 + TypeScript + Vite
-- **ML Libraries**: Scikit-learn, XGBoost, LightGBM, CatBoost, PyTorch
+### 🔧 Production-Ready Features
+- **Real-time Progress**: SSE streaming for live workflow updates
+- **Session Memory**: Maintains context across follow-up queries
+- **Error Recovery**: Graceful fallbacks and parameter validation
+- **Large Dataset Support**: Automatic sampling for 100K+ row datasets
 
-## Usage
-
-1. Upload your CSV/Excel dataset
-2. Ask questions in natural language (e.g., "Generate a detailed profiling report")
-3. The agent automatically selects and executes the right tools
-4. View generated reports, visualizations, and insights
-
-## Memory Optimization
-
-For large datasets (>50k rows or >10MB), the agent automatically:
-- Samples to 50,000 rows for profiling
-- Enables minimal mode to reduce memory usage
-- Disables expensive correlation/interaction calculations
-
-This ensures smooth operation even with large datasets on HuggingFace's 16GB RAM.
-
-## Environment Variables
-
-Set `GEMINI_API_KEY` in HuggingFace Spaces settings (Settings → Repository secrets):
+## 🏗️ Architecture
 
 ```
-GEMINI_API_KEY=your_google_gemini_api_key_here
+┌─────────────────────────────────────────────────────────────┐
+│                     React Frontend                          │
+│              (Upload Dataset + Chat Interface)              │
+└─────────────────────────┬───────────────────────────────────┘
+                          │ SSE Stream
+┌─────────────────────────▼───────────────────────────────────┐
+│                    FastAPI Server                           │
+│                    (Port 7860)                              │
+└─────────────────────────┬───────────────────────────────────┘
+                          │
+┌─────────────────────────▼───────────────────────────────────┐
+│                     Orchestrator                            │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐  │
+│  │   Intent    │  │   Agent     │  │    Conversation     │  │
+│  │  Detection  │──│  Selection  │──│      Pruning        │  │
+│  │             │  │   (SBERT)   │  │  (12 exchanges)     │  │
+│  └─────────────┘  └─────────────┘  └─────────────────────┘  │
+└─────────────────────────┬───────────────────────────────────┘
+                          │
+┌─────────────────────────▼───────────────────────────────────┐
+│                  5 Specialist Agents                        │
+│  ┌───────────┐ ┌───────────┐ ┌───────────┐ ┌───────────┐   │
+│  │    EDA    │ │ Modeling  │ │   Data    │ │   Viz     │   │
+│  │   Agent   │ │  Agent    │ │Engineering│ │  Agent    │   │
+│  └───────────┘ └───────────┘ └───────────┘ └───────────┘   │
+│                      ┌───────────┐                          │
+│                      │ Insights  │                          │
+│                      │   Agent   │                          │
+│                      └───────────┘                          │
+└─────────────────────────┬───────────────────────────────────┘
+                          │
+┌─────────────────────────▼───────────────────────────────────┐
+│                    50+ Tools                                │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │ Data Profiling │ Feature Engineering │ Model Training│   │
+│  │ Data Cleaning  │ Visualizations      │ NLP Analytics │   │
+│  │ Time Series    │ Computer Vision     │ Business Intel│   │
+│  └─────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-Get your API key from: https://aistudio.google.com/app/apikey
+## 🚀 Quick Start
 
-## Local Development
+### Usage
+1. **Upload** your CSV/Excel/Parquet dataset
+2. **Ask** in natural language: *"Analyze this dataset and predict the target column"*
+3. **Watch** the agent autonomously execute the full ML pipeline
+4. **Review** generated visualizations, model metrics, and insights
+
+### Example Queries
+```
+"Profile this dataset and show data quality issues"
+"Train models to predict the 'price' column"
+"Generate feature importance visualizations"
+"What are the key insights from this analysis?"
+```
+
+## 🛠️ Tech Stack
+
+| Component | Technology |
+|-----------|------------|
+| **LLM Provider** | Mistral (mistral-large-latest) / Gemini / Groq |
+| **Backend** | FastAPI + Python 3.12 |
+| **Frontend** | React 19 + TypeScript + Vite + Tailwind |
+| **Data Processing** | Polars (primary) + Pandas (XGBoost compatibility) |
+| **ML Libraries** | Scikit-learn, XGBoost, LightGBM, CatBoost |
+| **Hyperparameter Tuning** | Optuna with MedianPruner |
+| **Semantic Search** | Sentence-BERT (all-MiniLM-L6-v2) |
+| **Streaming** | Server-Sent Events (SSE) |
+
+## 📁 Project Structure
+
+```
+src/
+├── api/
+│   └── app.py              # FastAPI endpoints + SSE streaming
+├── orchestrator.py         # Main workflow orchestration (4500+ lines)
+├── session_memory.py       # Context persistence across queries
+├── session_store.py        # Session database management
+├── tools/
+│   ├── data_profiling.py   # YData profiling, statistics
+│   ├── data_cleaning.py    # Missing values, outliers
+│   ├── feature_engineering.py  # 50+ feature types
+│   ├── model_training.py   # 6 baseline models + progress logging
+│   ├── advanced_training.py    # Optuna hyperparameter tuning
+│   ├── plotly_visualizations.py
+│   ├── matplotlib_visualizations.py
+│   └── tools_registry.py   # Tool definitions for LLM
+├── reasoning/
+│   ├── business_summary.py # Executive summaries
+│   └── model_explanation.py    # Model interpretation
+└── utils/
+    ├── semantic_layer.py   # SBERT embeddings
+    └── error_recovery.py   # Checkpoint management
+```
+
+## ⚙️ Configuration
+
+### Environment Variables
+
+```bash
+# Required - Choose one LLM provider
+MISTRAL_API_KEY=your_mistral_key      # Recommended
+GEMINI_API_KEY=your_gemini_key        # Alternative
+GROQ_API_KEY=your_groq_key            # Alternative
+
+# Optional
+LLM_PROVIDER=mistral                  # mistral, gemini, or groq
+MAX_ITERATIONS=20                     # Max workflow steps
+```
+
+### HuggingFace Spaces
+Set secrets in: **Settings → Repository secrets**
+
+## 🖥️ Local Development
 
 ```bash
 # Clone repository
-git clone https://huggingface.co/spaces/YOUR_USERNAME/devs-print-data-science-agent
-cd devs-print-data-science-agent
+git clone https://github.com/your-repo/data-science-agent
+cd data-science-agent
 
-# Install dependencies
+# Install Python dependencies
 pip install -r requirements.txt
-npm install --prefix FRRONTEEEND
 
-# Build frontend
-cd FRRONTEEEND && npm run build && cd ..
+# Install and build frontend
+cd FRRONTEEEND && npm install && npm run build && cd ..
 
 # Set API key
-export GEMINI_API_KEY=your_key_here
+export MISTRAL_API_KEY=your_key_here
 
 # Run server
 uvicorn src.api.app:app --host 0.0.0.0 --port 7860
 ```
 
-## Architecture
+## 📊 Model Training Details
 
+### Baseline Models (Regression)
+| Model | Type | Key Features |
+|-------|------|--------------|
+| Ridge | Linear | L2 regularization, fast |
+| Lasso | Linear | L1 regularization, feature selection |
+| Random Forest | Ensemble | Robust, feature importance |
+| XGBoost | Gradient Boosting | High accuracy, GPU support |
+| LightGBM | Gradient Boosting | Fast training, low memory |
+| CatBoost | Gradient Boosting | Handles categoricals natively |
+
+### Progress Logging
+Real-time training progress with elapsed time:
 ```
-┌─────────────────┐
-│  React Frontend │  ← User uploads data + asks questions
-└────────┬────────┘
-         │
-┌────────▼────────┐
-│  FastAPI Server │  ← Serves frontend + API endpoints
-└────────┬────────┘
-         │
-┌────────▼────────┐
-│  Orchestrator   │  ← LLM-driven tool selection & execution
-└────────┬────────┘
-         │
-┌────────▼────────┐
-│   82+ Tools     │  ← Specialized data science functions
-└─────────────────┘
+🚀 Training 6 regression models on 140,757 samples...
+[1/6] Training ridge... ✓ ridge trained in 2.3s
+[2/6] Training lasso... ✓ lasso trained in 1.8s
+[3/6] Training random_forest... ✓ random_forest trained in 45.2s
+...
+🏆 Best model: random_forest (R²=0.7585)
 ```
 
-## Key Components
+## 🔧 Recent Improvements
 
-- **Orchestrator** ([src/orchestrator.py](src/orchestrator.py)): ReAct-based tool calling with Gemini
-- **Tools Registry** ([src/tools/](src/tools/)): 82+ specialized data science tools
-- **Session Memory** ([src/session_memory.py](src/session_memory.py)): Conversation history + file tracking
-- **Artifact Store** ([src/storage/artifact_store.py](src/storage/artifact_store.py)): File management + metadata
+### Workflow Reliability
+- ✅ **Autonomous Completion**: Full ML pipeline without manual confirmation
+- ✅ **Smart Context Pruning**: Keeps 12 exchanges (was 4) for better memory
+- ✅ **Target Column Persistence**: Injected into workflow guidance after pruning
+- ✅ **Parameter Validation**: Strips invalid LLM-hallucinated parameters
 
-## Deployment
+### Performance
+- ✅ **Real-time Progress Logging**: See model-by-model training status
+- ✅ **Large Dataset Sampling**: Auto-sample to 50K rows for tuning
+- ✅ **Checkpoint Clearing**: Fresh workflow for each new query
 
-This Space uses a **Docker** deployment for maximum compatibility:
-- Base image: `python:3.12-slim`
-- Multi-stage build (Node.js for frontend, Python for backend)
-- Auto-exposes port 7860 for HuggingFace
-- All dependencies bundled in container
+### Error Handling
+- ✅ **SBERT Fallback**: Graceful keyword routing if embeddings fail
+- ✅ **Tool Name Mapping**: Maps 8+ common hallucinated tool names
+- ✅ **NoneType Safety**: Validates all comparison operands
 
-## Contributing
+## 🐳 Docker Deployment
 
-Built for DevSprint Hackathon 2025. Contributions welcome post-hackathon!
+```dockerfile
+# Multi-stage build
+FROM node:20-slim AS frontend
+# Build React frontend
 
-## License
+FROM python:3.12-slim AS backend
+# Install Python dependencies + copy frontend build
+EXPOSE 7860
+CMD ["uvicorn", "src.api.app:app", "--host", "0.0.0.0", "--port", "7860"]
+```
 
-MIT License - see LICENSE file for details
+## 📈 Performance Benchmarks
+
+| Dataset Size | Profiling | Training (6 models) | Total Workflow |
+|--------------|-----------|---------------------|----------------|
+| 10K rows | ~5s | ~30s | ~2 min |
+| 50K rows | ~15s | ~2 min | ~5 min |
+| 175K rows | ~45s | ~5 min | ~10 min |
+
+## 🤝 Contributing
+
+Contributions welcome! Please:
+1. Fork the repository
+2. Create a feature branch
+3. Submit a pull request
+
+## 📄 License
+
+MIT License - see LICENSE file for details.
+
+---
+
+**Built with ❤️ for autonomous data science**
