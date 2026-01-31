@@ -213,12 +213,29 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onSuccess, onSkip }) => {
       };
       
       console.log('Saving profile data:', profileData);
-      const savedProfile = await saveUserProfile(profileData);
-      if (!savedProfile) {
-        console.warn('Failed to save profile data, but auth succeeded');
-        setError('Profile saved with warnings. You can continue.');
-      } else {
-        console.log('Profile saved successfully:', savedProfile);
+      
+      // Add timeout to prevent infinite hanging
+      const saveProfileWithTimeout = Promise.race([
+        saveUserProfile(profileData),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Profile save timeout')), 10000)
+        )
+      ]);
+      
+      try {
+        const savedProfile = await saveProfileWithTimeout;
+        if (!savedProfile) {
+          console.warn('Failed to save profile data, but auth succeeded');
+          // Don't block the user, just warn
+        } else {
+          console.log('Profile saved successfully:', savedProfile);
+        }
+      } catch (saveError: any) {
+        console.error('Profile save error:', saveError);
+        if (saveError.message === 'Profile save timeout') {
+          setError('Profile save is taking too long. You can continue and update your profile later.');
+        }
+        // Don't block OAuth users from proceeding even if profile save fails
       }
       
       setSuccess(isOAuthUser ? 'Profile completed! Redirecting...' : 'Account created successfully! Redirecting...');
@@ -877,11 +894,11 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onSuccess, onSkip }) => {
                   >
                     {isSubmitting ? (
                       <>
-                        <Loader2 className="h-4 w-4 animate-spin" /> Creating...
+                        <Loader2 className="h-4 w-4 animate-spin" /> {user ? 'Saving...' : 'Creating...'}
                       </>
                     ) : (
                       <>
-                        {currentStep === steps.length - 1 ? "Create Account" : "Next"}
+                        {currentStep === steps.length - 1 ? (user ? "Complete Profile" : "Create Account") : "Next"}
                         {currentStep === steps.length - 1 ? (
                           <Check className="h-4 w-4" />
                         ) : (
