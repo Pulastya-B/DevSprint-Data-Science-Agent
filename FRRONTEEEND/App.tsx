@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { HeroGeometric } from './components/HeroGeometric';
 import ProblemSolution from './components/ProblemSolution';
 import KeyCapabilities from './components/KeyCapabilities';
@@ -11,12 +11,12 @@ import { Logo } from './components/Logo';
 import { ChatInterface } from './components/ChatInterface';
 import { AuthPage } from './components/AuthPage';
 import { AuthProvider, useAuth } from './lib/AuthContext';
-import { User, LogOut } from 'lucide-react';
+import { User, LogOut, Loader2 } from 'lucide-react';
 
 // Inner app component that uses auth context
 const AppContent: React.FC = () => {
   const [view, setView] = useState<'landing' | 'chat' | 'auth'>('landing');
-  const { user, isAuthenticated, loading, signOut } = useAuth();
+  const { user, isAuthenticated, loading, signOut, isConfigured } = useAuth();
   const [showUserMenu, setShowUserMenu] = useState(false);
 
   // Handle launch console - redirect to auth if not logged in
@@ -24,6 +24,21 @@ const AppContent: React.FC = () => {
     // Allow both authenticated and guest users
     setView('chat');
   };
+
+  // Show loading state only briefly
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#030303] flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <Logo className="w-16 h-16 animate-pulse" />
+          <div className="flex items-center gap-2 text-white/50">
+            <Loader2 className="w-4 h-4 animate-spin" />
+            <span>Loading...</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // Show auth page
   if (view === 'auth') {
@@ -51,7 +66,7 @@ const AppContent: React.FC = () => {
         </div>
         
         <div className="flex items-center gap-3">
-          {/* User menu */}
+          {/* User menu - only show if Supabase is configured */}
           {isAuthenticated ? (
             <div className="relative">
               <button

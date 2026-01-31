@@ -1,0 +1,1281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cute Lamp Login - Ultimate Edition</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #16213e 100%);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      overflow-x: hidden;
+      position: relative;
+      padding: 20px;
+    }
+
+    /* Enhanced Animated background particles */
+    .particles {
+      position: fixed;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      z-index: 0;
+      top: 0;
+      left: 0;
+    }
+
+    .particle {
+      position: absolute;
+      width: 4px;
+      height: 4px;
+      background: radial-gradient(circle, #ffa500, transparent);
+      border-radius: 50%;
+      animation: float 15s infinite ease-in-out;
+      box-shadow: 0 0 10px #ffa500;
+    }
+
+    @keyframes float {
+      0% { transform: translate(0, 100vh) scale(0); opacity: 0; }
+      10% { opacity: 1; }
+      90% { opacity: 1; }
+      100% { transform: translate(var(--tx), -100vh) scale(1); opacity: 0; }
+    }
+
+    /* Sparkles */
+    .sparkle {
+      position: absolute;
+      width: 3px;
+      height: 3px;
+      background: #fff;
+      border-radius: 50%;
+      animation: sparkle 3s infinite;
+      box-shadow: 0 0 8px #fff;
+    }
+
+    @keyframes sparkle {
+      0%, 100% { opacity: 0; transform: scale(0); }
+      50% { opacity: 1; transform: scale(1.5); }
+    }
+
+    .title {
+      font-size: 52px;
+      font-weight: 700;
+      background: linear-gradient(90deg, #ffa500, #ff6b35, #ffa500);
+      background-size: 200% auto;
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 50px;
+      text-align: center;
+      z-index: 2;
+      text-shadow: 0 0 30px rgba(255, 165, 0, 0.5);
+      animation: gradientMove 3s linear infinite, fadeInDown 1s ease;
+      letter-spacing: 2px;
+    }
+
+    @keyframes gradientMove {
+      0% { background-position: 0% center; }
+      100% { background-position: 200% center; }
+    }
+
+    @keyframes fadeInDown {
+      from {
+        opacity: 0;
+        transform: translateY(-50px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .container {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 80px;
+      background: rgba(30, 40, 60, 0.5);
+      padding: 70px;
+      border-radius: 30px;
+      border: 2px solid rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(20px);
+      box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6), inset 0 0 40px rgba(255, 165, 0, 0.05);
+      z-index: 2;
+      animation: fadeIn 1.2s ease 0.3s backwards;
+      position: relative;
+      max-width: 1200px;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: scale(0.8) rotateX(10deg);
+      }
+      to {
+        opacity: 1;
+        transform: scale(1) rotateX(0);
+      }
+    }
+
+    /* Enhanced Lamp Section */
+    .lamp-section {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 300px;
+      height: 400px;
+    }
+
+    .lamp-container {
+      position: relative;
+      cursor: pointer;
+      transition: transform 0.3s ease;
+    }
+
+    .lamp-container:hover {
+      transform: scale(1.05);
+    }
+
+    .lamp {
+      position: relative;
+      width: 200px;
+      height: 320px;
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      animation: lampFloat 4s ease-in-out infinite;
+      filter: drop-shadow(0 10px 30px rgba(0, 0, 0, 0.5));
+    }
+
+    @keyframes lampFloat {
+      0%, 100% { transform: translateY(0) rotate(0deg); }
+      25% { transform: translateY(-12px) rotate(-2deg); }
+      75% { transform: translateY(-8px) rotate(2deg); }
+    }
+
+    /* Electric Cord */
+    .cord {
+      position: absolute;
+      width: 4px;
+      height: 80px;
+      background: linear-gradient(180deg, #555, #333);
+      top: -80px;
+      left: 50%;
+      transform: translateX(-50%);
+      border-radius: 2px;
+      animation: cordSwing 4s ease-in-out infinite;
+      transform-origin: top center;
+    }
+
+    @keyframes cordSwing {
+      0%, 100% { transform: translateX(-50%) rotate(0deg); }
+      25% { transform: translateX(-50%) rotate(-3deg); }
+      75% { transform: translateX(-50%) rotate(3deg); }
+    }
+
+    .cord-plug {
+      position: absolute;
+      top: -10px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 12px;
+      height: 12px;
+      background: #444;
+      border-radius: 50%;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+    }
+
+    .lamp-stand {
+      width: 10px;
+      height: 160px;
+      background: linear-gradient(180deg, #e8e8e8, #fff, #e8e8e8);
+      border-radius: 5px;
+      position: absolute;
+      bottom: 0;
+      box-shadow: 0 6px 15px rgba(0, 0, 0, 0.4), inset 0 0 10px rgba(255, 255, 255, 0.5);
+    }
+
+    .lamp-base {
+      width: 80px;
+      height: 25px;
+      background: linear-gradient(180deg, #d0d0d0, #f8f8f8, #d0d0d0);
+      border-radius: 15px;
+      position: absolute;
+      bottom: 0;
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5), inset 0 -3px 10px rgba(0, 0, 0, 0.2);
+    }
+
+    .lamp-shade {
+      width: 140px;
+      height: 110px;
+      background: linear-gradient(180deg, #95d4a8, #a8d5ba, #8bc9a8);
+      clip-path: polygon(22% 0%, 78% 0%, 100% 100%, 0% 100%);
+      position: absolute;
+      top: 40px;
+      border-radius: 10px 10px 0 0;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4), inset 0 -15px 40px rgba(255, 255, 255, 0.4);
+      animation: shadeGlow 3s ease-in-out infinite;
+      transition: all 0.3s ease;
+    }
+
+    .lamp-shade.happy {
+      filter: brightness(1.2);
+    }
+
+    .lamp-shade.sad {
+      filter: brightness(0.8);
+    }
+
+    @keyframes shadeGlow {
+      0%, 100% { 
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4), inset 0 -15px 40px rgba(255, 255, 255, 0.4);
+        filter: brightness(1);
+      }
+      50% { 
+        box-shadow: 0 10px 40px rgba(168, 213, 186, 0.7), inset 0 -15px 50px rgba(255, 255, 255, 0.6);
+        filter: brightness(1.15);
+      }
+    }
+
+    /* Enhanced Lamp Face with expressions */
+    .lamp-face {
+      position: absolute;
+      top: 75px;
+      width: 140px;
+      height: 90px;
+      z-index: 2;
+      transition: all 0.3s ease;
+    }
+
+    .lamp-eye {
+      width: 14px;
+      height: 20px;
+      background: #2d3436;
+      border-radius: 50%;
+      position: absolute;
+      top: 20px;
+      transition: all 0.3s ease;
+      animation: blink 5s infinite;
+    }
+
+    .lamp-eye.left {
+      left: 35px;
+    }
+
+    .lamp-eye.right {
+      right: 35px;
+    }
+
+    .lamp-eye::before {
+      content: '';
+      position: absolute;
+      width: 5px;
+      height: 5px;
+      background: #fff;
+      border-radius: 50%;
+      top: 4px;
+      left: 3px;
+      animation: eyeShine 3s infinite;
+    }
+
+    @keyframes eyeShine {
+      0%, 100% { opacity: 0.8; }
+      50% { opacity: 1; }
+    }
+
+    @keyframes blink {
+      0%, 46%, 50%, 100% { height: 20px; }
+      48% { height: 2px; }
+    }
+
+    /* Lamp Tongue (when light is on) */
+    .lamp-tongue {
+      position: absolute;
+      width: 20px;
+      height: 25px;
+      background: #ff6b6b;
+      border-radius: 0 0 10px 10px;
+      bottom: 15px;
+      left: 50%;
+      transform: translateX(-50%) scaleY(0);
+      transform-origin: top;
+      opacity: 0;
+      transition: all 0.3s ease;
+    }
+
+    .lamp-tongue.show {
+      transform: translateX(-50%) scaleY(1);
+      opacity: 1;
+      animation: tongueWiggle 0.5s ease-in-out;
+    }
+
+    @keyframes tongueWiggle {
+      0%, 100% { transform: translateX(-50%) scaleY(1) rotate(0deg); }
+      25% { transform: translateX(-50%) scaleY(1) rotate(-5deg); }
+      75% { transform: translateX(-50%) scaleY(1) rotate(5deg); }
+    }
+
+    .lamp-mouth {
+      width: 35px;
+      height: 18px;
+      border: 3px solid #e74c3c;
+      border-top: none;
+      border-radius: 0 0 35px 35px;
+      position: absolute;
+      top: 48px;
+      left: 50%;
+      transform: translateX(-50%);
+      transition: all 0.3s ease;
+      animation: smile 4s ease-in-out infinite;
+    }
+
+    .lamp-mouth.sad {
+      border-radius: 35px 35px 0 0;
+      border-top: 3px solid #e74c3c;
+      border-bottom: none;
+      top: 55px;
+    }
+
+    @keyframes smile {
+      0%, 100% { width: 35px; }
+      50% { width: 40px; }
+    }
+
+    .lamp-blush {
+      width: 22px;
+      height: 14px;
+      background: rgba(231, 76, 60, 0.5);
+      border-radius: 50%;
+      position: absolute;
+      top: 40px;
+      animation: blushPulse 3s ease-in-out infinite;
+    }
+
+    @keyframes blushPulse {
+      0%, 100% { opacity: 0.5; }
+      50% { opacity: 0.8; }
+    }
+
+    .lamp-blush.left {
+      left: 15px;
+    }
+
+    .lamp-blush.right {
+      right: 15px;
+    }
+
+    /* Enhanced Light glow effect */
+    .lamp-glow {
+      position: absolute;
+      bottom: -50px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 280px;
+      height: 280px;
+      background: radial-gradient(circle, rgba(255, 243, 176, 0.6) 0%, rgba(255, 220, 100, 0.3) 40%, transparent 70%);
+      border-radius: 50%;
+      animation: glowPulse 3s ease-in-out infinite;
+      pointer-events: none;
+      filter: blur(20px);
+    }
+
+    @keyframes glowPulse {
+      0%, 100% { 
+        opacity: 0.7; 
+        transform: translateX(-50%) scale(1);
+      }
+      50% { 
+        opacity: 1; 
+        transform: translateX(-50%) scale(1.15);
+      }
+    }
+
+    /* Enhanced Login Form */
+    .login-box {
+      background: linear-gradient(135deg, rgba(40, 50, 70, 0.8), rgba(30, 40, 60, 0.9));
+      padding: 50px 55px;
+      border-radius: 25px;
+      border: 2px solid rgba(76, 209, 55, 0.6);
+      box-shadow: 0 0 50px rgba(76, 209, 55, 0.4), inset 0 0 30px rgba(0, 0, 0, 0.3);
+      width: 420px;
+      backdrop-filter: blur(15px);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .login-box::before {
+      content: '';
+      position: absolute;
+      top: -50%;
+      left: -50%;
+      width: 200%;
+      height: 200%;
+      background: linear-gradient(45deg, transparent, rgba(76, 209, 55, 0.1), transparent);
+      animation: shimmer 3s infinite;
+    }
+
+    @keyframes shimmer {
+      0% { transform: translateX(-100%) translateY(-100%) rotate(45deg); }
+      100% { transform: translateX(100%) translateY(100%) rotate(45deg); }
+    }
+
+    .login-box > * {
+      position: relative;
+      z-index: 1;
+    }
+
+    .login-box h2 {
+      text-align: center;
+      color: #fff;
+      font-size: 36px;
+      margin-bottom: 35px;
+      font-weight: 700;
+      text-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+      animation: textGlow 2s ease-in-out infinite;
+    }
+
+    @keyframes textGlow {
+      0%, 100% { text-shadow: 0 4px 10px rgba(0, 0, 0, 0.5); }
+      50% { text-shadow: 0 4px 20px rgba(76, 209, 55, 0.5); }
+    }
+
+    .input-group {
+      margin-bottom: 28px;
+      position: relative;
+    }
+
+    .input-group label {
+      display: block;
+      color: #b8c5d8;
+      font-size: 14px;
+      margin-bottom: 10px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+    }
+
+    .input-wrapper {
+      position: relative;
+    }
+
+    .input-group input {
+      width: 100%;
+      padding: 16px 50px 16px 20px;
+      background: rgba(20, 30, 50, 0.7);
+      border: 2px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      color: #fff;
+      font-size: 15px;
+      outline: none;
+      transition: all 0.4s ease;
+      font-family: inherit;
+    }
+
+    .input-group input::placeholder {
+      color: #6c7a89;
+    }
+
+    .input-group input:focus {
+      border-color: #4cd137;
+      box-shadow: 0 0 20px rgba(76, 209, 55, 0.4), inset 0 0 10px rgba(76, 209, 55, 0.1);
+      background: rgba(20, 30, 50, 0.9);
+      transform: translateY(-2px);
+    }
+
+    .input-group input.error {
+      border-color: #e74c3c;
+      animation: shake 0.5s;
+    }
+
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-10px); }
+      75% { transform: translateX(10px); }
+    }
+
+    /* Password Toggle Eye */
+    .toggle-password {
+      position: absolute;
+      right: 15px;
+      top: 50%;
+      transform: translateY(-50%);
+      cursor: pointer;
+      color: #6c7a89;
+      font-size: 20px;
+      transition: color 0.3s ease;
+      user-select: none;
+    }
+
+    .toggle-password:hover {
+      color: #4cd137;
+    }
+
+    /* Social Login Buttons */
+    .social-login {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 25px;
+    }
+
+    .social-btn {
+      flex: 1;
+      padding: 12px;
+      border: 2px solid rgba(255, 255, 255, 0.2);
+      background: rgba(30, 40, 60, 0.6);
+      border-radius: 10px;
+      color: #fff;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .social-btn:hover {
+      transform: translateY(-3px);
+      border-color: #4cd137;
+      box-shadow: 0 5px 15px rgba(76, 209, 55, 0.3);
+    }
+
+    .divider {
+      text-align: center;
+      margin: 25px 0;
+      color: #6c7a89;
+      position: relative;
+    }
+
+    .divider::before,
+    .divider::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      width: 40%;
+      height: 1px;
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    .divider::before {
+      left: 0;
+    }
+
+    .divider::after {
+      right: 0;
+    }
+
+    .login-btn {
+      width: 100%;
+      padding: 17px;
+      background: linear-gradient(135deg, #4cd137, #44bd32, #3da82a);
+      background-size: 200% auto;
+      border: none;
+      border-radius: 12px;
+      color: #fff;
+      font-size: 18px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.4s ease;
+      box-shadow: 0 6px 25px rgba(76, 209, 55, 0.5);
+      margin-top: 12px;
+      position: relative;
+      overflow: hidden;
+      letter-spacing: 1px;
+    }
+
+    .login-btn::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+      transition: left 0.5s;
+    }
+
+    .login-btn:hover::before {
+      left: 100%;
+    }
+
+    .login-btn:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 10px 30px rgba(76, 209, 55, 0.7);
+      background-position: right center;
+    }
+
+    .login-btn:active {
+      transform: translateY(-2px);
+    }
+
+    .login-btn.loading {
+      pointer-events: none;
+      opacity: 0.8;
+    }
+
+    .login-btn.loading::after {
+      content: '';
+      position: absolute;
+      width: 20px;
+      height: 20px;
+      border: 3px solid rgba(255, 255, 255, 0.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+    }
+
+    @keyframes spin {
+      to { transform: translate(-50%, -50%) rotate(360deg); }
+    }
+
+    .forgot-password {
+      text-align: center;
+      margin-top: 22px;
+    }
+
+    .forgot-password a {
+      color: #7c8a9e;
+      text-decoration: none;
+      font-size: 14px;
+      transition: all 0.3s ease;
+      position: relative;
+    }
+
+    .forgot-password a::after {
+      content: '';
+      position: absolute;
+      bottom: -2px;
+      left: 0;
+      width: 0;
+      height: 2px;
+      background: #4cd137;
+      transition: width 0.3s ease;
+    }
+
+    .forgot-password a:hover {
+      color: #4cd137;
+    }
+
+    .forgot-password a:hover::after {
+      width: 100%;
+    }
+
+    /* Toast Notification */
+    .toast {
+      position: fixed;
+      top: 30px;
+      right: 30px;
+      background: linear-gradient(135deg, rgba(76, 209, 55, 0.95), rgba(68, 189, 50, 0.95));
+      color: #fff;
+      padding: 18px 28px;
+      border-radius: 12px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+      z-index: 1000;
+      transform: translateX(400px);
+      opacity: 0;
+      transition: all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-weight: 600;
+      backdrop-filter: blur(10px);
+    }
+
+    .toast.show {
+      transform: translateX(0);
+      opacity: 1;
+    }
+
+    .toast.error {
+      background: linear-gradient(135deg, rgba(231, 76, 60, 0.95), rgba(192, 57, 43, 0.95));
+    }
+
+    .toast-icon {
+      font-size: 24px;
+    }
+
+    /* Code Display Section */
+    .code-section {
+      margin-top: 60px;
+      width: 100%;
+      max-width: 1200px;
+      z-index: 2;
+      animation: fadeIn 1.5s ease 1s backwards;
+    }
+
+    .code-header {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+
+    .code-header h3 {
+      font-size: 28px;
+      color: #ffa500;
+      margin-bottom: 10px;
+      text-shadow: 0 0 20px rgba(255, 165, 0, 0.5);
+    }
+
+    .code-header p {
+      color: #b0b8c8;
+      font-size: 16px;
+    }
+
+    .code-display {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
+      gap: 25px;
+      padding: 0 20px;
+    }
+
+    .code-block {
+      background: rgba(20, 25, 35, 0.9);
+      border: 1px solid rgba(76, 209, 55, 0.3);
+      border-radius: 15px;
+      padding: 25px;
+      position: relative;
+      overflow: hidden;
+      backdrop-filter: blur(10px);
+      box-shadow: 0 8px 25px rgba(0, 0, 0, 0.4);
+      transition: all 0.3s ease;
+    }
+
+    .code-block:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 12px 35px rgba(76, 209, 55, 0.3);
+      border-color: #4cd137;
+    }
+
+    .code-block::before {
+      content: 'style.css';
+      position: absolute;
+      top: 0;
+      left: 0;
+      background: rgba(76, 209, 55, 0.2);
+      padding: 6px 15px;
+      font-size: 12px;
+      color: #4cd137;
+      border-radius: 0 0 10px 0;
+      font-family: 'Courier New', monospace;
+    }
+
+    .code-block pre {
+      margin-top: 30px;
+      color: #a8b2d1;
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.6;
+      overflow-x: auto;
+    }
+
+    .code-block pre code {
+      display: block;
+    }
+
+    .keyword { color: #c792ea; }
+    .property { color: #82aaff; }
+    .value { color: #c3e88d; }
+    .important { color: #ff6b6b; }
+    .comment { color: #676e95; font-style: italic; }
+
+    /* Responsive */
+    @media (max-width: 1200px) {
+      .container {
+        gap: 50px;
+        padding: 50px 40px;
+      }
+
+      .code-display {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 1024px) {
+      .container {
+        flex-direction: column;
+        gap: 40px;
+        padding: 40px 30px;
+      }
+
+      .title {
+        font-size: 42px;
+      }
+
+      .lamp-section {
+        width: 250px;
+        height: 350px;
+      }
+    }
+
+    @media (max-width: 600px) {
+      .title {
+        font-size: 32px;
+        margin-bottom: 30px;
+      }
+
+      .container {
+        padding: 30px 20px;
+        margin: 20px;
+      }
+
+      .login-box {
+        width: 100%;
+        padding: 35px 25px;
+      }
+
+      .lamp {
+        transform: scale(0.75);
+      }
+
+      .social-login {
+        flex-direction: column;
+      }
+
+      .code-display {
+        padding: 0;
+      }
+
+      .code-block {
+        padding: 20px 15px;
+      }
+
+      .code-block pre {
+        font-size: 11px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Animated particles -->
+  <div class="particles" id="particles"></div>
+
+  <!-- Title -->
+  <h1 class="title">✨ Cute Lamp Login ✨</h1>
+
+  <!-- Main Container -->
+  <div class="container">
+    <!-- Enhanced Lamp Section -->
+    <div class="lamp-section">
+      <div class="lamp-glow"></div>
+      <div class="lamp-container" id="lampContainer">
+        <div class="lamp" id="lamp">
+          <div class="cord">
+            <div class="cord-plug"></div>
+          </div>
+          <div class="lamp-shade" id="lampShade"></div>
+          <div class="lamp-face" id="lampFace">
+            <div class="lamp-eye left" id="leftEye"></div>
+            <div class="lamp-eye right" id="rightEye"></div>
+            <div class="lamp-mouth" id="lampMouth"></div>
+            <div class="lamp-tongue" id="lampTongue"></div>
+            <div class="lamp-blush left"></div>
+            <div class="lamp-blush right"></div>
+          </div>
+          <div class="lamp-stand"></div>
+          <div class="lamp-base"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Enhanced Login Form -->
+    <div class="login-box">
+      <h2>Welcome Back</h2>
+      
+      <!-- Social Login -->
+      <div class="social-login">
+        <button class="social-btn" onclick="socialLogin('Google')">
+          <span>🔍</span>
+          <span>Google</span>
+        </button>
+        <button class="social-btn" onclick="socialLogin('GitHub')">
+          <span>💻</span>
+          <span>GitHub</span>
+        </button>
+      </div>
+
+      <div class="divider">OR</div>
+
+      <form id="loginForm" onsubmit="handleLogin(event)">
+        <div class="input-group">
+          <label for="username">Username</label>
+          <div class="input-wrapper">
+            <input type="text" id="username" placeholder="Enter your username" required>
+          </div>
+        </div>
+        <div class="input-group">
+          <label for="password">Password</label>
+          <div class="input-wrapper">
+            <input type="password" id="password" placeholder="Enter your password" required>
+            <span class="toggle-password" id="togglePassword" onclick="togglePassword()">👁️</span>
+          </div>
+        </div>
+        <button type="submit" class="login-btn" id="loginBtn">Login</button>
+      </form>
+      <div class="forgot-password">
+        <a href="#" onclick="forgotPassword(); return false;">Forgot Password?</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Code Display Section -->
+  <div class="code-section">
+    <div class="code-header">
+      <h3>💻 Comment "cute" for code</h3>
+      <p>Here's a peek at the magic behind this adorable login page</p>
+    </div>
+    <div class="code-display">
+      <div class="code-block">
+        <pre><code><span class="keyword">.lamp</span> {
+  <span class="property">display</span>: <span class="value">flex</span>;
+  <span class="property">height</span>: <span class="value">320px</span>;
+  <span class="property">overflow</span>: <span class="value">visible</span> <span class="important">!important</span>;
+}
+
+<span class="keyword">.cord</span> {
+  <span class="property">stroke</span>: <span class="value">var(--cord)</span>;
+}
+
+<span class="keyword">.cord--nip</span> {
+  <span class="property">display</span>: <span class="value">none</span>;
+}
+
+<span class="keyword">.lamp__tongue</span> {
+  <span class="property">fill</span>: <span class="value">var(--tongue)</span>;
+}</code></pre>
+      </div>
+
+      <div class="code-block">
+        <pre><code><span class="keyword">.login-btn:active</span> {
+  <span class="property">transform</span>: <span class="value">translateY(0px)</span>;
+}
+
+<span class="keyword">.form-footer</span> {
+  <span class="property">margin-top</span>: <span class="value">1.5rem</span>;
+  <span class="property">text-align</span>: <span class="value">center</span>;
+}
+
+<span class="keyword">.forgot-link</span> {
+  <span class="property">color</span>: <span class="value">#888</span>;
+  <span class="property">font-size</span>: <span class="value">0.9rem</span>;
+  <span class="property">text-decoration</span>: <span class="value">none</span>;
+  <span class="property">transition</span>: <span class="value">all 0.3s ease</span>;
+}</code></pre>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div class="toast" id="toast">
+    <span class="toast-icon" id="toastIcon">✨</span>
+    <span id="toastMessage">Welcome!</span>
+  </div>
+
+  <script>
+    // Enhanced Particle System
+    const particlesContainer = document.getElementById('particles');
+    
+    function createParticles() {
+      for (let i = 0; i < 40; i++) {
+        const particle = document.createElement('div');
+        particle.className = 'particle';
+        particle.style.left = Math.random() * 100 + '%';
+        particle.style.setProperty('--tx', (Math.random() - 0.5) * 200 + 'px');
+        particle.style.animationDelay = Math.random() * 15 + 's';
+        particle.style.animationDuration = (10 + Math.random() * 10) + 's';
+        particlesContainer.appendChild(particle);
+      }
+
+      // Add sparkles
+      for (let i = 0; i < 20; i++) {
+        const sparkle = document.createElement('div');
+        sparkle.className = 'sparkle';
+        sparkle.style.left = Math.random() * 100 + '%';
+        sparkle.style.top = Math.random() * 100 + '%';
+        sparkle.style.animationDelay = Math.random() * 3 + 's';
+        particlesContainer.appendChild(sparkle);
+      }
+    }
+
+    createParticles();
+
+    // Lamp Elements
+    const lamp = document.getElementById('lamp');
+    const lampShade = document.getElementById('lampShade');
+    const lampFace = document.getElementById('lampFace');
+    const lampMouth = document.getElementById('lampMouth');
+    const lampTongue = document.getElementById('lampTongue');
+    const leftEye = document.getElementById('leftEye');
+    const rightEye = document.getElementById('rightEye');
+    const lampContainer = document.getElementById('lampContainer');
+
+    // Form Elements
+    const loginForm = document.getElementById('loginForm');
+    const usernameInput = document.getElementById('username');
+    const passwordInput = document.getElementById('password');
+    const loginBtn = document.getElementById('loginBtn');
+    const toast = document.getElementById('toast');
+    const toastIcon = document.getElementById('toastIcon');
+    const toastMessage = document.getElementById('toastMessage');
+
+    // Lamp Expressions
+    function setLampExpression(expression) {
+      lampShade.classList.remove('happy', 'sad');
+      lampMouth.classList.remove('sad');
+      lampTongue.classList.remove('show');
+
+      switch(expression) {
+        case 'happy':
+          lampShade.classList.add('happy');
+          lampTongue.classList.add('show');
+          leftEye.style.background = '#4cd137';
+          rightEye.style.background = '#4cd137';
+          break;
+        case 'sad':
+          lampShade.classList.add('sad');
+          lampMouth.classList.add('sad');
+          leftEye.style.background = '#3498db';
+          rightEye.style.background = '#3498db';
+          break;
+        case 'neutral':
+          leftEye.style.background = '#2d3436';
+          rightEye.style.background = '#2d3436';
+          break;
+      }
+    }
+
+    // Eye following cursor
+    let isFollowingCursor = true;
+
+    document.addEventListener('mousemove', (e) => {
+      if (!isFollowingCursor) return;
+
+      const lampRect = lamp.getBoundingClientRect();
+      const lampCenterX = lampRect.left + lampRect.width / 2;
+      const lampCenterY = lampRect.top + lampRect.height / 2;
+
+      const angle = Math.atan2(e.clientY - lampCenterY, e.clientX - lampCenterX);
+      const distance = Math.min(3, Math.hypot(e.clientX - lampCenterX, e.clientY - lampCenterY) / 100);
+
+      const moveX = Math.cos(angle) * distance;
+      const moveY = Math.sin(angle) * distance;
+
+      leftEye.style.transform = `translate(${moveX}px, ${moveY}px)`;
+      rightEye.style.transform = `translate(${moveX}px, ${moveY}px)`;
+    });
+
+    // Input Focus Effects
+    const inputs = [usernameInput, passwordInput];
+
+    inputs.forEach(input => {
+      input.addEventListener('focus', () => {
+        setLampExpression('happy');
+        isFollowingCursor = false;
+      });
+
+      input.addEventListener('blur', () => {
+        if (!usernameInput.value && !passwordInput.value) {
+          setLampExpression('neutral');
+          isFollowingCursor = true;
+        }
+      });
+
+      input.addEventListener('input', () => {
+        if (input.classList.contains('error')) {
+          input.classList.remove('error');
+          setLampExpression('happy');
+        }
+      });
+    });
+
+    // Toast Notification Function
+    function showToast(message, type = 'success') {
+      toast.className = 'toast';
+      if (type === 'error') {
+        toast.classList.add('error');
+        toastIcon.textContent = '❌';
+      } else {
+        toastIcon.textContent = '✨';
+      }
+      
+      toastMessage.textContent = message;
+      
+      setTimeout(() => {
+        toast.classList.add('show');
+      }, 100);
+
+      setTimeout(() => {
+        toast.classList.remove('show');
+      }, 3000);
+    }
+
+    // Password Toggle
+    function togglePassword() {
+      const type = passwordInput.type === 'password' ? 'text' : 'password';
+      passwordInput.type = type;
+      document.getElementById('togglePassword').textContent = type === 'password' ? '👁️' : '🙈';
+    }
+
+    // Form Validation
+    function validateForm() {
+      let isValid = true;
+
+      if (usernameInput.value.trim().length < 3) {
+        usernameInput.classList.add('error');
+        isValid = false;
+      }
+
+      if (passwordInput.value.trim().length < 6) {
+        passwordInput.classList.add('error');
+        isValid = false;
+      }
+
+      if (!isValid) {
+        setLampExpression('sad');
+        showToast('Please check your credentials! 😢', 'error');
+      }
+
+      return isValid;
+    }
+
+    // Handle Login
+    function handleLogin(e) {
+      e.preventDefault();
+
+      if (!validateForm()) {
+        return;
+      }
+
+      // Show loading state
+      loginBtn.classList.add('loading');
+      loginBtn.textContent = '';
+      setLampExpression('happy');
+
+      // Simulate API call
+      setTimeout(() => {
+        loginBtn.classList.remove('loading');
+        loginBtn.textContent = 'Login';
+
+        const username = usernameInput.value;
+        showToast(`Welcome back, ${username}! 🎉`, 'success');
+
+        // Reset form after success
+        setTimeout(() => {
+          loginForm.reset();
+          setLampExpression('neutral');
+          isFollowingCursor = true;
+        }, 2000);
+      }, 2000);
+    }
+
+    // Social Login
+    function socialLogin(platform) {
+      setLampExpression('happy');
+      showToast(`Logging in with ${platform}... 🚀`, 'success');
+      
+      setTimeout(() => {
+        showToast(`${platform} login successful! 🎊`, 'success');
+      }, 1500);
+    }
+
+    // Forgot Password
+    function forgotPassword() {
+      setLampExpression('sad');
+      showToast('Password reset link sent to your email! 📧', 'success');
+      
+      setTimeout(() => {
+        setLampExpression('neutral');
+      }, 2000);
+    }
+
+    // Lamp Click Interaction
+    lampContainer.addEventListener('click', () => {
+      setLampExpression('happy');
+      lampContainer.style.transform = 'scale(1.1)';
+      
+      setTimeout(() => {
+        lampContainer.style.transform = 'scale(1)';
+      }, 300);
+
+      setTimeout(() => {
+        if (!usernameInput.value && !passwordInput.value) {
+          setLampExpression('neutral');
+        }
+      }, 2000);
+    });
+
+    // Welcome Animation
+    window.addEventListener('load', () => {
+      setTimeout(() => {
+        showToast('Hello! Ready to login? 👋', 'success');
+      }, 1000);
+    });
+
+    // Easter Egg: Konami Code
+    let konamiCode = [];
+    const konamiSequence = ['ArrowUp', 'ArrowUp', 'ArrowDown', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ArrowLeft', 'ArrowRight', 'b', 'a'];
+
+    document.addEventListener('keydown', (e) => {
+      konamiCode.push(e.key);
+      konamiCode = konamiCode.slice(-10);
+
+      if (konamiCode.join(',') === konamiSequence.join(',')) {
+        lampShade.style.background = 'linear-gradient(180deg, #ff6b9d, #c44569)';
+        showToast('🎉 Rainbow Lamp Mode Activated! 🌈', 'success');
+        
+        let hue = 0;
+        const rainbowInterval = setInterval(() => {
+          lampShade.style.background = `hsl(${hue}, 70%, 60%)`;
+          hue = (hue + 5) % 360;
+        }, 100);
+
+        setTimeout(() => {
+          clearInterval(rainbowInterval);
+          lampShade.style.background = '';
+          showToast('Back to normal! ✨', 'success');
+        }, 5000);
+      }
+    });
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', (e) => {
+      // Ctrl/Cmd + Enter to submit
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        if (usernameInput.value || passwordInput.value) {
+          loginForm.dispatchEvent(new Event('submit'));
+        }
+      }
+    });
+
+    // Auto-focus username on load
+    window.addEventListener('load', () => {
+      setTimeout(() => {
+        usernameInput.focus();
+      }, 500);
+    });
+
+    // Add accessibility: ESC to clear form
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        loginForm.reset();
+        setLampExpression('neutral');
+        isFollowingCursor = true;
+        showToast('Form cleared! 🧹', 'success');
+      }
+    });
+  </script>
+</body>
+</html>
