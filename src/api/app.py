@@ -151,8 +151,77 @@ class ProgressEventManager:
         if session_id in self.session_status:
             del self.session_status[session_id]
 
-# Global event manager
-event_manager = ProgressEventManager()
+# 👥 MULTI-USER SUPPORT: Per-session agent instances
+# Instead of one global agent, create isolated instances per session
+# This prevents users from interfering with each other's workflows
+agent_cache: Dict[str, DataScienceCopilot] = {}  # session_id -> agent instance
+agent_cache_lock = asyncio.Lock()
+MAX_CACHED_AGENTS = 10  # Limit memory usage
+logger.info("👥 Multi-user agent cache initialized")
+
+# Legacy global agent for backward compatibility (will be deprecated)
+agent = None
+
+# 👥 MULTI-USER SUPPORT: Per-session agent instances
+# Instead of one global agent, create isolated instances per session
+# This prevents users from interfering with each other's workflows
+agent_cache: Dict[str, DataScienceCopilot] = {}  # session_id -> agent instance
+agent_cache_lock = asyncio.Lock()
+MAX_CACHED_AGENTS = 10  # Limit memory usage
+logger.info("👥 Multi-user agent cache initialized")
+
+# Legacy global agent for backward compatibility (will be deprecated)
+agent = None
+
+
+async def get_agent_for_session(session_id: str) -> DataScienceCopilot:
+    """
+    Get or create an isolated agent instance for a session.
+    
+    This ensures each user gets their own agent with isolated state,
+    preventing session collisions and race conditions.
+    
+    Args:
+        session_id: Unique session identifier
+        
+    Returns:
+        DataScienceCopilot instance for this session
+    """
+    async with agent_cache_lock:
+        # Return existing agent if cached
+        if session_id in agent_cache:
+            logger.info(f"[♻️] Reusing cached agent for session {session_id[:8]}...")
+            return agent_cache[session_id]
+        
+        # Create new agent instance
+        logger.info(f"[🆕] Creating new agent for session {session_id[:8]}...")
+        provider = os.getenv("LLM_PROVIDER", "mistral")
+        
+        new_agent = DataScienceCopilot(
+            reasoning_effort="medium",
+            provider=provider,
+            use_compact_prompts=False,  # Multi-agent architecture
+            session_id=session_id  # Pass session_id for isolation
+        )
+        
+        # Cache management: Remove oldest if cache is full
+        if len(agent_cache) >= MAX_CACHED_AGENTS:
+            oldest_session = next(iter(agent_cache))
+            logger.info(f"[🗑️] Cache full, removing session {oldest_session[:8]}...")
+            del agent_cache[oldest_session]
+        
+        agent_cache[session_id] = new_agent
+        logger.info(f"✅ Agent created for session {session_id[:8]} (cache: {len(agent_cache)}/{MAX_CACHED_AGENTS})")
+        
+        return new_agent
+
+# 🔒 REQUEST QUEUING: Global lock to prevent concurrent workflows
+# This ensures only one analysis runs at a time, preventing:
+# - Race conditions on file writes
+# - Memory exhaustion from parallel model training
+# - Session state corruption
+workflow_lock = asyncio.Lock()
+logger.info("🔒 Workflow lock initialized for request queuing")
 
 # Mount static files for React frontend
 frontend_path = Path(__file__).parent.parent.parent / "FRRONTEEEND" / "dist"
@@ -166,18 +235,19 @@ async def startup_event():
     """Initialize DataScienceCopilot on service startup."""
     global agent
     try:
-        logger.info("Initializing DataScienceCopilot...")
+        logger.info("Initializing legacy global agent for health checks...")
         provider = os.getenv("LLM_PROVIDER", "mistral")
-        # Disable compact prompts to enable multi-agent architecture
-        # Multi-agent system has focused prompts per specialist (~3K tokens each)
         use_compact = False  # Always use multi-agent routing
         
+        # Create one agent for health checks only
+        # Real requests will use get_agent_for_session() for isolation
         agent = DataScienceCopilot(
             reasoning_effort="medium",
             provider=provider,
             use_compact_prompts=use_compact
         )
-        logger.info(f"✅ Agent initialized with provider: {agent.provider}")
+        logger.info(f"✅ Health check agent initialized with provider: {agent.provider}")
+        logger.info("👥 Per-session agents enabled - each user gets isolated instance")
         logger.info("🤖 Multi-agent architecture enabled with 5 specialists")
     except Exception as e:
         logger.error(f"❌ Failed to initialize agent: {e}")
@@ -311,34 +381,50 @@ class AnalysisRequest(BaseModel):
 def run_analysis_background(file_path: str, task_description: str, target_col: Optional[str], 
                             use_cache: bool, max_iterations: int, session_id: str):
     """Background task to run analysis and emit events."""
+    async def _run_with_lock():
+        """Wrap analysis in lock to ensure sequential execution."""
+        async with workflow_lock:
+            try:
+                logger.info(f"[BACKGROUND] Starting analysis for session {session_id[:8]}...")
+                
+                # 👥 Get isolated agent for this session
+                session_agent = await get_agent_for_session(session_id)
+                
+                result = session_agent.analyze(
+                    file_path=file_path,
+                    task_description=task_description,
+                    target_col=target_col,
+                    use_cache=use_cache,
+                    max_iterations=max_iterations
+                )
+                
+                logger.info(f"[BACKGROUND] Analysis completed for session {session_id[:8]}...")
+                
+                # Send completion event
+                progress_manager.emit(session_id, {
+                    "type": "analysis_complete",
+                    "status": result.get("status"),
+                    "message": "✅ Analysis completed successfully!",
+                    "result": result
+                })
+                
+            except Exception as e:
+                logger.error(f"[BACKGROUND] Analysis failed for session {session_id[:8]}...: {e}")
+                progress_manager.emit(session_id, {
+                    "type": "analysis_failed",
+                    "error": str(e),
+                    "message": f"❌ Analysis failed: {str(e)}"
+                })
+    
+    # Run async function in event loop
+    import asyncio
     try:
-        logger.info(f"[BACKGROUND] Starting analysis for session {session_id}")
-        
-        result = agent.analyze(
-            file_path=file_path,
-            task_description=task_description,
-            target_col=target_col,
-            use_cache=use_cache,
-            max_iterations=max_iterations
-        )
-        
-        logger.info(f"[BACKGROUND] Analysis completed for session {session_id}")
-        
-        # Send completion event
-        progress_manager.emit(session_id, {
-            "type": "analysis_complete",
-            "status": result.get("status"),
-            "message": "✅ Analysis completed successfully!",
-            "result": result
-        })
-        
-    except Exception as e:
-        logger.error(f"[BACKGROUND] Analysis failed for session {session_id}: {e}")
-        progress_manager.emit(session_id, {
-            "type": "analysis_failed",
-            "error": str(e),
-            "message": f"❌ Analysis failed: {str(e)}"
-        })
+        loop = asyncio.get_event_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+    
+    loop.run_until_complete(_run_with_lock())
 
 
 @app.post("/run-async")
@@ -357,9 +443,10 @@ async def run_analysis_async(
     if agent is None:
         raise HTTPException(status_code=503, detail="Agent not initialized")
     
-    # Get session UUID immediately
-    session_id = agent.session.session_id if hasattr(agent, 'session') and agent.session else "default"
-    logger.info(f"[ASYNC] Created session: {session_id}")
+    # 🆔 Generate unique session ID for this request
+    import uuid
+    session_id = str(uuid.uuid4())
+    logger.info(f"[ASYNC] Created session: {session_id[:8]}...")
     
     # Handle file upload
     temp_file_path = None
@@ -372,6 +459,28 @@ async def run_analysis_async(
             shutil.copyfileobj(file.file, buffer)
         
         logger.info(f"[ASYNC] File saved: {file.filename}")
+    else:
+        # 🛡️ VALIDATION: For follow-up queries, check if any cached agent has dataset
+        # Note: In true multi-user setup, you'd need session_id from frontend to match exact session
+        has_dataset = False
+        async with agent_cache_lock:
+            for cached_agent in agent_cache.values():
+                if hasattr(cached_agent, 'session') and cached_agent.session and cached_agent.session.last_dataset:
+                    has_dataset = True
+                    logger.info(f"[ASYNC] Follow-up query using cached session data")
+                    break
+        
+        if not has_dataset:
+            logger.warning("[ASYNC] No file uploaded and no session dataset available")
+            return JSONResponse(
+                content={
+                    "success": False,
+                    "error": "No dataset available",
+                    "message": "Please upload a CSV, Excel, or Parquet file first.",
+                    "session_id": session_id
+                },
+                status_code=400
+            )
     
     # Start background analysis
     background_tasks.add_task(
@@ -427,20 +536,43 @@ async def run_analysis(
     if agent is None:
         raise HTTPException(status_code=503, detail="Agent not initialized")
     
+    # 🆔 Generate or use provided session ID
+    if not session_id:
+        import uuid
+        session_id = str(uuid.uuid4())
+        logger.info(f"[SYNC] Created new session: {session_id[:8]}...")
+    else:
+        logger.info(f"[SYNC] Using provided session: {session_id[:8]}...")
+    
+    # 👥 Get isolated agent for this session
+    session_agent = await get_agent_for_session(session_id)
+    
     # Handle follow-up requests (no file, using session memory)
     if file is None:
         logger.info(f"Follow-up request without file, using session memory")
         logger.info(f"Task: {task_description}")
         
+        # 🛡️ VALIDATION: Check if session has a dataset
+        if not (hasattr(session_agent, 'session') and session_agent.session and session_agent.session.last_dataset):
+            logger.warning("No file uploaded and no session dataset available")
+            return JSONResponse(
+                content={
+                    "success": False,
+                    "error": "No dataset available",
+                    "message": "Please upload a CSV, Excel, or Parquet file first before asking questions."
+                },
+                status_code=400
+            )
+        
         # Get the agent's actual session UUID for SSE routing
-        actual_session_id = agent.session.session_id if hasattr(agent, 'session') and agent.session else "default"
+        actual_session_id = session_agent.session.session_id if hasattr(session_agent, 'session') and session_agent.session else session_id
         print(f"[SSE] Follow-up using agent session UUID: {actual_session_id}")
         
         # NO progress_callback - orchestrator emits directly to UUID
         
         try:
             # Agent's session memory should resolve file_path from context
-            result = agent.analyze(
+            result = session_agent.analyze(
                 file_path="",  # Empty - will be resolved by session memory
                 task_description=task_description,
                 target_col=target_col,
@@ -526,14 +658,14 @@ async def run_analysis(
         logger.info(f"File saved successfully: {file.filename} ({os.path.getsize(temp_file_path)} bytes)")
         
         # Get the agent's actual session UUID for SSE routing (BEFORE analyze())
-        actual_session_id = agent.session.session_id if hasattr(agent, 'session') and agent.session else "default"
+        actual_session_id = session_agent.session.session_id if hasattr(session_agent, 'session') and session_agent.session else session_id
         print(f"[SSE] File upload using agent session UUID: {actual_session_id}")
         
         # NO progress_callback - orchestrator emits directly to UUID
         
         # Call existing agent logic
         logger.info(f"Starting analysis with task: {task_description}")
-        result = agent.analyze(
+        result = session_agent.analyze(
             file_path=str(temp_file_path),
             task_description=task_description,
             target_col=target_col,

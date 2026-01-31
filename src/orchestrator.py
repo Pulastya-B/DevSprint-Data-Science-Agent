@@ -402,7 +402,7 @@ class DataScienceCopilot:
             "split_data_strategically": split_data_strategically,
             # Advanced Training (3)
             "hyperparameter_tuning": hyperparameter_tuning,
-            "train_ensemble_models": train_ensemble_models,
+            # "train_ensemble_models": train_ensemble_models,  # DISABLED - Too resource intensive for scale
             "perform_cross_validation": perform_cross_validation,
             # Business Intelligence (4)
             "perform_cohort_analysis": perform_cohort_analysis,
@@ -554,7 +554,8 @@ When you need to use a tool, respond with a JSON block like this:
 - Keywords: "train model", "predict", "classify", "build model", "forecast"
 - User wants: cleaning + feature engineering + model training
 - **ACTION**: Run full ML workflow (steps 1-15 below)
-- **Example**: "Train a model to predict earthquake magnitude" → Full pipeline
+- **🎯 IMPORTANT**: ALWAYS generate ydata_profiling_report at the END of workflow for comprehensive final analysis
+- **Example**: "Train a model to predict earthquake magnitude" → Full pipeline + ydata_profiling_report at end
 
 **E. UNCLEAR/AMBIGUOUS REQUESTS** - Intent is not obvious:
 - User says: "analyze", "look at", "check", "review" (without specifics)
@@ -657,16 +658,16 @@ structure, variable relationships, and expected insights - not hardcoded domain 
 8. encode_categorical(latest, method="auto", output="./outputs/data/encoded.csv")
 9. generate_eda_plots(encoded, target_col, output_dir="./outputs/plots/eda") - Generate EDA visualizations
 10. **ONLY IF USER EXPLICITLY REQUESTED ML**: train_baseline_models(encoded, target_col, task_type="auto")
-11. **HYPERPARAMETER TUNING (OPTIONAL - Smart Decision)**:
-    - ⚠️ **WARNING: This tool is VERY expensive and takes 5-10 minutes!**
-    - **When to use**:
-      * User explicitly says "optimize", "tune", "improve", "best model possible" → ALWAYS tune
-      * Best model score < 0.90 → Tune to improve (user expects good accuracy)
-      * Best model score > 0.95 → Skip tuning (already excellent)
+10b. **ALWAYS AFTER MODEL TRAINING**: generate_ydata_profiling_report(encoded, output_path="./outputs/reports/ydata_profile.html") - Comprehensive data analysis report
+11. **HYPERPARAMETER TUNING (⚠️ ONLY WHEN EXPLICITLY REQUESTED)**:
+    - ⚠️ **CRITICAL WARNING**: This is EXTREMELY expensive (5-10 minutes) and resource-intensive!
+    - ⚠️ **DO NOT USE UNLESS USER EXPLICITLY ASKS FOR IT**
+    - **ONLY use when user says**: "tune", "optimize", "hyperparameter", "improve model", "best parameters"
+    - **NEVER auto-trigger** based on scores - user must explicitly request it
     - **How**: hyperparameter_tuning(file_path=encoded, target_col=target_col, model_type="xgboost", n_trials=50)
     - **Large datasets (>100K rows)**: n_trials automatically reduced to 20 to prevent timeout
     - **Only tune the WINNING model** (don't waste time on others)
-    - **Map model names**: XGBoost→"xgboost", RandomForest→"random_forest", Ridge→"ridge", Lasso→use Ridge
+    - **Map model names**: XGBoost→"xgboost", Ridge→"ridge", Lasso→use Ridge
     - **Note**: Time features should already be extracted in step 7 (create_time_features)
 12. **CROSS-VALIDATION (OPTIONAL - Production Models)**:
     - IF user says "validate", "production", "robust", "deploy" → ALWAYS cross-validate
@@ -836,7 +837,7 @@ Use specialized tools FIRST. Only use execute_python_code for:
 - train_baseline_models: Trains multiple models automatically
 - **⭐ execute_python_code**: Write and run custom Python code for ANY task not covered by tools (TRUE AI AGENT capability)
 - **execute_code_from_file**: Run existing Python scripts
-- Advanced: hyperparameter_tuning, train_ensemble_models, perform_eda_analysis, handle_imbalanced_data, perform_feature_scaling, detect_anomalies, detect_and_handle_multicollinearity, auto_feature_engineering, forecast_time_series, explain_predictions, generate_business_insights, perform_topic_modeling, extract_image_features, monitor_model_drift
+- Advanced: hyperparameter_tuning, perform_eda_analysis, handle_imbalanced_data, perform_feature_scaling, detect_anomalies, detect_and_handle_multicollinearity, auto_feature_engineering, forecast_time_series, explain_predictions, generate_business_insights, perform_topic_modeling, extract_image_features, monitor_model_drift
 - NEW Advanced Insights: analyze_root_cause, detect_trends_and_seasonality, detect_anomalies_advanced, perform_hypothesis_testing, analyze_distribution, perform_segment_analysis
 - NEW Automation: auto_ml_pipeline (zero-config full pipeline), auto_feature_selection
 - NEW Visualization: generate_all_plots, generate_data_quality_plots, generate_eda_plots, generate_model_performance_plots, generate_feature_importance_plot
@@ -1020,7 +1021,7 @@ BEFORE calling any training tools, you MUST:
 
 **Your Tools (6 modeling-focused):**
 - train_baseline_models, hyperparameter_tuning
-- train_ensemble_models, perform_cross_validation
+- perform_cross_validation
 - generate_model_report, detect_model_issues
 
 **Your Approach:**
@@ -2746,6 +2747,19 @@ You receive quality reports from EDA agent and deliver clean data to modeling ag
         
         # 🚀 LOCAL SCHEMA EXTRACTION (NO LLM) - Extract metadata before any LLM calls
         # Now that file_path is resolved from session if needed
+        
+        # 🛡️ VALIDATION: Ensure we have a valid file path
+        if not file_path or file_path == "":
+            error_msg = "No dataset file provided. Please upload a CSV, Excel, or Parquet file."
+            print(f"❌ {error_msg}")
+            return {
+                "status": "error",
+                "error": error_msg,
+                "summary": "Cannot proceed without a dataset file.",
+                "workflow_history": [],
+                "execution_time": 0.0
+            }
+        
         print("🔍 Extracting dataset schema locally (no LLM)...")
         schema_info = extract_schema_local(file_path, sample_rows=3)
         
@@ -3366,7 +3380,9 @@ You receive quality reports from EDA agent and deliver clean data to modeling ag
                     messages.append(response_message)
                 
                 # 🚀 PARALLEL EXECUTION: Detect multiple independent tool calls
-                if len(tool_calls) > 1:
+                # ⚠️ DISABLED FOR STABILITY - Parallel execution causes race conditions and OOM errors
+                # Re-enable only after implementing proper request isolation per user
+                if len(tool_calls) > 1 and False:  # Disabled with "and False"
                     print(f"🚀 Detected {len(tool_calls)} tool calls - attempting parallel execution")
                     
                     # Extract tool executions with proper weight classification

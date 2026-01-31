@@ -129,15 +129,15 @@ def train_baseline_models(file_path: str, target_col: str,
     
     # Train models based on task type
     import sys
-    print(f"\n🚀 Training {6 if task_type == 'classification' else 6} baseline models...", flush=True)
+    print(f"\n🚀 Training {5 if task_type == 'classification' else 5} baseline models...", flush=True)
     print(f"   📊 Training set: {len(X_train):,} samples × {X_train.shape[1]} features", flush=True)
     print(f"   📊 Test set: {len(X_test):,} samples", flush=True)
+    print(f"   ⚡ Note: Random Forest excluded to optimize compute resources", flush=True)
     sys.stdout.flush()
     
     if task_type == "classification":
         models = {
             "logistic_regression": LogisticRegression(max_iter=1000, random_state=random_state),
-            "random_forest": RandomForestClassifier(n_estimators=100, random_state=random_state, n_jobs=-1),
             "xgboost": XGBClassifier(n_estimators=100, random_state=random_state, n_jobs=-1),
             "lightgbm": LGBMClassifier(n_estimators=100, random_state=random_state, n_jobs=-1, verbose=-1),
             "catboost": CatBoostClassifier(iterations=100, random_state=random_state, verbose=0, allow_writing_files=False)
@@ -213,7 +213,6 @@ def train_baseline_models(file_path: str, target_col: str,
         models = {
             "ridge": Ridge(random_state=random_state),
             "lasso": Lasso(random_state=random_state),
-            "random_forest": RandomForestRegressor(n_estimators=100, random_state=random_state, n_jobs=-1),
             "xgboost": XGBRegressor(n_estimators=100, random_state=random_state, n_jobs=-1),
             "lightgbm": LGBMRegressor(n_estimators=100, random_state=random_state, n_jobs=-1, verbose=-1),
             "catboost": CatBoostRegressor(iterations=100, random_state=random_state, verbose=0, allow_writing_files=False)
@@ -316,7 +315,7 @@ def train_baseline_models(file_path: str, target_col: str,
                 "suggested_model": best_model_name,
                 "reason": f"{best_model_name} is optimal for large datasets - fast training and good performance"
             }
-        elif best_model_name == "random_forest":
+        elif best_model_name == "random_forest_legacy":  # Disabled for compute optimization
             # Find next best fast model
             fast_model_scores = {name: results["models"][name]["test_metrics"].get("r2" if task_type == "regression" else "f1", 0)
                                for name in fast_models if name in results["models"]}
