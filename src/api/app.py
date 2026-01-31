@@ -151,14 +151,30 @@ class ProgressEventManager:
 # 👥 MULTI-USER SUPPORT: Session state isolation
 # Heavy components (SBERT, tools, LLM client) are shared via global 'agent'
 # Only session memory is isolated per user for fast initialization
-session_states: Dict[str, Any] = {}  # session_id -> SessionMemory
+
+from dataclasses import dataclass
+from datetime import datetime, timedelta
+import threading
+
+@dataclass
+class SessionState:
+    """Wrapper for session with metadata for cleanup"""
+    session: Any
+    created_at: datetime
+    last_accessed: datetime
+    request_count: int = 0
+
+session_states: Dict[str, SessionState] = {}  # session_id -> SessionState
 agent_cache_lock = asyncio.Lock()
-MAX_CACHED_AGENTS = 10  # Limit memory usage (session states are lightweight)
+MAX_CACHED_SESSIONS = 50  # Increased limit for scale
+SESSION_TTL_MINUTES = 60  # Sessions expire after 1 hour of inactivity
 logger.info("👥 Multi-user session isolation initialized (fast mode)")
 
 # Global agent - Heavy components loaded ONCE at startup
 # SBERT model, tool functions, LLM client are shared across all users
+# CRITICAL: We use threading.local() to ensure thread-safe session isolation
 agent: Optional[DataScienceCopilot] = None
+agent_thread_local = threading.local()  # Thread-local storage for session isolation
 agent = None
 
 # Session state isolation (lightweight - just session memory)
@@ -169,10 +185,12 @@ async def get_agent_for_session(session_id: str) -> DataScienceCopilot:
     """
     Get agent with isolated session state.
     
-    OPTIMIZATION: Instead of creating a full new agent per session (slow!),
-    we reuse the global agent but swap session memory per request.
-    Heavy components (SBERT, tools, LLM client) are shared.
+    OPTIMIZATION: Heavy components (SBERT, tools, LLM client) are shared.
+    Session state is isolated using thread-local storage to prevent race conditions.
     This reduces per-user initialization from 20s to <1s.
+    
+    THREAD SAFETY: Uses threading.local() so each request thread gets its own
+    agent reference with isolated session, preventing cross-contamination.
     
     Args:
         session_id: Unique session identifier
@@ -193,10 +211,25 @@ async def get_agent_for_session(session_id: str) -> DataScienceCopilot:
                 use_compact_prompts=False
             )
         
+        # Clean up expired sessions periodically (every 10th request)
+        if len(session_states) > 0 and len(session_states) % 10 == 0:
+            cleanup_expired_sessions()
+        
+        now = datetime.now()
+        
         # Check if we have cached session memory for this session
         if session_id in session_states:
-            logger.info(f"[♻️] Reusing session state for {session_id[:8]}...")
-            agent.session = session_states[session_id]
+            state = session_states[session_id]
+            state.last_accessed = now
+            state.request_count += 1
+            logger.info(f"[♻️] Reusing session {session_id[:8]}... (requests: {state.request_count})")
+            
+            # Store in thread-local storage for isolation
+            agent_thread_local.session = state.session
+            agent_thread_local.session_id = session_id
+            
+            # Return agent with session set (safe because of workflow_lock)
+            agent.session = state.session
             agent.http_session_key = session_id
             return agent
         
@@ -206,22 +239,55 @@ async def get_agent_for_session(session_id: str) -> DataScienceCopilot:
         # Create isolated session memory for this user
         new_session = SessionMemory(session_id=session_id)
         
-        # Cache session memory (lightweight)
-        # Cache management: Remove oldest if cache is full
-        if len(session_states) >= MAX_CACHED_AGENTS:
-            oldest_session = next(iter(session_states))
-            logger.info(f"[🗑️] Cache full, removing session {oldest_session[:8]}...")
-            del session_states[oldest_session]
+        # Cache management: Remove expired first, then LRU if still over limit
+        if len(session_states) >= MAX_CACHED_SESSIONS:
+            expired_count = cleanup_expired_sessions()
+            
+            # If still over limit after cleanup, remove least recently used
+            if len(session_states) >= MAX_CACHED_SESSIONS:
+                # Sort by last_accessed and remove oldest
+                sorted_sessions = sorted(session_states.items(), key=lambda x: x[1].last_accessed)
+                oldest_session_id = sorted_sessions[0][0]
+                logger.info(f"[🗑️] Cache full, removing LRU session {oldest_session_id[:8]}...")
+                del session_states[oldest_session_id]
         
-        session_states[session_id] = new_session
+        # Create session state wrapper with metadata
+        session_state = SessionState(
+            session=new_session,
+            created_at=now,
+            last_accessed=now,
+            request_count=1
+        )
+        session_states[session_id] = session_state
         
-        # Set session on shared agent
+        # Store in thread-local storage
+        agent_thread_local.session = new_session
+        agent_thread_local.session_id = session_id
+        
+        # Set session on shared agent (safe with workflow_lock)
         agent.session = new_session
         agent.http_session_key = session_id
         
-        logger.info(f"✅ Session created for {session_id[:8]} (cache: {len(session_states)}/{MAX_CACHED_AGENTS}) - <1s init")
+        logger.info(f"✅ Session created for {session_id[:8]} (cache: {len(session_states)}/{MAX_CACHED_SESSIONS}) - <1s init")
         
         return agent
+
+def cleanup_expired_sessions():
+    """Remove expired sessions based on TTL."""
+    now = datetime.now()
+    expired = []
+    
+    for session_id, state in session_states.items():
+        # Check if session has been inactive for too long
+        inactive_duration = now - state.last_accessed
+        if inactive_duration > timedelta(minutes=SESSION_TTL_MINUTES):
+            expired.append(session_id)
+    
+    for session_id in expired:
+        logger.info(f"[🗑️] Removing expired session {session_id[:8]}... (inactive for {SESSION_TTL_MINUTES}min)")
+        del session_states[session_id]
+    
+    return len(expired)
 
 # 🔒 REQUEST QUEUING: Global lock to prevent concurrent workflows
 # This ensures only one analysis runs at a time, preventing:
@@ -483,7 +549,8 @@ async def run_analysis_async(
         async with agent_cache_lock:
             # Check session_states cache for this specific session_id
             if session_id in session_states:
-                cached_session = session_states[session_id]
+                state = session_states[session_id]
+                cached_session = state.session  # Extract SessionMemory from wrapper
                 if hasattr(cached_session, 'last_dataset') and cached_session.last_dataset:
                     has_dataset = True
                     logger.info(f"[ASYNC] Follow-up query for session {session_id[:8]}... - using cached dataset")

@@ -39,14 +39,61 @@ const generateLocalSessionId = () => `local_${Date.now()}_${Math.random().toStri
 // Initial session ID - generated once when module loads
 const INITIAL_SESSION_ID = generateLocalSessionId();
 
-export const ChatInterface: React.FC<{ onBack: () => void }> = ({ onBack }) => {
-  const [sessions, setSessions] = useState<ChatSession[]>([{
+// LocalStorage key for persisting sessions
+const SESSIONS_STORAGE_KEY = 'ds_agent_chat_sessions';
+const ACTIVE_SESSION_STORAGE_KEY = 'ds_agent_active_session';
+
+// Load sessions from localStorage
+const loadSessionsFromStorage = (): ChatSession[] => {
+  try {
+    const stored = localStorage.getItem(SESSIONS_STORAGE_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      // Convert ISO date strings back to Date objects
+      return parsed.map((s: any) => ({
+        ...s,
+        updatedAt: new Date(s.updatedAt),
+        messages: s.messages.map((m: any) => ({
+          ...m,
+          timestamp: new Date(m.timestamp)
+        }))
+      }));
+    }
+  } catch (err) {
+    console.error('Failed to load sessions from localStorage:', err);
+  }
+  // Return default session if loading fails
+  return [{
     id: INITIAL_SESSION_ID,
     title: 'New Chat',
     messages: [],
     updatedAt: new Date(),
-  }]);
-  const [activeSessionId, setActiveSessionId] = useState<string>(INITIAL_SESSION_ID);
+  }];
+};
+
+// Save sessions to localStorage
+const saveSessionsToStorage = (sessions: ChatSession[]) => {
+  try {
+    localStorage.setItem(SESSIONS_STORAGE_KEY, JSON.stringify(sessions));
+  } catch (err) {
+    console.error('Failed to save sessions to localStorage:', err);
+  }
+};
+
+export const ChatInterface: React.FC<{ onBack: () => void }> = ({ onBack }) => {
+  const [sessions, setSessions] = useState<ChatSession[]>(loadSessionsFromStorage);
+  const [activeSessionId, setActiveSessionId] = useState<string>(() => {
+    // Try to restore last active session
+    try {
+      const stored = localStorage.getItem(ACTIVE_SESSION_STORAGE_KEY);
+      if (stored && sessions.some(s => s.id === stored)) {
+        return stored;
+      }
+    } catch (err) {
+      console.error('Failed to load active session:', err);
+    }
+    return sessions[0]?.id || INITIAL_SESSION_ID;
+  });
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [currentStep, setCurrentStep] = useState<string>('');
@@ -60,6 +107,20 @@ export const ChatInterface: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   const processedAnalysisRef = useRef<Set<string>>(new Set()); // Track processed analysis_complete events
   
   const activeSession = sessions.find(s => s.id === activeSessionId) || sessions[0];
+
+  // Persist sessions to localStorage whenever they change
+  useEffect(() => {
+    saveSessionsToStorage(sessions);
+  }, [sessions]);
+
+  // Persist active session ID
+  useEffect(() => {
+    try {
+      localStorage.setItem(ACTIVE_SESSION_STORAGE_KEY, activeSessionId);
+    } catch (err) {
+      console.error('Failed to save active session:', err);
+    }
+  }, [activeSessionId]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -80,6 +141,7 @@ export const ChatInterface: React.FC<{ onBack: () => void }> = ({ onBack }) => {
 
   // Track which session the current SSE connection is for
   const sseSessionRef = useRef<string | null>(null);
+  const isCleaningUpRef = useRef<boolean>(false); // Prevent race conditions during cleanup
 
   // Connect to SSE when we receive a valid backend UUID
   useEffect(() => {
@@ -88,106 +150,120 @@ export const ChatInterface: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     
     if (!isBackendUUID) {
       // No backend session yet - close any existing connection
-      if (eventSourceRef.current) {
+      if (eventSourceRef.current && !isCleaningUpRef.current) {
         console.log('🔌 Closing SSE - no backend session');
+        isCleaningUpRef.current = true;
         eventSourceRef.current.close();
         eventSourceRef.current = null;
         sseSessionRef.current = null;
+        isCleaningUpRef.current = false;
       }
       return;
     }
 
-    // Check if we're switching to a DIFFERENT session
-    if (sseSessionRef.current !== activeSessionId) {
-      // Close old connection if it exists (switching sessions)
-      if (eventSourceRef.current) {
-        console.log(`🔄 Switching SSE from ${sseSessionRef.current?.slice(0, 8)}... to ${activeSessionId.slice(0, 8)}...`);
-        eventSourceRef.current.close();
-        eventSourceRef.current = null;
+    // Check if we're already connected to the correct session
+    if (sseSessionRef.current === activeSessionId) {
+      // Same session - check if connection is still alive
+      if (eventSourceRef.current && eventSourceRef.current.readyState !== 2) {
+        console.log('♻️ Reusing existing SSE connection for same session');
+        return;
       }
-    } else if (eventSourceRef.current && eventSourceRef.current.readyState !== 2) {
-      // Same session and connection is still open - reuse it
-      console.log('♻️ Reusing existing SSE connection');
-      return;
     }
 
-    // Connect to SSE stream for this session
-    const API_URL = window.location.origin;
-    console.log(`🔌 Connecting SSE to session: ${activeSessionId.slice(0, 8)}...`);
-    const eventSource = new EventSource(`${API_URL}/api/progress/stream/${activeSessionId}`);
-    sseSessionRef.current = activeSessionId;
+    // Different session or connection is closed - need new connection
+    // First, close any existing connection
+    if (eventSourceRef.current && !isCleaningUpRef.current) {
+      const oldSession = sseSessionRef.current?.slice(0, 8) || 'unknown';
+      console.log(`🔄 Closing SSE for ${oldSession}... before switching to ${activeSessionId.slice(0, 8)}...`);
+      isCleaningUpRef.current = true;
+      eventSourceRef.current.close();
+      eventSourceRef.current = null;
+      isCleaningUpRef.current = false;
+    }
 
-    eventSource.onopen = () => {
-      console.log('✅ SSE connection established');
-    };
-
-    // Handle all incoming messages
-    eventSource.onmessage = (e) => {
-      console.log('📨 SSE received:', e.data);
-      try {
-        const data = JSON.parse(e.data);
+    // Small delay to ensure old connection is fully closed
+    const timeoutId = setTimeout(() => {
+      // Double-check we're still on the same session (might have switched again)
+      if (activeSessionId !== sseSessionRef.current) {
+        console.log(`🔌 Opening new SSE connection to session: ${activeSessionId.slice(0, 8)}...`);
         
-        // Handle different event types
-        if (data.type === 'connected') {
-          console.log('🔗 Connected to progress stream');
-        } else if (data.type === 'agent_assigned') {
-          // 🤖 Multi-Agent: Display which specialist agent is handling the task
-          const agentMessage = `${data.emoji} **${data.agent}** assigned\n_${data.description}_`;
-          setCurrentStep(agentMessage);
-          console.log(`🤖 Agent assigned: ${data.agent}`);
-        } else if (data.type === 'tool_executing') {
-          setCurrentStep(data.message || `🔧 Executing: ${data.tool}`);
-        } else if (data.type === 'tool_completed') {
-          setCurrentStep(data.message || `✓ Completed: ${data.tool}`);
-        } else if (data.type === 'tool_failed') {
-          setCurrentStep(data.message || `❌ Failed: ${data.tool}`);
-        } else if (data.type === 'token_update') {
-          // Optional: Display token budget updates
-          console.log('💰 Token update:', data.message);
-        } else if (data.type === 'analysis_complete') {
-          console.log('✅ Analysis completed', data.result);
-          setIsTyping(false);
-          
-          // Create a unique key based on actual workflow content to prevent duplicates
-          // Use the last tool executed + summary hash for uniqueness
-          const lastTool = data.result?.workflow_history?.[data.result.workflow_history.length - 1]?.tool || 'unknown';
-          const summarySnippet = (data.result?.summary || '').substring(0, 50);
-          const resultKey = `${activeSessionId}-${lastTool}-${summarySnippet}`;
-          
-          // Only process if we haven't seen this exact result before
-          if (!processedAnalysisRef.current.has(resultKey)) {
-            console.log('🆕 New analysis result, processing...', resultKey);
-            processedAnalysisRef.current.add(resultKey);
+        const API_URL = window.location.origin;
+        const eventSource = new EventSource(`${API_URL}/api/progress/stream/${activeSessionId}`);
+        sseSessionRef.current = activeSessionId;
+        eventSourceRef.current = eventSource;
+
+        eventSource.onopen = () => {
+          console.log('✅ SSE connection established');
+        };
+
+        // Handle all incoming messages
+        eventSource.onmessage = (e) => {
+          console.log('📨 SSE received:', e.data);
+          try {
+            const data = JSON.parse(e.data);
             
-            // Process the final result with the current session ID
-            if (data.result) {
-              processAnalysisResult(data.result, activeSessionId);
+            // Handle different event types
+            if (data.type === 'connected') {
+              console.log('🔗 Connected to progress stream');
+            } else if (data.type === 'agent_assigned') {
+              // 🤖 Multi-Agent: Display which specialist agent is handling the task
+              const agentMessage = `${data.emoji} **${data.agent}** assigned\n_${data.description}_`;
+              setCurrentStep(agentMessage);
+              console.log(`🤖 Agent assigned: ${data.agent}`);
+            } else if (data.type === 'tool_executing') {
+              setCurrentStep(data.message || `🔧 Executing: ${data.tool}`);
+            } else if (data.type === 'tool_completed') {
+              setCurrentStep(data.message || `✓ Completed: ${data.tool}`);
+            } else if (data.type === 'tool_failed') {
+              setCurrentStep(data.message || `❌ Failed: ${data.tool}`);
+            } else if (data.type === 'token_update') {
+              // Optional: Display token budget updates
+              console.log('💰 Token update:', data.message);
+            } else if (data.type === 'analysis_complete') {
+              console.log('✅ Analysis completed', data.result);
+              setIsTyping(false);
+              
+              // Create a unique key based on actual workflow content to prevent duplicates
+              // Use the last tool executed + summary hash for uniqueness
+              const lastTool = data.result?.workflow_history?.[data.result.workflow_history.length - 1]?.tool || 'unknown';
+              const summarySnippet = (data.result?.summary || '').substring(0, 50);
+              const resultKey = `${activeSessionId}-${lastTool}-${summarySnippet}`;
+              
+              // Only process if we haven't seen this exact result before
+              if (!processedAnalysisRef.current.has(resultKey)) {
+                console.log('🆕 New analysis result, processing...', resultKey);
+                processedAnalysisRef.current.add(resultKey);
+                
+                // Process the final result with the current session ID
+                if (data.result) {
+                  processAnalysisResult(data.result, activeSessionId);
+                }
+              } else {
+                console.log('⏭️ Skipping duplicate analysis result', resultKey);
+              }
             }
-          } else {
-            console.log('⏭️ Skipping duplicate analysis result', resultKey);
+          } catch (err) {
+            console.error('❌ Error parsing SSE event:', err, e.data);
           }
-        }
-      } catch (err) {
-        console.error('❌ Error parsing SSE event:', err, e.data);
+        };
+
+        // Handle errors - DON'T immediately close, just log
+        eventSource.onerror = (err) => {
+          console.error('❌ SSE connection error/closed:', err);
+        };
       }
-    };
-
-    // Handle errors - DON'T immediately close, just log
-    eventSource.onerror = (err) => {
-      console.error('❌ SSE connection error/closed:', err);
-      // Don't close here - let it reconnect naturally on next request
-      // The readyState check above will handle creating a new connection if needed
-    };
-
-    eventSourceRef.current = eventSource;
+    }, 50); // 50ms delay to ensure old connection closes
 
     // Cleanup on unmount or session change
     return () => {
-      if (eventSourceRef.current) {
-        console.log('🧹 Cleaning up SSE connection');
+      clearTimeout(timeoutId); // Clear timeout if component unmounts
+      if (eventSourceRef.current && !isCleaningUpRef.current) {
+        console.log('🧹 Cleaning up SSE connection on unmount/session change');
+        isCleaningUpRef.current = true;
         eventSourceRef.current.close();
         eventSourceRef.current = null;
         sseSessionRef.current = null;
+        isCleaningUpRef.current = false;
       }
     };
   }, [activeSessionId]);
