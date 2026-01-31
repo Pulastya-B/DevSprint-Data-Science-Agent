@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { HeroGeometric } from './components/HeroGeometric';
 import ProblemSolution from './components/ProblemSolution';
 import KeyCapabilities from './components/KeyCapabilities';
@@ -9,9 +9,31 @@ import Footer from './components/Footer';
 import { BackgroundPaths } from './components/BackgroundPaths';
 import { Logo } from './components/Logo';
 import { ChatInterface } from './components/ChatInterface';
+import { AuthPage } from './components/AuthPage';
+import { AuthProvider, useAuth } from './lib/AuthContext';
+import { User, LogOut } from 'lucide-react';
 
-const App: React.FC = () => {
-  const [view, setView] = useState<'landing' | 'chat'>('landing');
+// Inner app component that uses auth context
+const AppContent: React.FC = () => {
+  const [view, setView] = useState<'landing' | 'chat' | 'auth'>('landing');
+  const { user, isAuthenticated, loading, signOut } = useAuth();
+  const [showUserMenu, setShowUserMenu] = useState(false);
+
+  // Handle launch console - redirect to auth if not logged in
+  const handleLaunchConsole = () => {
+    // Allow both authenticated and guest users
+    setView('chat');
+  };
+
+  // Show auth page
+  if (view === 'auth') {
+    return (
+      <AuthPage 
+        onSuccess={() => setView('chat')} 
+        onSkip={() => setView('chat')}
+      />
+    );
+  }
 
   if (view === 'chat') {
     return <ChatInterface onBack={() => setView('landing')} />;
@@ -28,16 +50,59 @@ const App: React.FC = () => {
           </span>
         </div>
         
-        <button 
-          onClick={() => setView('chat')}
-          className="px-5 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-sm font-medium transition-all"
-        >
-          Launch Console
-        </button>
+        <div className="flex items-center gap-3">
+          {/* User menu */}
+          {isAuthenticated ? (
+            <div className="relative">
+              <button
+                onClick={() => setShowUserMenu(!showUserMenu)}
+                className="flex items-center gap-2 px-3 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-sm transition-all"
+              >
+                <User className="w-4 h-4" />
+                <span className="hidden sm:block max-w-[120px] truncate">
+                  {user?.email?.split('@')[0]}
+                </span>
+              </button>
+              
+              {showUserMenu && (
+                <div className="absolute right-0 mt-2 w-48 bg-[#1a1a1a] border border-white/10 rounded-lg shadow-xl py-1">
+                  <div className="px-4 py-2 border-b border-white/10">
+                    <p className="text-xs text-white/50">Signed in as</p>
+                    <p className="text-sm text-white truncate">{user?.email}</p>
+                  </div>
+                  <button
+                    onClick={async () => {
+                      await signOut();
+                      setShowUserMenu(false);
+                    }}
+                    className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-400 hover:bg-white/5 transition-colors"
+                  >
+                    <LogOut className="w-4 h-4" />
+                    Sign Out
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <button
+              onClick={() => setView('auth')}
+              className="px-4 py-2 text-sm text-white/70 hover:text-white transition-colors"
+            >
+              Sign In
+            </button>
+          )}
+          
+          <button 
+            onClick={handleLaunchConsole}
+            className="px-5 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-sm font-medium transition-all"
+          >
+            Launch Console
+          </button>
+        </div>
       </nav>
 
       <main>
-        <HeroGeometric onChatClick={() => setView('chat')} />
+        <HeroGeometric onChatClick={handleLaunchConsole} />
         <TechStack />
         <ProblemSolution />
         <KeyCapabilities />
@@ -53,6 +118,15 @@ const App: React.FC = () => {
 
       <Footer />
     </div>
+  );
+};
+
+// Wrap with AuthProvider
+const App: React.FC = () => {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   );
 };
 

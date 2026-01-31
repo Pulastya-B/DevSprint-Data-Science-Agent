@@ -1,10 +1,12 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Send, Plus, Search, Settings, MoreHorizontal, User, Bot, ArrowLeft, Paperclip, Sparkles, Trash2, X, Upload, Package, FileText, BarChart3, ChevronRight } from 'lucide-react';
+import { Send, Plus, Search, Settings, MoreHorizontal, User, Bot, ArrowLeft, Paperclip, Sparkles, Trash2, X, Upload, Package, FileText, BarChart3, ChevronRight, LogOut } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { Logo } from './Logo';
 import ReactMarkdown from 'react-markdown';
+import { useAuth } from '../lib/AuthContext';
+import { trackQuery, incrementSessionQueries } from '../lib/supabase';
 
 interface Message {
   id: string;
@@ -105,6 +107,9 @@ export const ChatInterface: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
   const processedAnalysisRef = useRef<Set<string>>(new Set()); // Track processed analysis_complete events
+  
+  // Auth context for user tracking
+  const { user, isAuthenticated, dbSessionId, signOut } = useAuth();
   
   const activeSession = sessions.find(s => s.id === activeSessionId) || sessions[0];
 
@@ -409,10 +414,29 @@ export const ChatInterface: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         formData.append('use_cache', 'false');  // Disabled to show multi-agent execution
         formData.append('max_iterations', '20');
         
+        // Track query start time for analytics
+        const queryStartTime = Date.now();
+        
         response = await fetch(`${API_URL}/run-async`, {
           method: 'POST',
           body: formData
         });
+        
+        // 📊 Track analytics (non-blocking)
+        if (user || dbSessionId) {
+          trackQuery({
+            user_id: user?.id || 'anonymous',
+            user_email: user?.email,
+            session_id: sessionKey,
+            query: input || 'File analysis',
+            success: response.ok,
+            error_message: response.ok ? undefined : `HTTP ${response.status}`
+          }).catch(console.error);
+          
+          if (dbSessionId) {
+            incrementSessionQueries(dbSessionId).catch(console.error);
+          }
+        }
         
         setUploadedFile(null);
       } else {
@@ -709,17 +733,46 @@ export const ChatInterface: React.FC<{ onBack: () => void }> = ({ onBack }) => {
             ))}
           </div>
 
-          <div className="mt-auto pt-4 border-t border-white/5 flex items-center justify-between px-2">
-            <button onClick={onBack} className="p-2 hover:bg-white/5 rounded-lg transition-colors text-white/40 hover:text-white">
-              <ArrowLeft className="w-5 h-5" />
-            </button>
-            <div className="flex gap-2">
-              <button className="p-2 hover:bg-white/5 rounded-lg transition-colors text-white/40 hover:text-white">
-                <Settings className="w-5 h-5" />
+          <div className="mt-auto pt-4 border-t border-white/5">
+            {/* User info section */}
+            {isAuthenticated && user ? (
+              <div className="flex items-center gap-3 px-2 py-2 mb-2">
+                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-xs font-bold">
+                  {user.email?.[0]?.toUpperCase() || 'U'}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-white truncate">{user.email?.split('@')[0]}</p>
+                  <p className="text-xs text-white/40 truncate">{user.email}</p>
+                </div>
+                <button 
+                  onClick={() => signOut()}
+                  className="p-2 hover:bg-white/5 rounded-lg transition-colors text-white/40 hover:text-red-400"
+                  title="Sign Out"
+                >
+                  <LogOut className="w-4 h-4" />
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-3 px-2 py-2 mb-2">
+                <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center">
+                  <User className="w-4 h-4 text-white/50" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm text-white/50">Guest User</p>
+                  <p className="text-xs text-white/30">Sign in to save history</p>
+                </div>
+              </div>
+            )}
+            
+            <div className="flex items-center justify-between px-2">
+              <button onClick={onBack} className="p-2 hover:bg-white/5 rounded-lg transition-colors text-white/40 hover:text-white">
+                <ArrowLeft className="w-5 h-5" />
               </button>
-              <button className="p-2 hover:bg-white/5 rounded-lg transition-colors text-white/40 hover:text-white">
-                <User className="w-5 h-5" />
-              </button>
+              <div className="flex gap-2">
+                <button className="p-2 hover:bg-white/5 rounded-lg transition-colors text-white/40 hover:text-white">
+                  <Settings className="w-5 h-5" />
+                </button>
+              </div>
             </div>
           </div>
         </div>
