@@ -224,6 +224,22 @@ export const ChatInterface: React.FC<{ onBack: () => void }> = ({ onBack }) => {
             } else if (data.type === 'token_update') {
               // Optional: Display token budget updates
               console.log('💰 Token update:', data.message);
+            } else if (data.type === 'analysis_failed') {
+              console.log('❌ Analysis failed', data);
+              setIsTyping(false);
+              
+              // Show error message to user
+              setMessages((prev) => [
+                ...prev,
+                {
+                  id: Date.now().toString(),
+                  role: 'assistant',
+                  content: data.message || data.error || '❌ Analysis failed',
+                  session_id: activeSessionId,
+                },
+              ]);
+              
+              setCurrentStep('');
             } else if (data.type === 'analysis_complete') {
               console.log('✅ Analysis completed', data.result);
               setIsTyping(false);

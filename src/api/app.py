@@ -474,13 +474,22 @@ def run_analysis_background(file_path: str, task_description: str, target_col: O
                 
                 logger.info(f"[BACKGROUND] Analysis completed for session {session_id[:8]}...")
                 
-                # Send completion event
-                progress_manager.emit(session_id, {
-                    "type": "analysis_complete",
-                    "status": result.get("status"),
-                    "message": "✅ Analysis completed successfully!",
-                    "result": result
-                })
+                # Send appropriate completion event based on status
+                if result.get("status") == "error":
+                    progress_manager.emit(session_id, {
+                        "type": "analysis_failed",
+                        "status": "error",
+                        "message": result.get("summary", "❌ Analysis failed"),
+                        "error": result.get("error", "Analysis error"),
+                        "result": result
+                    })
+                else:
+                    progress_manager.emit(session_id, {
+                        "type": "analysis_complete",
+                        "status": result.get("status"),
+                        "message": "✅ Analysis completed successfully!",
+                        "result": result
+                    })
                 
             except Exception as e:
                 logger.error(f"[BACKGROUND] Analysis failed for session {session_id[:8]}...: {e}")
@@ -667,12 +676,20 @@ async def run_analysis(
             
             logger.info(f"Follow-up analysis completed: {result.get('status')}")
             
-            # Send completion event via SSE using actual session UUID
-            progress_manager.emit(actual_session_id, {
-                "type": "analysis_complete",
-                "status": result.get("status"),
-                "message": "✅ Analysis completed successfully!"
-            })
+            # Send appropriate completion event based on status
+            if result.get("status") == "error":
+                progress_manager.emit(actual_session_id, {
+                    "type": "analysis_failed",
+                    "status": "error",
+                    "message": result.get("summary", "❌ Analysis failed"),
+                    "error": result.get("error", "No dataset available")
+                })
+            else:
+                progress_manager.emit(actual_session_id, {
+                    "type": "analysis_complete",
+                    "status": result.get("status"),
+                    "message": "✅ Analysis completed successfully!"
+                })
             
             # Make result JSON serializable
             def make_json_serializable(obj):
@@ -760,12 +777,20 @@ async def run_analysis(
         
         logger.info(f"Analysis completed: {result.get('status')}")
         
-        # Send completion event via SSE using actual session UUID
-        progress_manager.emit(actual_session_id, {
-            "type": "analysis_complete",
-            "status": result.get("status"),
-            "message": "✅ Analysis completed successfully!"
-        })
+        # Send appropriate completion event based on status
+        if result.get("status") == "error":
+            progress_manager.emit(actual_session_id, {
+                "type": "analysis_failed",
+                "status": "error",
+                "message": result.get("summary", "❌ Analysis failed"),
+                "error": result.get("error", "Analysis error")
+            })
+        else:
+            progress_manager.emit(actual_session_id, {
+                "type": "analysis_complete",
+                "status": result.get("status"),
+                "message": "✅ Analysis completed successfully!"
+            })
         
         # Filter out non-JSON-serializable objects (like matplotlib/plotly Figures)
         def make_json_serializable(obj):
