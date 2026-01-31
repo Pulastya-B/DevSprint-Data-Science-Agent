@@ -155,13 +155,17 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onSuccess, onSkip }) => {
 
     // Check if user is already authenticated (OAuth flow)
     const isOAuthUser = !!user;
+    console.log('handleSignUp called, isOAuthUser:', isOAuthUser, 'user:', user);
     
     try {
       let userId: string;
+      let userEmail: string;
       
       if (isOAuthUser) {
         // User already authenticated via OAuth, just save profile
         userId = user.id;
+        userEmail = user.email || formData.email;
+        console.log('OAuth user detected, saving profile only. userId:', userId);
       } else {
         // Email/password signup
         if (formData.password !== formData.confirmPassword) {
@@ -170,15 +174,17 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onSuccess, onSkip }) => {
           return;
         }
 
+        console.log('Email/password signup, creating new account...');
         const { error } = await signUp(formData.email, formData.password);
         if (error) {
+          console.error('Signup error:', error);
           setError(error.message);
           setIsSubmitting(false);
           return;
         }
         
         // Wait for Supabase to create the auth user
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        await new Promise(resolve => setTimeout(resolve, 1500));
         
         // Get the user ID from auth session
         const { data: { session } } = await supabase.auth.getSession();
@@ -188,13 +194,15 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onSuccess, onSkip }) => {
           return;
         }
         userId = session.user.id;
+        userEmail = session.user.email || formData.email;
+        console.log('New account created, userId:', userId);
       }
       
       // Save user profile data to database
       const profileData = {
         user_id: userId,
         name: formData.name,
-        email: formData.email,
+        email: userEmail,
         primary_goal: formData.primaryGoal,
         target_outcome: formData.targetOutcome,
         data_types: formData.dataTypes,
@@ -204,9 +212,13 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onSuccess, onSkip }) => {
         onboarding_completed: true
       };
       
+      console.log('Saving profile data:', profileData);
       const savedProfile = await saveUserProfile(profileData);
       if (!savedProfile) {
         console.warn('Failed to save profile data, but auth succeeded');
+        setError('Profile saved with warnings. You can continue.');
+      } else {
+        console.log('Profile saved successfully:', savedProfile);
       }
       
       setSuccess(isOAuthUser ? 'Profile completed! Redirecting...' : 'Account created successfully! Redirecting...');
