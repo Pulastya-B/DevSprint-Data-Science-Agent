@@ -33,16 +33,20 @@ interface ChatSession {
   updatedAt: Date;
 }
 
+// Generate a unique local session ID (not a backend UUID)
+const generateLocalSessionId = () => `local_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+
+// Initial session ID - generated once when module loads
+const INITIAL_SESSION_ID = generateLocalSessionId();
+
 export const ChatInterface: React.FC<{ onBack: () => void }> = ({ onBack }) => {
-  const [sessions, setSessions] = useState<ChatSession[]>([
-    {
-      id: '1',
-      title: 'ML Model Analysis',
-      messages: [],
-      updatedAt: new Date(),
-    }
-  ]);
-  const [activeSessionId, setActiveSessionId] = useState<string>('1');  // Start with default session, update to UUID after first API call
+  const [sessions, setSessions] = useState<ChatSession[]>([{
+    id: INITIAL_SESSION_ID,
+    title: 'New Chat',
+    messages: [],
+    updatedAt: new Date(),
+  }]);
+  const [activeSessionId, setActiveSessionId] = useState<string>(INITIAL_SESSION_ID);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [currentStep, setCurrentStep] = useState<string>('');
@@ -63,41 +67,55 @@ export const ChatInterface: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     }
   }, [activeSession.messages, isTyping]);
 
-  // Clear uploaded file when switching sessions
+  // Clear state when switching sessions
   useEffect(() => {
     setUploadedFile(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
+    // Clear processed results tracker for new session
+    // (keeps results from old session from blocking new ones)
+    processedAnalysisRef.current.clear();
   }, [activeSessionId]);
+
+  // Track which session the current SSE connection is for
+  const sseSessionRef = useRef<string | null>(null);
 
   // Connect to SSE when we receive a valid backend UUID
   useEffect(() => {
-    // Only connect if we have a backend UUID (contains hyphens)
-    if (!activeSessionId || !activeSessionId.includes('-')) {
+    // Only connect if we have a backend UUID (contains hyphens, not a local_ ID)
+    const isBackendUUID = activeSessionId && activeSessionId.includes('-') && !activeSessionId.startsWith('local_');
+    
+    if (!isBackendUUID) {
+      // No backend session yet - close any existing connection
+      if (eventSourceRef.current) {
+        console.log('🔌 Closing SSE - no backend session');
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
+        sseSessionRef.current = null;
+      }
       return;
     }
 
-    // Check if we need a new connection for this session
-    // Close old connection if it exists and belongs to a different session or is closed
-    if (eventSourceRef.current) {
-      const currentSource = eventSourceRef.current;
-      // If readyState is CLOSED (2), we need a new connection
-      // If it's CONNECTING (0) or OPEN (1) for the same session, reuse it
-      if (currentSource.readyState === 2) {
-        console.log('🔄 Existing connection closed, creating new one');
-        currentSource.close();
+    // Check if we're switching to a DIFFERENT session
+    if (sseSessionRef.current !== activeSessionId) {
+      // Close old connection if it exists (switching sessions)
+      if (eventSourceRef.current) {
+        console.log(`🔄 Switching SSE from ${sseSessionRef.current?.slice(0, 8)}... to ${activeSessionId.slice(0, 8)}...`);
+        eventSourceRef.current.close();
         eventSourceRef.current = null;
-      } else {
-        console.log('♻️ Reusing existing SSE connection');
-        return;
       }
+    } else if (eventSourceRef.current && eventSourceRef.current.readyState !== 2) {
+      // Same session and connection is still open - reuse it
+      console.log('♻️ Reusing existing SSE connection');
+      return;
     }
 
-    // Connect to SSE stream - will receive history + any new events
+    // Connect to SSE stream for this session
     const API_URL = window.location.origin;
-    console.log(`🔌 Connecting SSE to session: ${activeSessionId}`);
+    console.log(`🔌 Connecting SSE to session: ${activeSessionId.slice(0, 8)}...`);
     const eventSource = new EventSource(`${API_URL}/api/progress/stream/${activeSessionId}`);
+    sseSessionRef.current = activeSessionId;
 
     eventSource.onopen = () => {
       console.log('✅ SSE connection established');
@@ -169,6 +187,7 @@ export const ChatInterface: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         console.log('🧹 Cleaning up SSE connection');
         eventSourceRef.current.close();
         eventSourceRef.current = null;
+        sseSessionRef.current = null;
       }
     };
   }, [activeSessionId]);
@@ -287,31 +306,30 @@ export const ChatInterface: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       let response;
       const sessionKey = activeSessionId || 'default';
       
-      // Check if there's a recent file analysis in the conversation
-      const recentFileMessage = newMessages.slice(-5).find(m => m.file || m.content.includes('Uploaded:'));
-      const hasRecentFile = recentFileMessage && !uploadedFile;
+      // Detect if we have an active backend session (UUID format)
+      const hasBackendSession = sessionKey.includes('-') && sessionKey.length > 20;
       
-      if (uploadedFile || hasRecentFile) {
-        // Use /run endpoint for file analysis or follow-up questions about uploaded data
+      // Check if there's a recent file analysis in the conversation
+      const recentFileMessage = newMessages.find(m => m.file || m.content.includes('Uploaded:'));
+      const isFileAnalysis = uploadedFile || recentFileMessage;
+      
+      // 🔑 KEY CHANGE: Always use /run-async if:
+      // 1. User is uploading a file, OR
+      // 2. We have an active backend session (meaning we've done file analysis before)
+      if (uploadedFile || hasBackendSession) {
+        // Use /run-async endpoint for file analysis or follow-up questions
         const formData = new FormData();
         
         if (uploadedFile) {
           formData.append('file', uploadedFile);
           formData.append('task_description', input || 'Analyze this dataset and provide insights');
-          formData.append('session_id', sessionKey); // Add session_id for progress tracking
-        } else if (hasRecentFile) {
-          // For follow-up questions, extract the filename from recent context
-          const fileNameMatch = recentFileMessage?.content.match(/Uploaded: (.+)/);
-          const fileName = fileNameMatch ? fileNameMatch[1] : 'dataset.csv';
-          
-          // Send follow-up request as a new task description
+        } else {
+          // Follow-up query - send task description only, backend will use cached dataset
           formData.append('task_description', input);
-          formData.append('session_id', sessionKey); // Use same session key
-          
-          // Note: Backend needs to support session-based file context
-          // For now, just send the task which should work with session memory
+          console.log(`📤 Follow-up query for session ${sessionKey.slice(0, 8)}...`);
         }
         
+        formData.append('session_id', sessionKey);
         formData.append('use_cache', 'false');  // Disabled to show multi-agent execution
         formData.append('max_iterations', '20');
         
@@ -322,6 +340,7 @@ export const ChatInterface: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         
         setUploadedFile(null);
       } else {
+        // No file and no backend session - use simple chat endpoint
         response = await fetch(`${API_URL}/chat`, {
           method: 'POST',
           headers: {
@@ -519,7 +538,9 @@ export const ChatInterface: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   };
 
   const createNewChat = () => {
-    const newId = Date.now().toString();
+    // Generate a unique local ID for this chat session
+    // The backend will generate the real UUID when the first request is made
+    const newId = generateLocalSessionId();
     const newSession: ChatSession = {
       id: newId,
       title: 'New Chat',
@@ -533,6 +554,12 @@ export const ChatInterface: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     setUploadedFile(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
+    }
+    
+    // Close any existing SSE connection since this is a fresh chat
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
+      eventSourceRef.current = null;
     }
   };
 
