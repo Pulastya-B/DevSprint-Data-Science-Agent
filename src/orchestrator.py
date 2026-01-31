@@ -269,8 +269,9 @@ class DataScienceCopilot:
         max_context = provider_max_tokens.get(self.provider, 128000)
         self.token_manager = get_token_manager(model=self.model, max_tokens=max_context)
         
-        # ⚡ Initialize parallel executor
-        self.parallel_executor = get_parallel_executor()
+        # ⚡ Parallel executor DISABLED - running tools sequentially for stability
+        # self.parallel_executor = get_parallel_executor()
+        self.parallel_executor = None  # Disabled for scale optimization
         
         # 🧠 Initialize session memory
         self.use_session_memory = use_session_memory
@@ -3438,7 +3439,7 @@ You receive quality reports from EDA agent and deliver clean data to modeling ag
                         print(f"   These will run SEQUENTIALLY to prevent resource exhaustion")
                         print(f"   Heavy tools: {', '.join(heavy_tools)}")
                         # Fall through to sequential execution
-                    elif len(tool_executions) > 1 and len(heavy_tools) <= 1:
+                    elif len(tool_executions) > 1 and len(heavy_tools) <= 1 and self.parallel_executor is not None:
                         try:
                             results = asyncio.run(self.parallel_executor.execute_all(
                                 tool_executions=tool_executions,
