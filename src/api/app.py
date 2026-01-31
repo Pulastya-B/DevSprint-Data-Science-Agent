@@ -441,20 +441,30 @@ async def run_analysis_async(
     file: Optional[UploadFile] = File(None),
     task_description: str = Form(...),
     target_col: Optional[str] = Form(None),
+    session_id: Optional[str] = Form(None),  # Accept session_id from frontend for follow-ups
     use_cache: bool = Form(False),  # Disabled to show multi-agent in action
     max_iterations: int = Form(20)
 ) -> JSONResponse:
     """
     Start analysis in background and return session UUID immediately.
     Frontend can connect SSE with this UUID to receive real-time updates.
+    
+    For follow-up queries, frontend should send the same session_id to maintain context.
     """
     if agent is None:
         raise HTTPException(status_code=503, detail="Agent not initialized")
     
-    # 🆔 Generate unique session ID for this request
+    # 🆔 Session ID handling:
+    # - If frontend sends a valid UUID, REUSE it (follow-up query)
+    # - Otherwise generate a new one (first query)
     import uuid
-    session_id = str(uuid.uuid4())
-    logger.info(f"[ASYNC] Created session: {session_id[:8]}...")
+    if session_id and '-' in session_id and len(session_id) > 20:
+        # Valid UUID from frontend - this is a follow-up query
+        logger.info(f"[ASYNC] Reusing session: {session_id[:8]}... (follow-up)")
+    else:
+        # Generate new session for first query
+        session_id = str(uuid.uuid4())
+        logger.info(f"[ASYNC] Created new session: {session_id[:8]}...")
     
     # Handle file upload
     temp_file_path = None
@@ -468,15 +478,18 @@ async def run_analysis_async(
         
         logger.info(f"[ASYNC] File saved: {file.filename}")
     else:
-        # 🛡️ VALIDATION: Check if agent's current session has dataset
+        # 🛡️ VALIDATION: Check if this session has dataset cached
         has_dataset = False
         async with agent_cache_lock:
-            if agent and hasattr(agent, 'session') and agent.session and hasattr(agent.session, 'last_dataset') and agent.session.last_dataset:
-                has_dataset = True
-                logger.info(f"[ASYNC] Follow-up query using session data")
+            # Check session_states cache for this specific session_id
+            if session_id in session_states:
+                cached_session = session_states[session_id]
+                if hasattr(cached_session, 'last_dataset') and cached_session.last_dataset:
+                    has_dataset = True
+                    logger.info(f"[ASYNC] Follow-up query for session {session_id[:8]}... - using cached dataset")
         
         if not has_dataset:
-            logger.warning("[ASYNC] No file uploaded and no session dataset available")
+            logger.warning(f"[ASYNC] No file uploaded and no dataset for session {session_id[:8]}...")
             return JSONResponse(
                 content={
                     "success": False,
