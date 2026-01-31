@@ -578,7 +578,9 @@ export const ChatInterface: React.FC<{ onBack: () => void }> = ({ onBack }) => {
           assistantContent += `**Final Result:**\n${result.final_result || 'Analysis completed successfully'}`;
         }
       } else if (data.success && data.message) {
+        // /chat endpoint response
         assistantContent = data.message;
+        setIsTyping(false); // Stop thinking animation for /chat responses
       } else {
         throw new Error('Invalid response from API');
       }
