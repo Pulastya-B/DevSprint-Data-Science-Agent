@@ -206,3 +206,70 @@ export const getUniqueUsersCount = async (days: number = 7) => {
     return 0;
   }
 };
+
+// User profile management
+export interface UserProfile {
+  id?: string;
+  user_id: string;
+  name: string;
+  email: string;
+  primary_goal?: string;
+  target_outcome?: string;
+  data_types?: string[];
+  profession?: string;
+  experience?: string;
+  industry?: string;
+  onboarding_completed: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+// Create or update user profile (for signup form data)
+export const saveUserProfile = async (profile: Omit<UserProfile, 'id' | 'created_at' | 'updated_at'>) => {
+  try {
+    const { data, error } = await supabase
+      .from('user_profiles')
+      .upsert([{
+        ...profile,
+        updated_at: new Date().toISOString()
+      }], {
+        onConflict: 'user_id'
+      })
+      .select()
+      .single();
+    
+    if (error) {
+      console.error('Failed to save user profile:', error);
+      return null;
+    }
+    return data;
+  } catch (err) {
+    console.error('Profile save error:', err);
+    return null;
+  }
+};
+
+// Check if user has completed onboarding
+export const getUserProfile = async (userId: string) => {
+  try {
+    const { data, error } = await supabase
+      .from('user_profiles')
+      .select('*')
+      .eq('user_id', userId)
+      .single();
+    
+    if (error) {
+      // User not found is not an error (first time user)
+      if (error.code === 'PGRST116') {
+        return null;
+      }
+      console.error('Failed to get user profile:', error);
+      return null;
+    }
+    return data as UserProfile;
+  } catch (err) {
+    console.error('Profile fetch error:', err);
+    return null;
+  }
+};
+

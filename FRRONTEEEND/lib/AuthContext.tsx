@@ -1,12 +1,13 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, Session, AuthChangeEvent } from '@supabase/supabase-js';
-import { supabase, startUserSession, endUserSession, isSupabaseConfigured } from './supabase';
+import { supabase, startUserSession, endUserSession, isSupabaseConfigured, getUserProfile } from './supabase';
 
 interface AuthContextType {
   user: User | null;
   session: Session | null;
   dbSessionId: string | null;
   loading: boolean;
+  needsOnboarding: boolean;
   signIn: (email: string, password: string) => Promise<{ error: any }>;
   signUp: (email: string, password: string) => Promise<{ error: any }>;
   signInWithGoogle: () => Promise<{ error: any }>;
@@ -23,6 +24,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [session, setSession] = useState<Session | null>(null);
   const [dbSessionId, setDbSessionId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [needsOnboarding, setNeedsOnboarding] = useState(false);
   const configured = isSupabaseConfigured();
 
   useEffect(() => {
@@ -44,6 +46,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (dbSession) {
             setDbSessionId(dbSession.id);
           }
+        
+        // Check if user needs onboarding
+        getUserProfile(session.user.id).then((profile) => {
+          setNeedsOnboarding(!profile || !profile.onboarding_completed);
+        });
         });
       }
     }).catch((err) => {
@@ -64,12 +71,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (dbSession) {
             setDbSessionId(dbSession.id);
           }
+          
+          // Check if user needs onboarding
+          const profile = await getUserProfile(session.user.id);
+          setNeedsOnboarding(!profile || !profile.onboarding_completed);
         } else if (event === 'SIGNED_OUT') {
           // End tracking session
           if (dbSessionId) {
             await endUserSession(dbSessionId);
             setDbSessionId(null);
           }
+          setNeedsOnboarding(false);
         }
       }
     );
@@ -115,11 +127,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const signOut = async () => {
-    if (dbSessionId) {
-      await endUserSession(dbSessionId);
-      setDbSessionId(null);
+    try {
+      if (dbSessionId) {
+        await endUserSession(dbSessionId);
+        setDbSessionId(null);
+      }
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        console.error('Sign out error:', error);
+        throw error;
+      }
+    } catch (error) {
+      console.error('Sign out failed:', error);
+      throw error;
     }
-    await supabase.auth.signOut();
   };
 
   return (
@@ -129,6 +150,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         session,
         dbSessionId,
         loading,
+        needsOnboarding,
         signIn,
         signUp,
         signInWithGoogle,

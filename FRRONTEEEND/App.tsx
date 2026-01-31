@@ -16,8 +16,16 @@ import { User, LogOut, Loader2 } from 'lucide-react';
 // Inner app component that uses auth context
 const AppContent: React.FC = () => {
   const [view, setView] = useState<'landing' | 'chat' | 'auth'>('landing');
-  const { user, isAuthenticated, loading, signOut, isConfigured } = useAuth();
+  const { user, isAuthenticated, loading, signOut, isConfigured, needsOnboarding } = useAuth();
   const [showUserMenu, setShowUserMenu] = useState(false);
+
+  // If user is authenticated but needs onboarding, show auth page
+  React.useEffect(() => {
+    if (isAuthenticated && needsOnboarding && view !== 'auth') {
+      console.log('User needs onboarding, showing form...');
+      setView('auth');
+    }
+  }, [isAuthenticated, needsOnboarding, view]);
 
   // Handle launch console - redirect to auth if not logged in
   const handleLaunchConsole = () => {
@@ -91,8 +99,13 @@ const AppContent: React.FC = () => {
                   </div>
                   <button
                     onClick={async () => {
-                      await signOut();
-                      setShowUserMenu(false);
+                      try {
+                        await signOut();
+                        setShowUserMenu(false);
+                        setView('landing');
+                      } catch (error) {
+                        console.error('Sign out failed:', error);
+                      }
                     }}
                     className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-400 hover:bg-white/5 transition-colors"
                   >

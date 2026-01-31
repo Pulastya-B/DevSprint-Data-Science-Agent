@@ -26,6 +26,8 @@ import {
 import { cn } from "../lib/utils";
 import { useAuth } from "../lib/AuthContext";
 import { Logo } from "./Logo";
+import { saveUserProfile } from "../lib/supabase";
+import { supabase } from "../lib/supabase";
 
 const steps = [
   { id: "personal", title: "Personal Info" },
@@ -63,7 +65,7 @@ interface AuthPageProps {
 }
 
 export const AuthPage: React.FC<AuthPageProps> = ({ onSuccess, onSkip }) => {
-  const { signIn, signUp, signInWithGoogle, signInWithGithub, isConfigured } = useAuth();
+  const { signIn, signUp, signInWithGoogle, signInWithGithub, isConfigured, user } = useAuth();
   const [mode, setMode] = useState<'signin' | 'signup'>('signin');
   const [currentStep, setCurrentStep] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -83,6 +85,18 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onSuccess, onSkip }) => {
     experience: "",
     industry: "",
   });
+
+  // If user is already authenticated (OAuth), pre-fill email and switch to signup mode for onboarding
+  React.useEffect(() => {
+    if (user && user.email) {
+      setFormData(prev => ({
+        ...prev,
+        email: user.email || '',
+        name: user.user_metadata?.full_name || user.user_metadata?.name || ''
+      }));
+      setMode('signup');
+    }
+  }, [user]);
 
   const updateFormData = (field: keyof FormData, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -139,22 +153,66 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onSuccess, onSkip }) => {
     setIsSubmitting(true);
     setError(null);
 
-    if (formData.password !== formData.confirmPassword) {
-      setError("Passwords don't match");
-      setIsSubmitting(false);
-      return;
-    }
-
+    // Check if user is already authenticated (OAuth flow)
+    const isOAuthUser = !!user;
+    
     try {
-      const { error } = await signUp(formData.email, formData.password);
-      if (error) {
-        setError(error.message);
+      let userId: string;
+      
+      if (isOAuthUser) {
+        // User already authenticated via OAuth, just save profile
+        userId = user.id;
       } else {
-        setSuccess('Account created! Check your email to confirm your account.');
-        setTimeout(() => {
-          onSuccess?.();
-        }, 2000);
+        // Email/password signup
+        if (formData.password !== formData.confirmPassword) {
+          setError("Passwords don't match");
+          setIsSubmitting(false);
+          return;
+        }
+
+        const { error } = await signUp(formData.email, formData.password);
+        if (error) {
+          setError(error.message);
+          setIsSubmitting(false);
+          return;
+        }
+        
+        // Wait for Supabase to create the auth user
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        // Get the user ID from auth session
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.user) {
+          setError('Failed to get user session. Please sign in to continue.');
+          setIsSubmitting(false);
+          return;
+        }
+        userId = session.user.id;
       }
+      
+      // Save user profile data to database
+      const profileData = {
+        user_id: userId,
+        name: formData.name,
+        email: formData.email,
+        primary_goal: formData.primaryGoal,
+        target_outcome: formData.targetOutcome,
+        data_types: formData.dataTypes,
+        profession: formData.profession,
+        experience: formData.experience,
+        industry: formData.industry,
+        onboarding_completed: true
+      };
+      
+      const savedProfile = await saveUserProfile(profileData);
+      if (!savedProfile) {
+        console.warn('Failed to save profile data, but auth succeeded');
+      }
+      
+      setSuccess(isOAuthUser ? 'Profile completed! Redirecting...' : 'Account created successfully! Redirecting...');
+      setTimeout(() => {
+        onSuccess?.();
+      }, 1500);
     } catch (err: any) {
       if (err.message?.includes('Failed to fetch')) {
         setError('Unable to connect to authentication server. Please try again later.');
@@ -192,8 +250,15 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onSuccess, onSkip }) => {
   };
 
   const isStepValid = () => {
+    // For OAuth users (already authenticated), skip password validation
+    const isOAuthUser = !!user;
+    
     switch (currentStep) {
       case 0:
+        if (isOAuthUser) {
+          // OAuth users don't need password fields
+          return formData.name.trim() !== "" && formData.email.trim() !== "";
+        }
         return formData.name.trim() !== "" && formData.email.trim() !== "" && 
                formData.password.length >= 6 && formData.password === formData.confirmPassword;
       case 1:
@@ -481,57 +546,66 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onSuccess, onSkip }) => {
                             />
                           </div>
                         </motion.div>
-                        <motion.div variants={fadeInUp} className="space-y-2">
-                          <Label htmlFor="signup-password" className="text-white/70">Password</Label>
-                          <div className="relative">
-                            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
-                            <Input
-                              id="signup-password"
-                              type={showPassword ? "text" : "password"}
-                              placeholder="••••••••"
-                              value={formData.password}
-                              onChange={(e) => updateFormData("password", e.target.value)}
-                              className="pl-10 pr-10 bg-white/5 border-white/10 text-white placeholder:text-white/30 focus:border-indigo-500/50"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => setShowPassword(!showPassword)}
-                              className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/50"
-                            >
-                              {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                            </button>
-                          </div>
-                          <p className="text-xs text-white/40">Minimum 6 characters</p>
-                        </motion.div>
-                        <motion.div variants={fadeInUp} className="space-y-2">
-                          <Label htmlFor="confirm-password" className="text-white/70">Confirm Password</Label>
-                          <div className="relative">
-                            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
-                            <Input
-                              id="confirm-password"
-                              type={showPassword ? "text" : "password"}
-                              placeholder="••••••••"
-                              value={formData.confirmPassword}
-                              onChange={(e) => updateFormData("confirmPassword", e.target.value)}
-                              className={cn(
-                                "pl-10 bg-white/5 border-white/10 text-white placeholder:text-white/30 focus:border-indigo-500/50",
-                                formData.confirmPassword && formData.password !== formData.confirmPassword && "border-red-500/50"
+                        
+                        {/* Only show password fields for email/password signup (not OAuth) */}
+                        {!user && (
+                          <>
+                            <motion.div variants={fadeInUp} className="space-y-2">
+                              <Label htmlFor="signup-password" className="text-white/70">Password</Label>
+                              <div className="relative">
+                                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
+                                <Input
+                                  id="signup-password"
+                                  type={showPassword ? "text" : "password"}
+                                  placeholder="••••••••"
+                                  value={formData.password}
+                                  onChange={(e) => updateFormData("password", e.target.value)}
+                                  className="pl-10 pr-10 bg-white/5 border-white/10 text-white placeholder:text-white/30 focus:border-indigo-500/50"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => setShowPassword(!showPassword)}
+                                  className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/50"
+                                >
+                                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                </button>
+                              </div>
+                              <p className="text-xs text-white/40">Minimum 6 characters</p>
+                            </motion.div>
+                            <motion.div variants={fadeInUp} className="space-y-2">
+                              <Label htmlFor="confirm-password" className="text-white/70">Confirm Password</Label>
+                              <div className="relative">
+                                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
+                                <Input
+                                  id="confirm-password"
+                                  type={showPassword ? "text" : "password"}
+                                  placeholder="••••••••"
+                                  value={formData.confirmPassword}
+                                  onChange={(e) => updateFormData("confirmPassword", e.target.value)}
+                                  className={cn(
+                                    "pl-10 bg-white/5 border-white/10 text-white placeholder:text-white/30 focus:border-indigo-500/50",
+                                    formData.confirmPassword && formData.password !== formData.confirmPassword && "border-red-500/50"
+                                  )}
+                                />
+                              </div>
+                              {formData.confirmPassword && formData.password !== formData.confirmPassword && (
+                                <p className="text-xs text-red-400">Passwords don't match</p>
                               )}
-                            />
-                          </div>
-                          {formData.confirmPassword && formData.password !== formData.confirmPassword && (
-                            <p className="text-xs text-red-400">Passwords don't match</p>
-                          )}
-                        </motion.div>
+                            </motion.div>
+                          </>
+                        )}
 
-                        <div className="relative my-4">
-                          <div className="absolute inset-0 flex items-center">
-                            <div className="w-full border-t border-white/10"></div>
-                          </div>
-                          <div className="relative flex justify-center text-sm">
-                            <span className="px-4 bg-[#0a0a0a] text-white/40">or sign up with</span>
-                          </div>
-                        </div>
+                        {/* Only show OAuth buttons for non-authenticated users */}
+                        {!user && (
+                          <>
+                            <div className="relative my-4">
+                              <div className="absolute inset-0 flex items-center">
+                                <div className="w-full border-t border-white/10"></div>
+                              </div>
+                              <div className="relative flex justify-center text-sm">
+                                <span className="px-4 bg-[#0a0a0a] text-white/40">or sign up with</span>
+                              </div>
+                            </div>
 
                         <div className="flex gap-3">
                           <Button
@@ -560,6 +634,8 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onSuccess, onSkip }) => {
                             GitHub
                           </Button>
                         </div>
+                          </>
+                        )}
                       </CardContent>
                     </>
                   )}
