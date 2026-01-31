@@ -1,3 +1,15 @@
+---
+title: Data Science Agent
+emoji: 🤖
+colorFrom: blue
+colorTo: purple
+sdk: docker
+python_version: "3.12"
+app_file: src/api/app.py
+pinned: false
+license: mit
+---
+
 # Data Science Agent 🤖
 
 An intelligent **multi-agent AI system** for automated end-to-end data science workflows. Upload any dataset and watch the agent autonomously profile, clean, engineer features, train models, and generate insights—all through natural language.
