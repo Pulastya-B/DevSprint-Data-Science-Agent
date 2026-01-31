@@ -1,16 +1,49 @@
 import { createClient } from '@supabase/supabase-js';
 
-// Supabase configuration - these will be loaded from environment variables
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+// Supabase configuration
+// For HuggingFace Spaces: secrets are injected at runtime via window.__SUPABASE_CONFIG__
+// For local dev: use import.meta.env (Vite build-time variables)
+declare global {
+  interface Window {
+    __SUPABASE_CONFIG__?: {
+      url: string;
+      anonKey: string;
+    };
+  }
+}
+
+// Try to get config from runtime injection first (HuggingFace), then fall back to Vite env vars
+const getSupabaseConfig = () => {
+  // Check for runtime config (injected by server)
+  if (typeof window !== 'undefined' && window.__SUPABASE_CONFIG__) {
+    return {
+      url: window.__SUPABASE_CONFIG__.url,
+      anonKey: window.__SUPABASE_CONFIG__.anonKey
+    };
+  }
+  
+  // Fall back to Vite build-time env vars
+  const url = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SUPABASE_URL) || '';
+  const anonKey = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SUPABASE_ANON_KEY) || '';
+  
+  return { url, anonKey };
+};
+
+const config = getSupabaseConfig();
+const supabaseUrl = config.url;
+const supabaseAnonKey = config.anonKey;
 
 // Check if Supabase is configured
 export const isSupabaseConfigured = () => {
-  return !!(supabaseUrl && supabaseAnonKey && supabaseUrl.includes('supabase'));
+  const cfg = getSupabaseConfig();
+  return !!(cfg.url && cfg.anonKey && cfg.url.includes('supabase') && !cfg.url.includes('placeholder'));
 };
 
-// Create Supabase client
-export const supabase = createClient(supabaseUrl || 'https://placeholder.supabase.co', supabaseAnonKey || 'placeholder');
+// Create Supabase client (use placeholder if not configured to avoid errors)
+export const supabase = createClient(
+  supabaseUrl || 'https://placeholder.supabase.co', 
+  supabaseAnonKey || 'placeholder-key'
+);
 
 // Types for our analytics
 export interface UsageAnalytics {

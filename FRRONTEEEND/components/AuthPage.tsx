@@ -63,7 +63,7 @@ interface AuthPageProps {
 }
 
 export const AuthPage: React.FC<AuthPageProps> = ({ onSuccess, onSkip }) => {
-  const { signIn, signUp, signInWithGoogle, signInWithGithub } = useAuth();
+  const { signIn, signUp, signInWithGoogle, signInWithGithub, isConfigured } = useAuth();
   const [mode, setMode] = useState<'signin' | 'signup'>('signin');
   const [currentStep, setCurrentStep] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -103,6 +103,12 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onSuccess, onSkip }) => {
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (!isConfigured) {
+      setError('Authentication is not configured. Please contact the administrator.');
+      return;
+    }
+    
     setIsSubmitting(true);
     setError(null);
 
@@ -114,13 +120,22 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onSuccess, onSkip }) => {
         onSuccess?.();
       }
     } catch (err: any) {
-      setError(err.message || 'An error occurred');
+      if (err.message?.includes('Failed to fetch')) {
+        setError('Unable to connect to authentication server. Please try again later.');
+      } else {
+        setError(err.message || 'An error occurred');
+      }
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const handleSignUp = async () => {
+    if (!isConfigured) {
+      setError('Authentication is not configured. Please contact the administrator.');
+      return;
+    }
+    
     setIsSubmitting(true);
     setError(null);
 
@@ -141,13 +156,22 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onSuccess, onSkip }) => {
         }, 2000);
       }
     } catch (err: any) {
-      setError(err.message || 'An error occurred');
+      if (err.message?.includes('Failed to fetch')) {
+        setError('Unable to connect to authentication server. Please try again later.');
+      } else {
+        setError(err.message || 'An error occurred');
+      }
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const handleOAuthSignIn = async (provider: 'google' | 'github') => {
+    if (!isConfigured) {
+      setError('Authentication is not configured. Please contact the administrator.');
+      return;
+    }
+    
     setIsSubmitting(true);
     setError(null);
 
@@ -157,7 +181,11 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onSuccess, onSkip }) => {
         setError(error.message);
       }
     } catch (err: any) {
-      setError(err.message || 'An error occurred');
+      if (err.message?.includes('Failed to fetch')) {
+        setError('Unable to connect to authentication server. Please try again later.');
+      } else {
+        setError(err.message || 'An error occurred');
+      }
     } finally {
       setIsSubmitting(false);
     }

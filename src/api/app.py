@@ -1132,7 +1132,28 @@ async def serve_frontend(full_path: str):
     # Default to index.html for client-side routing
     index_path = frontend_path / "index.html"
     if index_path.exists():
-        return FileResponse(index_path)
+        # Inject Supabase config at runtime for HuggingFace Spaces
+        supabase_url = os.getenv("VITE_SUPABASE_URL", "")
+        supabase_anon_key = os.getenv("VITE_SUPABASE_ANON_KEY", "")
+        
+        # Read the HTML file
+        html_content = index_path.read_text()
+        
+        # Inject the config script before </head>
+        config_script = f"""
+    <script>
+      window.__SUPABASE_CONFIG__ = {{
+        url: "{supabase_url}",
+        anonKey: "{supabase_anon_key}"
+      }};
+    </script>
+  </head>"""
+        
+        # Replace </head> with our config + </head>
+        html_content = html_content.replace("</head>", config_script)
+        
+        from fastapi.responses import HTMLResponse
+        return HTMLResponse(content=html_content)
     
     # Frontend not built
     raise HTTPException(

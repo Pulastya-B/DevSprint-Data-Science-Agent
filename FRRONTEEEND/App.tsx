@@ -21,8 +21,12 @@ const AppContent: React.FC = () => {
 
   // Handle launch console - redirect to auth if not logged in
   const handleLaunchConsole = () => {
-    // Allow both authenticated and guest users
-    setView('chat');
+    if (isAuthenticated) {
+      setView('chat');
+    } else {
+      // Redirect to auth page first
+      setView('auth');
+    }
   };
 
   // Show loading state only briefly
@@ -109,9 +113,9 @@ const AppContent: React.FC = () => {
           
           <button 
             onClick={handleLaunchConsole}
-            className="px-5 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-sm font-medium transition-all"
+            className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 border border-indigo-500/50 rounded-lg text-sm font-medium transition-all text-white"
           >
-            Launch Console
+            {isAuthenticated ? 'Launch Console' : 'Get Started'}
           </button>
         </div>
       </nav>
