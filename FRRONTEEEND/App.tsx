@@ -19,6 +19,19 @@ const AppContent: React.FC = () => {
   const { user, isAuthenticated, loading, signOut, isConfigured, needsOnboarding } = useAuth();
   const [showUserMenu, setShowUserMenu] = useState(false);
 
+  // Close user menu when clicking outside
+  React.useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (showUserMenu && !target.closest('.user-menu-container')) {
+        setShowUserMenu(false);
+      }
+    };
+    
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showUserMenu]);
+
   // If user is authenticated but needs onboarding, show auth page
   React.useEffect(() => {
     if (isAuthenticated && needsOnboarding && view !== 'auth') {
@@ -80,7 +93,7 @@ const AppContent: React.FC = () => {
         <div className="flex items-center gap-3">
           {/* User menu - only show if Supabase is configured */}
           {isAuthenticated ? (
-            <div className="relative">
+            <div className="relative user-menu-container">
               <button
                 onClick={() => setShowUserMenu(!showUserMenu)}
                 className="flex items-center gap-2 px-3 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-sm transition-all"
@@ -92,22 +105,25 @@ const AppContent: React.FC = () => {
               </button>
               
               {showUserMenu && (
-                <div className="absolute right-0 mt-2 w-48 bg-[#1a1a1a] border border-white/10 rounded-lg shadow-xl py-1">
+                <div className="absolute right-0 mt-2 w-48 bg-[#1a1a1a] border border-white/10 rounded-lg shadow-xl py-1 z-50">
                   <div className="px-4 py-2 border-b border-white/10">
                     <p className="text-xs text-white/50">Signed in as</p>
                     <p className="text-sm text-white truncate">{user?.email}</p>
                   </div>
                   <button
                     onClick={async () => {
+                      console.log('Sign out clicked');
+                      setShowUserMenu(false);
                       try {
                         await signOut();
-                        setShowUserMenu(false);
+                        console.log('Sign out successful');
                         setView('landing');
                       } catch (error) {
                         console.error('Sign out failed:', error);
+                        alert('Failed to sign out. Please try again.');
                       }
                     }}
-                    className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-400 hover:bg-white/5 transition-colors"
+                    className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-400 hover:bg-white/5 transition-colors text-left"
                   >
                     <LogOut className="w-4 h-4" />
                     Sign Out
