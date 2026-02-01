@@ -225,23 +225,29 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onSuccess, onSkip }) => {
       try {
         const savedProfile = await saveProfileWithTimeout;
         if (!savedProfile) {
-          console.warn('Failed to save profile data, but auth succeeded');
-          // Don't block the user, just warn
-        } else {
-          console.log('Profile saved successfully:', savedProfile);
+          console.error('Failed to save profile data');
+          setError('Failed to save your profile. Please try again.');
+          setIsSubmitting(false);
+          return;
         }
+        
+        console.log('Profile saved successfully:', savedProfile);
+        
+        // Only proceed if profile was saved successfully
+        setSuccess(isOAuthUser ? 'Profile completed! Redirecting...' : 'Account created successfully! Redirecting...');
+        setTimeout(() => {
+          onSuccess?.();
+        }, 1500);
       } catch (saveError: any) {
         console.error('Profile save error:', saveError);
         if (saveError.message === 'Profile save timeout') {
-          setError('Profile save is taking too long. You can continue and update your profile later.');
+          setError('Profile save is taking too long. Please try again.');
+        } else {
+          setError('Failed to save your profile. Please try again.');
         }
-        // Don't block OAuth users from proceeding even if profile save fails
+        setIsSubmitting(false);
+        return;
       }
-      
-      setSuccess(isOAuthUser ? 'Profile completed! Redirecting...' : 'Account created successfully! Redirecting...');
-      setTimeout(() => {
-        onSuccess?.();
-      }, 1500);
     } catch (err: any) {
       if (err.message?.includes('Failed to fetch')) {
         setError('Unable to connect to authentication server. Please try again later.');
@@ -571,8 +577,15 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onSuccess, onSkip }) => {
                               placeholder="john@example.com"
                               value={formData.email}
                               onChange={(e) => updateFormData("email", e.target.value)}
-                              className="pl-10 bg-white/5 border-white/10 text-white placeholder:text-white/30 focus:border-indigo-500/50"
+                              disabled={!!user}
+                              className={cn(
+                                "pl-10 bg-white/5 border-white/10 text-white placeholder:text-white/30 focus:border-indigo-500/50",
+                                user && "opacity-60 cursor-not-allowed"
+                              )}
                             />
+                            {user && (
+                              <p className="text-xs text-white/40 mt-1">Email from OAuth provider</p>
+                            )}
                           </div>
                         </motion.div>
                         
