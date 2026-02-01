@@ -5,6 +5,7 @@ import { Send, Plus, Search, Settings, MoreHorizontal, User, Bot, ArrowLeft, Pap
 import { cn } from '../lib/utils';
 import { Logo } from './Logo';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { useAuth } from '../lib/AuthContext';
 import { trackQuery, incrementSessionQueries } from '../lib/supabase';
 
@@ -896,17 +897,60 @@ export const ChatInterface: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                   )}
                   {msg.role === 'assistant' ? (
                     <ReactMarkdown 
+                      remarkPlugins={[remarkGfm]}
                       className="prose prose-invert prose-sm max-w-none prose-p:leading-relaxed prose-pre:bg-black/40 prose-pre:border prose-pre:border-white/10 prose-headings:text-white prose-strong:text-white prose-li:text-white/80"
                       components={{
-                        p: ({node, ...props}) => <p className="mb-3 last:mb-0" {...props} />,
-                        ul: ({node, ...props}) => <ul className="mb-3 space-y-1" {...props} />,
-                        ol: ({node, ...props}) => <ol className="mb-3 space-y-1" {...props} />,
-                        li: ({node, ...props}) => <li className="ml-4" {...props} />,
+                        // Headings
+                        h1: ({node, ...props}) => <h1 className="text-xl font-bold text-white mb-4 mt-6 first:mt-0 border-b border-white/10 pb-2" {...props} />,
+                        h2: ({node, ...props}) => <h2 className="text-lg font-semibold text-white mb-3 mt-5 first:mt-0" {...props} />,
+                        h3: ({node, ...props}) => <h3 className="text-base font-semibold text-indigo-300 mb-2 mt-4 first:mt-0" {...props} />,
+                        h4: ({node, ...props}) => <h4 className="text-sm font-semibold text-indigo-200 mb-2 mt-3 first:mt-0" {...props} />,
+                        
+                        // Paragraphs and text
+                        p: ({node, ...props}) => <p className="mb-3 last:mb-0 text-white/80 leading-relaxed" {...props} />,
                         strong: ({node, ...props}) => <strong className="font-semibold text-white" {...props} />,
-                        code: ({node, inline, ...props}: any) => 
-                          inline ? 
-                            <code className="px-1.5 py-0.5 rounded bg-white/10 text-indigo-300 text-xs font-mono" {...props} /> :
-                            <code className="block p-3 rounded-lg bg-black/40 border border-white/10 text-xs font-mono overflow-x-auto" {...props} />
+                        em: ({node, ...props}) => <em className="text-indigo-200 italic" {...props} />,
+                        
+                        // Lists
+                        ul: ({node, ...props}) => <ul className="mb-3 space-y-1.5 list-disc list-outside ml-4" {...props} />,
+                        ol: ({node, ...props}) => <ol className="mb-3 space-y-1.5 list-decimal list-outside ml-4" {...props} />,
+                        li: ({node, ...props}) => <li className="text-white/80 pl-1" {...props} />,
+                        
+                        // Code - inline and block
+                        code: ({node, inline, className, children, ...props}: any) => {
+                          if (inline) {
+                            return <code className="px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 text-xs font-mono border border-indigo-500/20" {...props}>{children}</code>;
+                          }
+                          return (
+                            <code className="block p-4 rounded-lg bg-black/60 border border-white/10 text-xs font-mono overflow-x-auto text-emerald-300 my-3" {...props}>
+                              {children}
+                            </code>
+                          );
+                        },
+                        pre: ({node, ...props}) => <pre className="bg-transparent p-0 m-0 overflow-visible" {...props} />,
+                        
+                        // Tables - CRITICAL for proper table rendering
+                        table: ({node, ...props}) => (
+                          <div className="my-4 overflow-x-auto rounded-lg border border-white/10">
+                            <table className="w-full text-sm" {...props} />
+                          </div>
+                        ),
+                        thead: ({node, ...props}) => <thead className="bg-white/5 border-b border-white/10" {...props} />,
+                        tbody: ({node, ...props}) => <tbody className="divide-y divide-white/5" {...props} />,
+                        tr: ({node, ...props}) => <tr className="hover:bg-white/[0.02] transition-colors" {...props} />,
+                        th: ({node, ...props}) => <th className="px-4 py-3 text-left text-xs font-semibold text-indigo-300 uppercase tracking-wider" {...props} />,
+                        td: ({node, ...props}) => <td className="px-4 py-3 text-white/70 text-xs" {...props} />,
+                        
+                        // Blockquotes
+                        blockquote: ({node, ...props}) => (
+                          <blockquote className="border-l-4 border-indigo-500/50 pl-4 py-2 my-3 bg-indigo-500/5 rounded-r-lg text-white/70 italic" {...props} />
+                        ),
+                        
+                        // Horizontal rule
+                        hr: ({node, ...props}) => <hr className="my-6 border-white/10" {...props} />,
+                        
+                        // Links
+                        a: ({node, ...props}) => <a className="text-indigo-400 hover:text-indigo-300 underline underline-offset-2" {...props} />,
                       }}
                     >
                       {msg.content || ''}
