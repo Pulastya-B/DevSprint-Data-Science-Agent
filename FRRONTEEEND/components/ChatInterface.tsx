@@ -46,6 +46,41 @@ const INITIAL_SESSION_ID = generateLocalSessionId();
 const SESSIONS_STORAGE_KEY = 'ds_agent_chat_sessions';
 const ACTIVE_SESSION_STORAGE_KEY = 'ds_agent_active_session';
 
+// Clean up malformed markdown - fixes common LLM formatting issues
+const cleanMarkdown = (content: string): string => {
+  if (!content) return '';
+  
+  let cleaned = content;
+  
+  // Fix inline code on separate lines: `code`\n, or ,\n`code`
+  // This pattern matches backticked content with surrounding newlines and punctuation
+  cleaned = cleaned.replace(/`([^`\n]+)`\s*\n+\s*,/g, '`$1`, ');
+  cleaned = cleaned.replace(/,\s*\n+\s*`([^`\n]+)`/g, ', `$1`');
+  
+  // Fix backticked items that are on their own lines when they should be inline
+  // Pattern: newline + `code` + newline (when preceded/followed by text)
+  cleaned = cleaned.replace(/(\w)\s*\n+\s*`([^`\n]+)`\s*\n+\s*(\w)/g, '$1 `$2` $3');
+  
+  // Fix orphaned punctuation on its own line
+  cleaned = cleaned.replace(/\n+\s*([,.])\s*\n+/g, '$1 ');
+  
+  // Fix ") from the" type patterns that got split
+  cleaned = cleaned.replace(/\)\s*\n+\s*from the/g, ') from the');
+  cleaned = cleaned.replace(/\)\s*\n+\s*from\s*\n+\s*the/g, ') from the');
+  
+  // Fix "e.g.," patterns with newlines
+  cleaned = cleaned.replace(/\(e\.g\.,?\s*\n+\s*`/g, '(e.g., `');
+  
+  // Clean up multiple consecutive newlines (more than 2) to just 2
+  cleaned = cleaned.replace(/\n{3,}/g, '\n\n');
+  
+  // Fix table cells that got split across lines
+  // Match table row pattern and normalize whitespace
+  cleaned = cleaned.replace(/\|\s*\n+\s*`([^`]+)`\s*\n+\s*\|/g, '| `$1` |');
+  
+  return cleaned;
+};
+
 // Load sessions from localStorage
 const loadSessionsFromStorage = (): ChatSession[] => {
   try {
@@ -916,30 +951,44 @@ export const ChatInterface: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                         ol: ({node, ...props}) => <ol className="mb-3 space-y-1.5 list-decimal list-outside ml-4" {...props} />,
                         li: ({node, ...props}) => <li className="text-white/80 pl-1" {...props} />,
                         
-                        // Code - inline and block
+                        // Code - Smart inline detection
+                        // Treat as inline if: no language class, short content, or inside table/paragraph
                         code: ({node, inline, className, children, ...props}: any) => {
-                          if (inline) {
-                            return <code className="px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 text-xs font-mono border border-indigo-500/20" {...props}>{children}</code>;
+                          const codeContent = String(children).replace(/\n$/, '');
+                          const hasLanguage = className && className.startsWith('language-');
+                          // Treat as inline if: explicitly inline, no language, or short single-line content
+                          const isInlineCode = inline || (!hasLanguage && !codeContent.includes('\n') && codeContent.length < 100);
+                          
+                          if (isInlineCode) {
+                            return (
+                              <code className="px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 text-xs font-mono border border-indigo-500/20 whitespace-nowrap" {...props}>
+                                {children}
+                              </code>
+                            );
                           }
                           return (
-                            <code className="block p-4 rounded-lg bg-black/60 border border-white/10 text-xs font-mono overflow-x-auto text-emerald-300 my-3" {...props}>
+                            <code className="block p-4 rounded-lg bg-black/60 border border-white/10 text-xs font-mono overflow-x-auto text-emerald-300 my-3 whitespace-pre-wrap" {...props}>
                               {children}
                             </code>
                           );
                         },
-                        pre: ({node, ...props}) => <pre className="bg-transparent p-0 m-0 overflow-visible" {...props} />,
+                        pre: ({node, children, ...props}) => {
+                          // Check if the child is already a styled code block
+                          // If so, just render children without extra wrapper styling
+                          return <pre className="bg-transparent p-0 m-0 overflow-visible" {...props}>{children}</pre>;
+                        },
                         
                         // Tables - CRITICAL for proper table rendering
                         table: ({node, ...props}) => (
                           <div className="my-4 overflow-x-auto rounded-lg border border-white/10">
-                            <table className="w-full text-sm" {...props} />
+                            <table className="w-full text-sm border-collapse" {...props} />
                           </div>
                         ),
                         thead: ({node, ...props}) => <thead className="bg-white/5 border-b border-white/10" {...props} />,
                         tbody: ({node, ...props}) => <tbody className="divide-y divide-white/5" {...props} />,
                         tr: ({node, ...props}) => <tr className="hover:bg-white/[0.02] transition-colors" {...props} />,
-                        th: ({node, ...props}) => <th className="px-4 py-3 text-left text-xs font-semibold text-indigo-300 uppercase tracking-wider" {...props} />,
-                        td: ({node, ...props}) => <td className="px-4 py-3 text-white/70 text-xs" {...props} />,
+                        th: ({node, ...props}) => <th className="px-4 py-3 text-left text-xs font-semibold text-indigo-300 uppercase tracking-wider whitespace-nowrap" {...props} />,
+                        td: ({node, ...props}) => <td className="px-4 py-3 text-white/70 text-sm align-top" {...props} />,
                         
                         // Blockquotes
                         blockquote: ({node, ...props}) => (
@@ -953,7 +1002,7 @@ export const ChatInterface: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                         a: ({node, ...props}) => <a className="text-indigo-400 hover:text-indigo-300 underline underline-offset-2" {...props} />,
                       }}
                     >
-                      {msg.content || ''}
+                      {cleanMarkdown(msg.content || '')}
                     </ReactMarkdown>
                   ) : (
                     msg.content
