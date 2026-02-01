@@ -1294,7 +1294,8 @@ export const ChatInterface: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                                 <span className="text-xs text-white/40 mt-1 block">{plot.type || 'interactive'}</span>
                               </button>
                             );
-                          })}\n                        </div>
+                          })}
+                        </div>
                       </div>
                     )}
                     
