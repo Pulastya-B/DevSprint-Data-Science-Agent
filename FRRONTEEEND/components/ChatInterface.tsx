@@ -47,36 +47,89 @@ const SESSIONS_STORAGE_KEY = 'ds_agent_chat_sessions';
 const ACTIVE_SESSION_STORAGE_KEY = 'ds_agent_active_session';
 
 // Clean up malformed markdown - fixes common LLM formatting issues
+// This is CRITICAL for proper rendering of inline code and lists
 const cleanMarkdown = (content: string): string => {
   if (!content) return '';
   
   let cleaned = content;
   
-  // Fix inline code on separate lines: `code`\n, or ,\n`code`
-  // This pattern matches backticked content with surrounding newlines and punctuation
+  // PHASE 1: Fix inline code that got split across lines
+  // Pattern: `code` followed by newline(s) then comma
   cleaned = cleaned.replace(/`([^`\n]+)`\s*\n+\s*,/g, '`$1`, ');
+  
+  // Pattern: comma followed by newline(s) then `code`
   cleaned = cleaned.replace(/,\s*\n+\s*`([^`\n]+)`/g, ', `$1`');
   
-  // Fix backticked items that are on their own lines when they should be inline
-  // Pattern: newline + `code` + newline (when preceded/followed by text)
-  cleaned = cleaned.replace(/(\w)\s*\n+\s*`([^`\n]+)`\s*\n+\s*(\w)/g, '$1 `$2` $3');
+  // Pattern: `code` followed by newline(s) then ", and"
+  cleaned = cleaned.replace(/`([^`\n]+)`\s*\n+\s*,\s*and\s/gi, '`$1`, and ');
   
-  // Fix orphaned punctuation on its own line
-  cleaned = cleaned.replace(/\n+\s*([,.])\s*\n+/g, '$1 ');
+  // Pattern: `code` newline(s) `code` (consecutive code blocks that should be inline)
+  cleaned = cleaned.replace(/`([^`\n]+)`\s*\n+\s*`([^`\n]+)`/g, '`$1` `$2`');
   
-  // Fix ") from the" type patterns that got split
-  cleaned = cleaned.replace(/\)\s*\n+\s*from the/g, ') from the');
-  cleaned = cleaned.replace(/\)\s*\n+\s*from\s*\n+\s*the/g, ') from the');
+  // PHASE 2: Fix text that got split from inline code
+  // Pattern: word(s) + newline + `code` + newline + word(s)
+  cleaned = cleaned.replace(/(\w+)\s*\n+\s*`([^`\n]+)`\s*\n+\s*(\w+)/g, '$1 `$2` $3');
   
-  // Fix "e.g.," patterns with newlines
-  cleaned = cleaned.replace(/\(e\.g\.,?\s*\n+\s*`/g, '(e.g., `');
+  // Pattern: "the" or "on" or "for" etc + newline + `code`
+  cleaned = cleaned.replace(/(the|on|for|with|using|from|in|and|or|to|of|between)\s*\n+\s*`([^`\n]+)`/gi, '$1 `$2`');
   
-  // Clean up multiple consecutive newlines (more than 2) to just 2
+  // Pattern: `code` + newline + common follow words
+  cleaned = cleaned.replace(/`([^`\n]+)`\s*\n+\s*(column|target|feature|variable|field|and|or|to|from|using|with)/gi, '`$1` $2');
+  
+  // PHASE 3: Fix orphaned punctuation
+  // Comma on its own line
+  cleaned = cleaned.replace(/\n\s*,\s*\n/g, ', ');
+  cleaned = cleaned.replace(/\n\s*,\s*$/gm, ', ');
+  
+  // Period on its own line (but preserve paragraph breaks)
+  cleaned = cleaned.replace(/\n\s*\.\s*\n(?!\n)/g, '. ');
+  
+  // "and" on its own line between code blocks
+  cleaned = cleaned.replace(/`([^`\n]+)`\s*\n+\s*,?\s*and\s*\n+\s*`([^`\n]+)`/gi, '`$1`, and `$2`');
+  
+  // PHASE 4: Fix list items with broken inline code
+  // Pattern: "• Encoded" + newline + `code` + newline + ","
+  cleaned = cleaned.replace(/([-•*]\s*\w+[^`\n]*)\n+\s*`([^`\n]+)`\s*\n+\s*,/g, '$1 `$2`,');
+  
+  // Pattern: list item ending with newline before `code`
+  cleaned = cleaned.replace(/([-•*]\s*[^`\n]+)\n+\s*`([^`\n]+)`/g, '$1 `$2`');
+  
+  // PHASE 5: Fix specific patterns from the screenshots
+  // "Encoded" + newline + `code`
+  cleaned = cleaned.replace(/Encoded\s*\n+\s*`/gi, 'Encoded `');
+  
+  // "using" + `code`
+  cleaned = cleaned.replace(/using\s*\n+\s*`/gi, 'using `');
+  
+  // "Output:" + newline + `path`
+  cleaned = cleaned.replace(/Output:\s*\n+\s*`/gi, 'Output: `');
+  
+  // "on the" + newline + `code` + newline + "target"
+  cleaned = cleaned.replace(/on the\s*\n+\s*`([^`\n]+)`\s*\n+\s*target/gi, 'on the `$1` target');
+  
+  // "between" + newline + `code`
+  cleaned = cleaned.replace(/between\s*\n+\s*`([^`\n]+)`/gi, 'between `$1`');
+  
+  // PHASE 6: Aggressive inline code joining
+  // If we have `code` on its own line (preceded and followed by non-code text), join it
+  // Match: text\n`code`\n or text\n`code`\ntext
+  cleaned = cleaned.replace(/([^\n`])\n+`([^`\n]{1,50})`\n+([^\n`])/g, '$1 `$2` $3');
+  
+  // PHASE 7: Clean up excessive whitespace
+  // Multiple spaces to single space (but preserve newlines)
+  cleaned = cleaned.replace(/[ \t]+/g, ' ');
+  
+  // More than 2 consecutive newlines to just 2
   cleaned = cleaned.replace(/\n{3,}/g, '\n\n');
   
-  // Fix table cells that got split across lines
-  // Match table row pattern and normalize whitespace
+  // PHASE 8: Fix table formatting
+  // Table cells with broken inline code
   cleaned = cleaned.replace(/\|\s*\n+\s*`([^`]+)`\s*\n+\s*\|/g, '| `$1` |');
+  cleaned = cleaned.replace(/\|\s*`([^`]+)`\s*\n+\s*\|/g, '| `$1` |');
+  
+  // PHASE 9: One more pass for any remaining patterns
+  // `code` followed by newline and then more text on same logical line
+  cleaned = cleaned.replace(/`([^`\n]+)`\n+(?=[a-z])/gi, '`$1` ');
   
   return cleaned;
 };
@@ -952,16 +1005,30 @@ export const ChatInterface: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                         li: ({node, ...props}) => <li className="text-white/80 pl-1" {...props} />,
                         
                         // Code - Smart inline detection
-                        // Treat as inline if: no language class, short content, or inside table/paragraph
+                        // The key insight: react-markdown sets inline=true for `code` inside paragraphs
+                        // But if `code` is on its own line, it gets wrapped in <pre> and inline=false
+                        // We need to detect "should be inline" cases even when inline=false
                         code: ({node, inline, className, children, ...props}: any) => {
                           const codeContent = String(children).replace(/\n$/, '');
                           const hasLanguage = className && className.startsWith('language-');
-                          // Treat as inline if: explicitly inline, no language, or short single-line content
-                          const isInlineCode = inline || (!hasLanguage && !codeContent.includes('\n') && codeContent.length < 100);
                           
-                          if (isInlineCode) {
+                          // Force inline rendering for short, single-line, non-language code
+                          // This catches cases where the LLM put `columnName` on its own line
+                          const shouldBeInline = inline || (
+                            !hasLanguage && 
+                            !codeContent.includes('\n') && 
+                            codeContent.length < 80 &&
+                            // Common patterns that should always be inline
+                            (codeContent.match(/^[a-zA-Z_][a-zA-Z0-9_]*$/) ||  // variable names
+                             codeContent.match(/^[a-zA-Z_][a-zA-Z0-9_]*\s*[+\-*\/]\s*[a-zA-Z_][a-zA-Z0-9_]*$/) ||  // expressions like depth * mag
+                             codeContent.match(/^\.?\/[^\s]+$/) ||  // file paths
+                             !codeContent.includes(' ') ||  // single words
+                             codeContent.split(' ').length <= 5)  // short phrases
+                          );
+                          
+                          if (shouldBeInline) {
                             return (
-                              <code className="px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 text-xs font-mono border border-indigo-500/20 whitespace-nowrap" {...props}>
+                              <code className="px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 text-xs font-mono border border-indigo-500/20 inline" {...props}>
                                 {children}
                               </code>
                             );
@@ -972,9 +1039,17 @@ export const ChatInterface: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                             </code>
                           );
                         },
-                        pre: ({node, children, ...props}) => {
-                          // Check if the child is already a styled code block
-                          // If so, just render children without extra wrapper styling
+                        // Pre wrapper - make it inline-friendly when containing short code
+                        pre: ({node, children, ...props}: any) => {
+                          // Check if this pre contains just a short code element
+                          // If so, render without block styling to allow inline flow
+                          const childContent = node?.children?.[0]?.children?.[0]?.value || '';
+                          const isShortCode = !childContent.includes('\n') && childContent.length < 80;
+                          
+                          if (isShortCode) {
+                            // Return children directly without pre wrapper for short inline code
+                            return <>{children}</>;
+                          }
                           return <pre className="bg-transparent p-0 m-0 overflow-visible" {...props}>{children}</pre>;
                         },
                         
