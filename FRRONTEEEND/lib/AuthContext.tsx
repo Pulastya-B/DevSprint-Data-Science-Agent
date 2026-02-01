@@ -13,6 +13,7 @@ interface AuthContextType {
   signInWithGoogle: () => Promise<{ error: any }>;
   signInWithGithub: () => Promise<{ error: any }>;
   signOut: () => Promise<void>;
+  refreshOnboardingStatus: () => Promise<void>;
   isAuthenticated: boolean;
   isConfigured: boolean;
 }
@@ -126,6 +127,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return { error };
   };
 
+  const refreshOnboardingStatus = async () => {
+    if (user) {
+      const profile = await getUserProfile(user.id);
+      setNeedsOnboarding(!profile || !profile.onboarding_completed);
+    }
+  };
+
   const signOut = async () => {
     try {
       if (dbSessionId) {
@@ -156,6 +164,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         signInWithGoogle,
         signInWithGithub,
         signOut,
+        refreshOnboardingStatus,
         isAuthenticated: !!user,
         isConfigured: configured
       }}

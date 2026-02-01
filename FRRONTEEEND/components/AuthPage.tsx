@@ -65,7 +65,7 @@ interface AuthPageProps {
 }
 
 export const AuthPage: React.FC<AuthPageProps> = ({ onSuccess, onSkip }) => {
-  const { signIn, signUp, signInWithGoogle, signInWithGithub, isConfigured, user } = useAuth();
+  const { signIn, signUp, signInWithGoogle, signInWithGithub, isConfigured, user, refreshOnboardingStatus } = useAuth();
   const [mode, setMode] = useState<'signin' | 'signup'>('signin');
   const [currentStep, setCurrentStep] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -232,6 +232,9 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onSuccess, onSkip }) => {
         }
         
         console.log('Profile saved successfully:', savedProfile);
+        
+        // Refresh onboarding status so AuthContext knows the profile is complete
+        await refreshOnboardingStatus();
         
         // Only proceed if profile was saved successfully
         setSuccess(isOAuthUser ? 'Profile completed! Redirecting...' : 'Account created successfully! Redirecting...');
