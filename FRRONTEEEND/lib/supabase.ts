@@ -219,6 +219,8 @@ export interface UserProfile {
   profession?: string;
   experience?: string;
   industry?: string;
+  huggingface_token?: string;  // Encrypted HF token for storage integration
+  huggingface_username?: string;
   onboarding_completed: boolean;
   created_at?: string;
   updated_at?: string;
@@ -270,6 +272,55 @@ export const getUserProfile = async (userId: string) => {
   } catch (err) {
     console.error('Profile fetch error:', err);
     return null;
+  }
+};
+
+// Update HuggingFace token for a user
+export const updateHuggingFaceToken = async (userId: string, hfToken: string, hfUsername?: string) => {
+  try {
+    const { data, error } = await supabase
+      .from('user_profiles')
+      .update({ 
+        huggingface_token: hfToken,
+        huggingface_username: hfUsername,
+        updated_at: new Date().toISOString()
+      })
+      .eq('user_id', userId)
+      .select()
+      .single();
+    
+    if (error) {
+      console.error('Failed to update HF token:', error);
+      return null;
+    }
+    return data;
+  } catch (err) {
+    console.error('HF token update error:', err);
+    return null;
+  }
+};
+
+// Get HuggingFace token for a user (returns masked token for security)
+export const getHuggingFaceStatus = async (userId: string) => {
+  try {
+    const { data, error } = await supabase
+      .from('user_profiles')
+      .select('huggingface_token, huggingface_username')
+      .eq('user_id', userId)
+      .single();
+    
+    if (error) {
+      return { connected: false };
+    }
+    
+    return {
+      connected: !!data?.huggingface_token,
+      username: data?.huggingface_username,
+      tokenMasked: data?.huggingface_token ? `hf_****${data.huggingface_token.slice(-4)}` : null
+    };
+  } catch (err) {
+    console.error('HF status fetch error:', err);
+    return { connected: false };
   }
 };
 

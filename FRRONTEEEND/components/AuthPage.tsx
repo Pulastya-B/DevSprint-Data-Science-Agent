@@ -33,6 +33,7 @@ const steps = [
   { id: "personal", title: "Personal Info" },
   { id: "goals", title: "Data Science Goals" },
   { id: "professional", title: "Professional" },
+  { id: "integrations", title: "Connect Storage" },
 ];
 
 interface FormData {
@@ -46,6 +47,7 @@ interface FormData {
   profession: string;
   experience: string;
   industry: string;
+  huggingfaceToken: string;
 }
 
 const fadeInUp = {
@@ -84,6 +86,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onSuccess, onSkip }) => {
     profession: "",
     experience: "",
     industry: "",
+    huggingfaceToken: "",
   });
 
   // If user is already authenticated (OAuth), pre-fill email and switch to signup mode for onboarding
@@ -209,6 +212,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onSuccess, onSkip }) => {
         profession: formData.profession,
         experience: formData.experience,
         industry: formData.industry,
+        huggingface_token: formData.huggingfaceToken || null,
         onboarding_completed: true
       };
       
@@ -303,6 +307,9 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onSuccess, onSkip }) => {
         return formData.primaryGoal !== "";
       case 2:
         return formData.profession.trim() !== "" && formData.industry !== "";
+      case 3:
+        // HuggingFace token is optional, always valid
+        return true;
       default:
         return true;
     }
@@ -846,6 +853,119 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onSuccess, onSkip }) => {
                               </motion.div>
                             ))}
                           </RadioGroup>
+                        </motion.div>
+
+                        <AnimatePresence>
+                          {error && (
+                            <motion.div
+                              initial={{ opacity: 0, y: -10 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              exit={{ opacity: 0 }}
+                              className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm"
+                            >
+                              {error}
+                            </motion.div>
+                          )}
+                          {success && (
+                            <motion.div
+                              initial={{ opacity: 0, y: -10 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              exit={{ opacity: 0 }}
+                              className="p-3 bg-green-500/10 border border-green-500/20 rounded-lg text-green-400 text-sm"
+                            >
+                              {success}
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </CardContent>
+                    </>
+                  )}
+
+                  {currentStep === 3 && (
+                    <>
+                      <CardHeader>
+                        <div className="flex justify-center mb-2">
+                          <div className="w-12 h-12 bg-yellow-500/10 rounded-full flex items-center justify-center">
+                            <svg className="w-6 h-6 text-yellow-400" viewBox="0 0 24 24" fill="currentColor">
+                              <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm0 2a9.95 9.95 0 017.07 2.929A9.95 9.95 0 0122 12a9.95 9.95 0 01-2.929 7.071A9.95 9.95 0 0112 22a9.95 9.95 0 01-7.071-2.929A9.95 9.95 0 012 12a9.95 9.95 0 012.929-7.071A9.95 9.95 0 0112 2zm0 3.5a6.5 6.5 0 100 13 6.5 6.5 0 000-13z"/>
+                            </svg>
+                          </div>
+                        </div>
+                        <CardTitle className="text-white text-center">Connect HuggingFace</CardTitle>
+                        <CardDescription className="text-white/50 text-center">
+                          Store your datasets, models & reports securely on HuggingFace
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        <motion.div 
+                          variants={fadeInUp} 
+                          className="p-4 bg-gradient-to-r from-yellow-500/10 to-orange-500/10 border border-yellow-500/20 rounded-xl"
+                        >
+                          <h4 className="text-sm font-semibold text-yellow-300 mb-2">🚀 Why connect HuggingFace?</h4>
+                          <ul className="text-xs text-white/60 space-y-1.5">
+                            <li className="flex items-start gap-2">
+                              <span className="text-green-400 mt-0.5">✓</span>
+                              <span><strong className="text-white/80">Persist your work</strong> - Datasets, models & plots saved permanently</span>
+                            </li>
+                            <li className="flex items-start gap-2">
+                              <span className="text-green-400 mt-0.5">✓</span>
+                              <span><strong className="text-white/80">One-click deployment</strong> - Deploy models as APIs instantly</span>
+                            </li>
+                            <li className="flex items-start gap-2">
+                              <span className="text-green-400 mt-0.5">✓</span>
+                              <span><strong className="text-white/80">Version control</strong> - Git-based versioning for free</span>
+                            </li>
+                            <li className="flex items-start gap-2">
+                              <span className="text-green-400 mt-0.5">✓</span>
+                              <span><strong className="text-white/80">You own your data</strong> - Everything stored in YOUR account</span>
+                            </li>
+                          </ul>
+                        </motion.div>
+
+                        <motion.div variants={fadeInUp} className="space-y-2">
+                          <Label htmlFor="hfToken" className="text-white/70 flex items-center gap-2">
+                            HuggingFace Access Token
+                            <span className="text-xs text-white/40">(Optional - can add later)</span>
+                          </Label>
+                          <div className="relative">
+                            <Input
+                              id="hfToken"
+                              type={showPassword ? "text" : "password"}
+                              placeholder="hf_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                              value={formData.huggingfaceToken}
+                              onChange={(e) => updateFormData("huggingfaceToken", e.target.value)}
+                              className="bg-white/5 border-white/10 text-white placeholder:text-white/30 focus:border-yellow-500/50 pr-10 font-mono text-sm"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowPassword(!showPassword)}
+                              className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white/60"
+                            >
+                              {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                            </button>
+                          </div>
+                          <p className="text-xs text-white/40">
+                            Get your token from{" "}
+                            <a 
+                              href="https://huggingface.co/settings/tokens" 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="text-yellow-400 hover:text-yellow-300 underline"
+                            >
+                              huggingface.co/settings/tokens
+                            </a>
+                            {" "}(needs write permissions)
+                          </p>
+                        </motion.div>
+
+                        <motion.div 
+                          variants={fadeInUp} 
+                          className="p-3 bg-white/5 border border-white/10 rounded-lg"
+                        >
+                          <p className="text-xs text-white/50">
+                            🔒 <strong className="text-white/70">Security:</strong> Your token is encrypted and stored securely. 
+                            We only use it to save files to your HuggingFace account. You can revoke it anytime.
+                          </p>
                         </motion.div>
 
                         <AnimatePresence>

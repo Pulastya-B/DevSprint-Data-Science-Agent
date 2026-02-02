@@ -90,6 +90,15 @@ google-cloud-storage==2.14.0  # For GCS artifact storage
 google-auth==2.25.2
 google-generativeai==0.3.2  # For Gemini LLM support
 
+# Cloudflare R2 Storage (S3-compatible)
+boto3>=1.28.0  # For R2 file storage
+
+# HuggingFace Storage Integration
+huggingface_hub>=0.20.0  # For storing user artifacts on HuggingFace
+
+# Supabase Backend
+supabase>=2.0.0  # For user file metadata
+
 # Testing
 pytest==7.4.3
 pytest-mock==3.12.0

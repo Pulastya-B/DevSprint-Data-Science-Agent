@@ -1053,6 +1053,238 @@ async def chat(request: ChatRequest) -> JSONResponse:
         )
 
 
+# ==================== FILE STORAGE API ====================
+# These endpoints handle persistent file storage with R2 + Supabase
+
+class FileMetadataResponse(BaseModel):
+    """Response model for file metadata."""
+    id: str
+    file_type: str
+    file_name: str
+    size_bytes: int
+    created_at: str
+    expires_at: str
+    download_url: Optional[str] = None
+    metadata: Dict[str, Any] = {}
+
+class UserFilesResponse(BaseModel):
+    """Response model for user files list."""
+    success: bool
+    files: List[FileMetadataResponse]
+    total_count: int
+    total_size_mb: float
+
+@app.get("/api/files")
+async def get_user_files(
+    user_id: str,
+    file_type: Optional[str] = None,
+    session_id: Optional[str] = None
+):
+    """
+    Get all files for a user.
+    
+    Query params:
+    - user_id: User ID (required)
+    - file_type: Filter by type (plot, csv, report, model)
+    - session_id: Filter by chat session
+    """
+    try:
+        from src.storage.user_files_service import get_files_service, FileType
+        from src.storage.r2_storage import get_r2_service
+        
+        files_service = get_files_service()
+        r2_service = get_r2_service()
+        
+        # Convert file_type string to enum if provided
+        file_type_enum = None
+        if file_type:
+            file_type_enum = FileType(file_type)
+        
+        files = files_service.get_user_files(
+            user_id=user_id,
+            file_type=file_type_enum,
+            session_id=session_id
+        )
+        
+        # Generate download URLs
+        file_responses = []
+        total_size = 0
+        for f in files:
+            download_url = None
+            if f.file_type == FileType.CSV:
+                download_url = r2_service.get_csv_download_url(f.r2_key)
+            elif f.file_type in [FileType.REPORT, FileType.PLOT]:
+                download_url = r2_service.get_report_url(f.r2_key)
+            
+            file_responses.append(FileMetadataResponse(
+                id=f.id,
+                file_type=f.file_type.value,
+                file_name=f.file_name,
+                size_bytes=f.size_bytes,
+                created_at=f.created_at.isoformat(),
+                expires_at=f.expires_at.isoformat(),
+                download_url=download_url,
+                metadata=f.metadata
+            ))
+            total_size += f.size_bytes
+        
+        return UserFilesResponse(
+            success=True,
+            files=file_responses,
+            total_count=len(files),
+            total_size_mb=round(total_size / (1024 * 1024), 2)
+        )
+        
+    except ImportError:
+        # Storage services not configured
+        return UserFilesResponse(
+            success=True,
+            files=[],
+            total_count=0,
+            total_size_mb=0
+        )
+    except Exception as e:
+        logger.error(f"Error fetching user files: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/files/{file_id}")
+async def get_file(file_id: str):
+    """Get a specific file by ID with download URL."""
+    try:
+        from src.storage.user_files_service import get_files_service, FileType
+        from src.storage.r2_storage import get_r2_service
+        
+        files_service = get_files_service()
+        r2_service = get_r2_service()
+        
+        file = files_service.get_file_by_id(file_id)
+        if not file:
+            raise HTTPException(status_code=404, detail="File not found")
+        
+        # Generate appropriate URL
+        download_url = None
+        if file.file_type == FileType.CSV:
+            download_url = r2_service.get_csv_download_url(file.r2_key)
+        elif file.file_type == FileType.PLOT:
+            # For plots, return the plot data directly
+            plot_data = r2_service.get_plot_data(file.r2_key)
+            return {
+                "success": True,
+                "file": {
+                    "id": file.id,
+                    "file_type": file.file_type.value,
+                    "file_name": file.file_name,
+                    "metadata": file.metadata
+                },
+                "plot_data": plot_data
+            }
+        else:
+            download_url = r2_service.get_report_url(file.r2_key)
+        
+        return {
+            "success": True,
+            "file": FileMetadataResponse(
+                id=file.id,
+                file_type=file.file_type.value,
+                file_name=file.file_name,
+                size_bytes=file.size_bytes,
+                created_at=file.created_at.isoformat(),
+                expires_at=file.expires_at.isoformat(),
+                download_url=download_url,
+                metadata=file.metadata
+            )
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching file: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/api/files/{file_id}")
+async def delete_file(file_id: str, user_id: str):
+    """Delete a file (both from R2 and Supabase)."""
+    try:
+        from src.storage.user_files_service import get_files_service
+        from src.storage.r2_storage import get_r2_service
+        
+        files_service = get_files_service()
+        r2_service = get_r2_service()
+        
+        file = files_service.get_file_by_id(file_id)
+        if not file:
+            raise HTTPException(status_code=404, detail="File not found")
+        
+        # Verify ownership
+        if file.user_id != user_id:
+            raise HTTPException(status_code=403, detail="Not authorized")
+        
+        # Delete from R2
+        r2_service.delete_file(file.r2_key)
+        
+        # Delete from Supabase
+        files_service.hard_delete_file(file_id)
+        
+        return {"success": True, "message": "File deleted"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting file: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/files/stats/{user_id}")
+async def get_storage_stats(user_id: str):
+    """Get storage statistics for a user."""
+    try:
+        from src.storage.user_files_service import get_files_service
+        
+        files_service = get_files_service()
+        stats = files_service.get_user_storage_stats(user_id)
+        
+        return {
+            "success": True,
+            "stats": stats
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting stats: {e}")
+        return {
+            "success": True,
+            "stats": {
+                "total_files": 0,
+                "total_size_bytes": 0,
+                "total_size_mb": 0,
+                "by_type": {}
+            }
+        }
+
+@app.post("/api/files/extend/{file_id}")
+async def extend_file_expiration(file_id: str, user_id: str, days: int = 7):
+    """Extend a file's expiration date."""
+    try:
+        from src.storage.user_files_service import get_files_service
+        
+        files_service = get_files_service()
+        
+        file = files_service.get_file_by_id(file_id)
+        if not file:
+            raise HTTPException(status_code=404, detail="File not found")
+        
+        if file.user_id != user_id:
+            raise HTTPException(status_code=403, detail="Not authorized")
+        
+        success = files_service.extend_expiration(file_id, days)
+        
+        return {"success": success}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error extending expiration: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # Error handlers
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request, exc):
