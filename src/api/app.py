@@ -1373,6 +1373,158 @@ async def serve_output_files(file_path: str):
     return FileResponse(output_path, media_type=media_type)
 
 
+# ============== HUGGINGFACE EXPORT ENDPOINT ==============
+
+class HuggingFaceExportRequest(BaseModel):
+    """Request model for HuggingFace export."""
+    user_id: str
+    session_id: str
+
+@app.post("/api/export/huggingface")
+async def export_to_huggingface(request: HuggingFaceExportRequest):
+    """
+    Export session assets (datasets, models, plots) to user's HuggingFace account.
+    
+    Requires user to have connected their HuggingFace token in settings.
+    """
+    from supabase import create_client, Client
+    import glob
+    
+    try:
+        # Get user's HuggingFace credentials from Supabase
+        supabase_url = os.getenv("VITE_SUPABASE_URL") or os.getenv("SUPABASE_URL")
+        supabase_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("VITE_SUPABASE_ANON_KEY")
+        
+        if not supabase_url or not supabase_key:
+            raise HTTPException(status_code=500, detail="Supabase configuration missing")
+        
+        supabase: Client = create_client(supabase_url, supabase_key)
+        
+        # Fetch user's HuggingFace token from profiles
+        result = supabase.table("user_profiles").select(
+            "huggingface_token, huggingface_username"
+        ).eq("user_id", request.user_id).single().execute()
+        
+        if not result.data:
+            raise HTTPException(status_code=404, detail="User profile not found")
+        
+        hf_token = result.data.get("huggingface_token")
+        hf_username = result.data.get("huggingface_username")
+        
+        if not hf_token or not hf_username:
+            raise HTTPException(
+                status_code=400, 
+                detail="HuggingFace not connected. Please connect in Settings."
+            )
+        
+        # Import HuggingFace storage service
+        from src.storage.huggingface_storage import HuggingFaceStorageService
+        
+        hf_service = HuggingFaceStorageService(token=hf_token, username=hf_username)
+        
+        # Collect all session assets
+        uploaded_files = []
+        errors = []
+        
+        # Session-specific output directory
+        session_outputs_dir = Path(f"./outputs/{request.session_id}")
+        global_outputs_dir = Path("./outputs")
+        
+        # Upload datasets (CSVs)
+        csv_patterns = [
+            session_outputs_dir / "*.csv",
+            global_outputs_dir / "*.csv"
+        ]
+        for pattern in csv_patterns:
+            for csv_file in glob.glob(str(pattern)):
+                try:
+                    result = hf_service.upload_dataset(
+                        file_path=csv_file,
+                        dataset_name=Path(csv_file).stem,
+                        description=f"Dataset from DS Agent session {request.session_id[:8]}"
+                    )
+                    uploaded_files.append({"type": "dataset", "name": Path(csv_file).name, "url": result.get("url")})
+                except Exception as e:
+                    errors.append(f"Dataset {Path(csv_file).name}: {str(e)}")
+        
+        # Upload models (PKL files)
+        model_patterns = [
+            session_outputs_dir / "models" / "*.pkl",
+            global_outputs_dir / "models" / "*.pkl"
+        ]
+        for pattern in model_patterns:
+            for model_file in glob.glob(str(pattern)):
+                try:
+                    result = hf_service.upload_model(
+                        model_path=model_file,
+                        model_name=Path(model_file).stem,
+                        description=f"Model from DS Agent session {request.session_id[:8]}"
+                    )
+                    uploaded_files.append({"type": "model", "name": Path(model_file).name, "url": result.get("url")})
+                except Exception as e:
+                    errors.append(f"Model {Path(model_file).name}: {str(e)}")
+        
+        # Upload visualizations (HTML plots)
+        plot_patterns = [
+            session_outputs_dir / "*.html",
+            global_outputs_dir / "*.html",
+            session_outputs_dir / "plots" / "*.html",
+            global_outputs_dir / "plots" / "*.html"
+        ]
+        for pattern in plot_patterns:
+            for plot_file in glob.glob(str(pattern)):
+                # Skip index.html or other non-plot files
+                if "index" in Path(plot_file).name.lower():
+                    continue
+                try:
+                    result = hf_service.upload_plot(
+                        plot_path=plot_file,
+                        plot_name=Path(plot_file).stem,
+                        plot_type="interactive"
+                    )
+                    uploaded_files.append({"type": "plot", "name": Path(plot_file).name, "url": result.get("url")})
+                except Exception as e:
+                    errors.append(f"Plot {Path(plot_file).name}: {str(e)}")
+        
+        # Upload PNG images
+        image_patterns = [
+            session_outputs_dir / "*.png",
+            global_outputs_dir / "*.png",
+            session_outputs_dir / "plots" / "*.png",
+            global_outputs_dir / "plots" / "*.png"
+        ]
+        for pattern in image_patterns:
+            for image_file in glob.glob(str(pattern)):
+                try:
+                    result = hf_service.upload_plot(
+                        plot_path=image_file,
+                        plot_name=Path(image_file).stem,
+                        plot_type="static"
+                    )
+                    uploaded_files.append({"type": "image", "name": Path(image_file).name, "url": result.get("url")})
+                except Exception as e:
+                    errors.append(f"Image {Path(image_file).name}: {str(e)}")
+        
+        if not uploaded_files and errors:
+            raise HTTPException(
+                status_code=500, 
+                detail=f"Export failed: {'; '.join(errors)}"
+            )
+        
+        return JSONResponse({
+            "success": True,
+            "uploaded_files": uploaded_files,
+            "errors": errors if errors else None,
+            "message": f"Successfully exported {len(uploaded_files)} files to HuggingFace"
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"HuggingFace export failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Export failed: {str(e)}")
+
+
 @app.get("/{full_path:path}")
 async def serve_frontend(full_path: str):
     """

@@ -1,13 +1,24 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Send, Plus, Search, Settings, MoreHorizontal, User, Bot, ArrowLeft, Paperclip, Sparkles, Trash2, X, Upload, Package, FileText, BarChart3, ChevronRight, LogOut } from 'lucide-react';
+import { Send, Plus, Search, Settings, MoreHorizontal, User, Bot, ArrowLeft, Paperclip, Sparkles, Trash2, X, Upload, Package, FileText, BarChart3, ChevronRight, LogOut, AlertTriangle, Loader2, Check, CloudUpload } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { Logo } from './Logo';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useAuth } from '../lib/AuthContext';
-import { trackQuery, incrementSessionQueries } from '../lib/supabase';
+import { trackQuery, incrementSessionQueries, getHuggingFaceStatus } from '../lib/supabase';
+import { SettingsModal } from './SettingsModal';
+
+// HuggingFace logo SVG component for the export button
+const HuggingFaceLogo = ({ className = "w-4 h-4" }: { className?: string }) => (
+  <svg className={className} viewBox="0 0 120 120" fill="currentColor">
+    <path d="M60 0C26.863 0 0 26.863 0 60s26.863 60 60 60 60-26.863 60-60S93.137 0 60 0zm0 10c27.614 0 50 22.386 50 50s-22.386 50-50 50S10 87.614 10 60 32.386 10 60 10z"/>
+    <circle cx="40" cy="50" r="8"/>
+    <circle cx="80" cy="50" r="8"/>
+    <path d="M40 75c0 11.046 8.954 20 20 20s20-8.954 20-20H40z"/>
+  </svg>
+);
 
 interface Message {
   id: string;
@@ -192,6 +203,11 @@ export const ChatInterface: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   const [reportModalUrl, setReportModalUrl] = useState<string | null>(null);
   const [reportModalTitle, setReportModalTitle] = useState<string>('Visualization');
   const [showAssets, setShowAssets] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [hfConnected, setHfConnected] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportSuccess, setExportSuccess] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
@@ -201,6 +217,17 @@ export const ChatInterface: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   const { user, isAuthenticated, dbSessionId, signOut } = useAuth();
   
   const activeSession = sessions.find(s => s.id === activeSessionId) || sessions[0];
+
+  // Check HuggingFace connection status
+  useEffect(() => {
+    const checkHfStatus = async () => {
+      if (user?.id) {
+        const status = await getHuggingFaceStatus(user.id);
+        setHfConnected(status.connected);
+      }
+    };
+    checkHfStatus();
+  }, [user]);
 
   // Persist sessions to localStorage whenever they change
   useEffect(() => {
@@ -317,16 +344,22 @@ export const ChatInterface: React.FC<{ onBack: () => void }> = ({ onBack }) => {
               console.log('❌ Analysis failed', data);
               setIsTyping(false);
               
-              // Show error message to user
-              setMessages((prev) => [
-                ...prev,
-                {
-                  id: Date.now().toString(),
-                  role: 'assistant',
-                  content: data.message || data.error || '❌ Analysis failed',
-                  session_id: activeSessionId,
-                },
-              ]);
+              // Show error message to user - add to sessions
+              setSessions(prev => prev.map(s => {
+                if (s.id === activeSessionId) {
+                  return {
+                    ...s,
+                    messages: [...s.messages, {
+                      id: Date.now().toString(),
+                      role: 'assistant' as const,
+                      content: data.message || data.error || '❌ Analysis failed',
+                      timestamp: new Date(),
+                    }],
+                    updatedAt: new Date()
+                  };
+                }
+                return s;
+              }));
               
               setCurrentStep('');
             } else if (data.type === 'analysis_complete') {
@@ -876,7 +909,11 @@ export const ChatInterface: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                 <ArrowLeft className="w-5 h-5" />
               </button>
               <div className="flex gap-2">
-                <button className="p-2 hover:bg-white/5 rounded-lg transition-colors text-white/40 hover:text-white">
+                <button 
+                  onClick={() => setShowSettings(true)}
+                  className="p-2 hover:bg-white/5 rounded-lg transition-colors text-white/40 hover:text-white"
+                  title="Settings"
+                >
                   <Settings className="w-5 h-5" />
                 </button>
               </div>
@@ -1222,18 +1259,106 @@ export const ChatInterface: React.FC<{ onBack: () => void }> = ({ onBack }) => {
             transition={{ type: "spring", damping: 25, stiffness: 200 }}
             className="w-[320px] border-l border-white/5 bg-[#0a0a0a]/95 backdrop-blur-xl flex flex-col"
           >
-            <div className="p-4 border-b border-white/5 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Package className="w-5 h-5 text-emerald-400" />
-                <h3 className="font-bold text-sm">Assets</h3>
+            <div className="p-4 border-b border-white/5">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <Package className="w-5 h-5 text-emerald-400" />
+                  <h3 className="font-bold text-sm">Assets</h3>
+                </div>
+                <button 
+                  onClick={() => setShowAssets(false)}
+                  className="p-1.5 rounded-lg hover:bg-white/5 transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
               </div>
-              <button 
-                onClick={() => setShowAssets(false)}
-                className="p-1.5 rounded-lg hover:bg-white/5 transition-colors"
-              >
-                <X className="w-4 h-4" />
-              </button>
+              
+              {/* Export to HuggingFace Button */}
+              {hfConnected ? (
+                <button
+                  onClick={async () => {
+                    setIsExporting(true);
+                    setExportError(null);
+                    setExportSuccess(false);
+                    try {
+                      // Call export API endpoint
+                      const response = await fetch('/api/export/huggingface', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          user_id: user?.id,
+                          session_id: activeSessionId
+                        })
+                      });
+                      if (response.ok) {
+                        setExportSuccess(true);
+                        setTimeout(() => setExportSuccess(false), 5000);
+                      } else {
+                        const data = await response.json();
+                        setExportError(data.detail || 'Export failed');
+                      }
+                    } catch (err) {
+                      setExportError('Failed to export. Please try again.');
+                    } finally {
+                      setIsExporting(false);
+                    }
+                  }}
+                  disabled={isExporting}
+                  className={cn(
+                    "w-full py-2.5 px-3 rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-all",
+                    isExporting 
+                      ? "bg-yellow-500/20 text-yellow-300/60 cursor-wait"
+                      : exportSuccess
+                        ? "bg-green-500/20 text-green-400 border border-green-500/30"
+                        : "bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 hover:bg-yellow-500/30"
+                  )}
+                >
+                  {isExporting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Exporting...
+                    </>
+                  ) : exportSuccess ? (
+                    <>
+                      <Check className="w-4 h-4" />
+                      Exported to HuggingFace!
+                    </>
+                  ) : (
+                    <>
+                      <HuggingFaceLogo className="w-4 h-4" />
+                      Export to HuggingFace
+                    </>
+                  )}
+                </button>
+              ) : (
+                <button
+                  onClick={() => setShowSettings(true)}
+                  className="w-full py-2.5 px-3 rounded-lg text-sm font-medium flex items-center justify-center gap-2 bg-white/5 text-white/50 border border-white/10 hover:bg-white/10 hover:text-white/70 transition-all"
+                >
+                  <HuggingFaceLogo className="w-4 h-4" />
+                  Export to HuggingFace
+                </button>
+              )}
+              
+              {exportError && (
+                <p className="text-xs text-red-400 mt-2 text-center">{exportError}</p>
+              )}
             </div>
+            
+            {/* Warning Banner */}
+            {!hfConnected && (
+              <div className="px-4 py-3 bg-amber-500/10 border-y border-amber-500/20">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-xs text-amber-300 font-medium">Assets are temporary</p>
+                    <p className="text-[10px] text-amber-300/60 mt-0.5">
+                      Connect HuggingFace in Settings to permanently save your visualizations, models, and datasets.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
             
             <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
               {(() => {
@@ -1476,6 +1601,18 @@ export const ChatInterface: React.FC<{ onBack: () => void }> = ({ onBack }) => {
           background: rgba(255, 255, 255, 0.1);
         }
       `}</style>
+      
+      {/* Settings Modal */}
+      <SettingsModal 
+        isOpen={showSettings} 
+        onClose={() => {
+          setShowSettings(false);
+          // Refresh HF connection status when settings modal closes
+          if (user?.id) {
+            getHuggingFaceStatus(user.id).then(status => setHfConnected(status.connected));
+          }
+        }} 
+      />
     </div>
   );
 };
