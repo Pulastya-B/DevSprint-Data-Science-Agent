@@ -275,6 +275,14 @@ export const getUserProfile = async (userId: string) => {
   }
 };
 
+// Helper function to add timeout to any promise
+const withTimeout = <T>(promise: Promise<T>, ms: number, errorMsg: string): Promise<T> => {
+  const timeout = new Promise<never>((_, reject) => 
+    setTimeout(() => reject(new Error(errorMsg)), ms)
+  );
+  return Promise.race([promise, timeout]);
+};
+
 // Update HuggingFace token for a user (only updates existing profiles)
 export const updateHuggingFaceToken = async (userId: string, hfToken: string, hfUsername?: string) => {
   console.log('[HF Token] Starting update for user:', userId);
@@ -286,21 +294,21 @@ export const updateHuggingFaceToken = async (userId: string, hfToken: string, hf
   }
   
   try {
-    // Check if user is authenticated in Supabase
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-    console.log('[HF Token] Current session:', session ? `User: ${session.user.id}` : 'NO SESSION');
+    // Check if user is authenticated in Supabase (with timeout)
+    console.log('[HF Token] Getting session...');
+    const { data: { session } } = await withTimeout(
+      supabase.auth.getSession(),
+      5000,
+      'Session check timeout'
+    );
+    console.log('[HF Token] Session:', session ? `User: ${session.user.id}` : 'NO SESSION');
     
     if (!session) {
       console.error('[HF Token] No active Supabase session! RLS will block the query.');
-      console.error('[HF Token] User needs to be logged in via Supabase auth.');
       return null;
     }
     
-    if (session.user.id !== userId) {
-      console.warn('[HF Token] Session user ID mismatch:', session.user.id, '!=', userId);
-    }
-    
-    console.log('[HF Token] Attempting update with authenticated session...');
+    console.log('[HF Token] Attempting update...');
     
     const updateData = { 
       huggingface_token: hfToken || null,
@@ -309,10 +317,14 @@ export const updateHuggingFaceToken = async (userId: string, hfToken: string, hf
     };
     console.log('[HF Token] Update payload:', { ...updateData, huggingface_token: hfToken ? '****' : null });
     
-    const { error, count } = await supabase
-      .from('user_profiles')
-      .update(updateData)
-      .eq('user_id', userId);
+    const { error } = await withTimeout(
+      supabase
+        .from('user_profiles')
+        .update(updateData)
+        .eq('user_id', userId),
+      8000,
+      'Update query timeout'
+    );
     
     if (error) {
       console.error('[HF Token] Update failed:', error.message, error.code, error.hint);
@@ -322,7 +334,7 @@ export const updateHuggingFaceToken = async (userId: string, hfToken: string, hf
     console.log('[HF Token] Update successful!');
     return { ...updateData, user_id: userId };
   } catch (err: any) {
-    console.error('[HF Token] Unexpected error:', err?.message || err);
+    console.error('[HF Token] Error:', err?.message || err);
     return null;
   }
 };
@@ -332,18 +344,29 @@ export const getHuggingFaceStatus = async (userId: string) => {
   console.log('[HF Status] Checking HF connection for user:', userId);
   
   try {
-    // Check if user is authenticated
-    const { data: { session } } = await supabase.auth.getSession();
+    // Check if user is authenticated (with timeout)
+    console.log('[HF Status] Getting session...');
+    const { data: { session } } = await withTimeout(
+      supabase.auth.getSession(),
+      5000,
+      'Session check timeout'
+    );
+    
     if (!session) {
       console.log('[HF Status] No session, returning not connected');
       return { connected: false };
     }
+    console.log('[HF Status] Session found, querying profile...');
     
-    const { data, error } = await supabase
-      .from('user_profiles')
-      .select('huggingface_token, huggingface_username')
-      .eq('user_id', userId)
-      .single();
+    const { data, error } = await withTimeout(
+      supabase
+        .from('user_profiles')
+        .select('huggingface_token, huggingface_username')
+        .eq('user_id', userId)
+        .single(),
+      5000,
+      'Profile query timeout'
+    );
     
     if (error) {
       console.error('[HF Status] Query error:', error.message);
@@ -358,8 +381,8 @@ export const getHuggingFaceStatus = async (userId: string) => {
     
     console.log('[HF Status] Result:', result.connected ? `Connected as ${result.username}` : 'Not connected');
     return result;
-  } catch (err) {
-    console.error('[HF Status] Unexpected error:', err);
+  } catch (err: any) {
+    console.error('[HF Status] Error:', err?.message || err);
     return { connected: false };
   }
 };
