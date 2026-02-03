@@ -275,17 +275,19 @@ export const getUserProfile = async (userId: string) => {
   }
 };
 
-// Update HuggingFace token for a user
+// Update HuggingFace token for a user (UPSERT to handle new users)
 export const updateHuggingFaceToken = async (userId: string, hfToken: string, hfUsername?: string) => {
   try {
     const { data, error } = await supabase
       .from('user_profiles')
-      .update({ 
+      .upsert({ 
+        user_id: userId,
         huggingface_token: hfToken,
         huggingface_username: hfUsername,
         updated_at: new Date().toISOString()
+      }, {
+        onConflict: 'user_id'
       })
-      .eq('user_id', userId)
       .select()
       .single();
     
