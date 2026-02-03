@@ -990,7 +990,7 @@ You are a DOER. Complete workflows based on user intent."""
             "eda_agent": {
                 "name": "EDA Specialist",
                 "emoji": "🔬",
-                "description": "Expert in data profiling, quality checks, and exploratory analysis",
+                "description": "Explore and understand data patterns, relationships, correlations, and distributions. Answer questions about how variables relate, change together, or affect each other. Analyze data quality, detect outliers and anomalies. Generate descriptive statistics, correlation matrices, scatter plots, histograms, box plots, and distribution visualizations to reveal insights.",
                 "system_prompt": """You are the EDA Specialist Agent - an expert in exploratory data analysis.
 
 **Your Expertise:**
@@ -1020,7 +1020,7 @@ You work collaboratively with other specialists and hand off cleaned data to pre
             "modeling_agent": {
                 "name": "ML Modeling Specialist",
                 "emoji": "🤖",
-                "description": "Expert in model training, tuning, and evaluation",
+                "description": "Build and train predictive machine learning models to forecast outcomes, classify categories, or predict future values. Perform supervised learning tasks including regression and classification. Train baseline models, optimize hyperparameters, conduct cross-validation, and evaluate model performance metrics like accuracy, precision, recall, and R-squared.",
                 "system_prompt": """You are the ML Modeling Specialist Agent - an expert in machine learning.
 
 **Your Expertise:**
@@ -1066,7 +1066,7 @@ You receive preprocessed data from data engineering agents and collaborate with 
             "viz_agent": {
                 "name": "Visualization Specialist",
                 "emoji": "📊",
-                "description": "Expert in creating plots, dashboards, and visual insights",
+                "description": "Create visual representations, charts, graphs, and dashboards to display data patterns. Generate interactive plots including scatter plots, line charts, bar graphs, heatmaps, time series visualizations, and statistical plots. Design comprehensive dashboards and visual reports to communicate findings clearly.",
                 "system_prompt": """You are the Visualization Specialist Agent - an expert in data visualization.
 
 **Your Expertise:**
@@ -1096,7 +1096,7 @@ You collaborate with all agents to visualize their outputs - EDA results, model 
             "insight_agent": {
                 "name": "Business Insights Specialist",
                 "emoji": "💡",
-                "description": "Expert in interpreting results and generating business recommendations",
+                "description": "Interpret trained machine learning model results and translate findings into actionable business recommendations. Explain why models make certain predictions, analyze feature importance from completed models, identify root causes in model outputs, generate what-if scenarios, and provide strategic business insights based on model performance and predictions.",
                 "system_prompt": """You are the Business Insights Specialist Agent - an expert in translating data into action.
 
 **Your Expertise:**
@@ -1127,7 +1127,7 @@ You synthesize outputs from all other agents and provide the final business narr
             "preprocessing_agent": {
                 "name": "Data Engineering Specialist",
                 "emoji": "⚙️",
-                "description": "Expert in data cleaning, preprocessing, and feature engineering",
+                "description": "Clean and prepare raw data for analysis by handling missing values, removing or treating outliers, encoding categorical variables, scaling numerical features, and engineering new features. Transform messy data into analysis-ready datasets through imputation, normalization, one-hot encoding, and feature creation.",
                 "system_prompt": """You are the Data Engineering Specialist Agent - an expert in data preparation.
 
 **Your Expertise:**
@@ -2880,12 +2880,26 @@ You receive quality reports from EDA agent and deliver clean data to modeling ag
         wants_viz = any(kw in task_lower for kw in ["plot", "graph", "visualiz", "dashboard", "chart", "show", "display", "create", "generate"])
         wants_clean = any(kw in task_lower for kw in ["clean", "missing", "impute"])
         wants_features = any(kw in task_lower for kw in ["feature", "engineer", "time-based", "extract features"])
-        wants_train = any(kw in task_lower for kw in ["train", "model", "predict", "best model", "classify", "regression", "forecast"])
+        wants_train = any(kw in task_lower for kw in ["train", "model", "predict", "best model", "classify", "regression", "forecast", "build model"])
         
-        # 🎯 AUTO-ENABLE TRAINING: If we have a target column and it's numeric/categorical, assume full ML workflow
-        if target_col and not wants_viz and not wants_clean and self.workflow_state.task_type in ["regression", "classification"]:
-            print(f"   🎯 Auto-enabling ML training (detected {self.workflow_state.task_type} task with target='{target_col}')")
-            wants_train = True
+        # 🔍 CRITICAL: Detect exploratory/relationship questions (should NOT trigger ML training)
+        wants_relationship = any(kw in task_lower for kw in [
+            "how does", "how do", "relationship", "relate", "correlation", "correlate",
+            "affect", "effect", "impact", "influence", "change with", "vary with",
+            "compare", "difference between", "distribution", "pattern"
+        ])
+        
+        # 🎯 AUTO-ENABLE TRAINING: Only if explicitly asking for predictions AND not asking about relationships
+        # Don't auto-enable for exploratory questions even if target exists
+        if target_col and not wants_viz and not wants_clean and not wants_relationship and self.workflow_state.task_type in ["regression", "classification"]:
+            # Additional check: only auto-enable if question implies prediction
+            if wants_train or any(kw in task_lower for kw in ["predict", "forecast", "estimate"]):
+                print(f"   🎯 Auto-enabling ML training (detected {self.workflow_state.task_type} task with target='{target_col}')")
+                wants_train = True
+        elif wants_relationship:
+            # Override: Relationship questions should NOT train models
+            print(f"   🔍 Exploratory analysis detected - disabling auto-ML (question asks about relationships, not predictions)")
+            wants_train = False
         
         # 📊 DETECT SPECIFIC PLOT TYPE - Match user's exact visualization request
         plot_type_guidance = ""
