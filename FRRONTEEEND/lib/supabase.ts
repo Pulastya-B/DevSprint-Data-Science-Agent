@@ -329,7 +329,16 @@ export const updateHuggingFaceToken = async (userId: string, hfToken: string, hf
 
 // Get HuggingFace token for a user (returns masked token for security)
 export const getHuggingFaceStatus = async (userId: string) => {
+  console.log('[HF Status] Checking HF connection for user:', userId);
+  
   try {
+    // Check if user is authenticated
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      console.log('[HF Status] No session, returning not connected');
+      return { connected: false };
+    }
+    
     const { data, error } = await supabase
       .from('user_profiles')
       .select('huggingface_token, huggingface_username')
@@ -337,16 +346,20 @@ export const getHuggingFaceStatus = async (userId: string) => {
       .single();
     
     if (error) {
+      console.error('[HF Status] Query error:', error.message);
       return { connected: false };
     }
     
-    return {
+    const result = {
       connected: !!data?.huggingface_token,
       username: data?.huggingface_username,
       tokenMasked: data?.huggingface_token ? `hf_****${data.huggingface_token.slice(-4)}` : null
     };
+    
+    console.log('[HF Status] Result:', result.connected ? `Connected as ${result.username}` : 'Not connected');
+    return result;
   } catch (err) {
-    console.error('HF status fetch error:', err);
+    console.error('[HF Status] Unexpected error:', err);
     return { connected: false };
   }
 };
