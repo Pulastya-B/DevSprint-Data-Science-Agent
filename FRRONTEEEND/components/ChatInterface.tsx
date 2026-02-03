@@ -381,6 +381,14 @@ export const ChatInterface: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                 if (data.result) {
                   processAnalysisResult(data.result, activeSessionId);
                 }
+                
+                // Close SSE connection after receiving final result to prevent duplicate events
+                console.log('🔒 Closing SSE connection after analysis complete');
+                if (eventSourceRef.current) {
+                  eventSourceRef.current.close();
+                  eventSourceRef.current = null;
+                  sseSessionRef.current = null;
+                }
               } else {
                 console.log('⏭️ Skipping duplicate analysis result', resultKey);
               }
