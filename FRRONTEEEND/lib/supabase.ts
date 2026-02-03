@@ -280,27 +280,36 @@ export const updateHuggingFaceToken = async (userId: string, hfToken: string, hf
   console.log('[HF Token] Starting update for user:', userId);
   
   try {
-    // First check if profile exists
+    // First check if profile exists with timeout
     console.log('[HF Token] Checking if profile exists...');
-    const { data: existingProfile, error: fetchError } = await supabase
+    
+    const profileCheckPromise = supabase
       .from('user_profiles')
       .select('user_id, name, email')
       .eq('user_id', userId)
       .single();
     
-    if (fetchError) {
-      console.error('[HF Token] Profile fetch error:', fetchError);
-      return null;
+    // Add 5 second timeout
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('Profile check timeout')), 5000)
+    );
+    
+    let existingProfile;
+    try {
+      const result = await Promise.race([profileCheckPromise, timeoutPromise]) as any;
+      if (result.error) {
+        console.error('[HF Token] Profile fetch error:', result.error);
+        return null;
+      }
+      existingProfile = result.data;
+    } catch (timeoutErr) {
+      console.error('[HF Token] Profile check timed out, proceeding with update anyway...');
+      // Proceed with update even if check times out - the update will fail if profile doesn't exist
     }
     
-    if (!existingProfile) {
-      console.error('[HF Token] Profile not found for user:', userId);
-      return null;
-    }
+    console.log('[HF Token] Proceeding with update...');
     
-    console.log('[HF Token] Profile found, updating HF fields...');
-    
-    // Profile exists, update only HF fields
+    // Update HF fields (will fail if profile doesn't exist due to no matching rows)
     const updateData = { 
       huggingface_token: hfToken || null,
       huggingface_username: hfUsername || null,
@@ -308,22 +317,29 @@ export const updateHuggingFaceToken = async (userId: string, hfToken: string, hf
     };
     console.log('[HF Token] Update payload:', { ...updateData, huggingface_token: hfToken ? '****' : null });
     
-    const { data, error } = await supabase
+    const updatePromise = supabase
       .from('user_profiles')
       .update(updateData)
       .eq('user_id', userId)
       .select()
       .single();
     
-    if (error) {
-      console.error('[HF Token] Update failed:', error.message, error.code, error.details);
+    // Add 5 second timeout for update
+    const updateTimeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('Update timeout')), 5000)
+    );
+    
+    const updateResult = await Promise.race([updatePromise, updateTimeoutPromise]) as any;
+    
+    if (updateResult.error) {
+      console.error('[HF Token] Update failed:', updateResult.error.message, updateResult.error.code);
       return null;
     }
     
     console.log('[HF Token] Update successful!');
-    return data;
-  } catch (err) {
-    console.error('[HF Token] Unexpected error:', err);
+    return updateResult.data;
+  } catch (err: any) {
+    console.error('[HF Token] Unexpected error:', err?.message || err);
     return null;
   }
 };
