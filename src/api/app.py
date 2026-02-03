@@ -383,11 +383,10 @@ async def stream_progress(session_id: str):
             print(f"[SSE] SENDING connection event to client")
             yield f"data: {safe_json_dumps(connection_event)}\n\n"
             
-            # Send any existing history first (for reconnections)
-            history = progress_manager.get_history(session_id)
-            print(f"[SSE] Sending {len(history[-10:])} history events")
-            for event in history[-10:]:  # Send last 10 events
-                yield f"data: {safe_json_dumps(event)}\n\n"
+            # ❌ DON'T replay history - causes duplicate results when reconnecting
+            # Each new query should only show events from that query, not previous ones
+            # History is only useful for debugging, not for client display
+            print(f"[SSE] Skipping history replay (follow-up query should show fresh events)")
             
             print(f"[SSE] Starting event stream loop for session {session_id}")
             
@@ -460,6 +459,11 @@ def run_analysis_background(file_path: str, task_description: str, target_col: O
         async with workflow_lock:
             try:
                 logger.info(f"[BACKGROUND] Starting analysis for session {session_id[:8]}...")
+                
+                # 🧹 Clear SSE history for fresh event stream (prevents duplicate results)
+                print(f"[🧹] Clearing SSE history for {session_id[:8]}...")
+                if session_id in progress_manager._history:
+                    progress_manager._history[session_id] = []
                 
                 # 👥 Get isolated agent for this session
                 session_agent = await get_agent_for_session(session_id)
