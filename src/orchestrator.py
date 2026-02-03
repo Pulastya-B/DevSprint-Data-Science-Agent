@@ -6,6 +6,7 @@ Supports multiple providers: Groq and Gemini.
 
 import json
 import os
+import re
 from typing import Dict, Any, List, Optional
 from pathlib import Path
 import time
@@ -1640,6 +1641,63 @@ You receive quality reports from EDA agent and deliver clean data to modeling ag
                     "path": data_path,
                     "url": f"/outputs/{url_path}"
                 })
+            
+            # === SCAN execute_python_code OUTPUT FOR HTML FILES ===
+            # When LLM uses execute_python_code to create visualizations, the HTML paths
+            # are not in output_path - we need to scan the output/stdout for .html paths
+            if tool == "execute_python_code":
+                # Get raw output from code execution
+                raw_output = str(nested_result.get("output", "")) + str(nested_result.get("stdout", "")) + str(result.get("output", ""))
+                
+                # Also scan the code itself for write_html() calls
+                code_str = str(step.get("arguments", {}).get("code", ""))
+                
+                # Regex to find .html file paths in output or code
+                html_paths = set()
+                
+                # Pattern 1: Paths in write_html() calls
+                write_html_pattern = r"write_html\s*\(\s*['\"]([^'\"]+\.html)['\"]"
+                html_paths.update(re.findall(write_html_pattern, code_str))
+                
+                # Pattern 2: Paths like /tmp/data_science_agent/*.html in output
+                output_pattern = r"(/tmp/data_science_agent/[^\s'\"]+\.html)"
+                html_paths.update(re.findall(output_pattern, raw_output))
+                html_paths.update(re.findall(output_pattern, code_str))
+                
+                # Pattern 3: visualizations_created list in output (common pattern)
+                viz_list_pattern = r"visualizations_created['\"]?\s*:\s*\[([^\]]+)\]"
+                viz_match = re.search(viz_list_pattern, raw_output)
+                if viz_match:
+                    viz_paths = re.findall(r"['\"]([^'\"]+\.html)['\"]", viz_match.group(1))
+                    html_paths.update(viz_paths)
+                
+                print(f"[DEBUG] execute_python_code artifact scanner found {len(html_paths)} HTML files: {html_paths}")
+                
+                # Register each found HTML as a plot
+                for html_path in html_paths:
+                    # Extract title from filename
+                    filename = html_path.split("/")[-1]
+                    plot_title = filename.replace("_", " ").replace(".html", "").title()
+                    
+                    # Clean path for URL
+                    if html_path.startswith('/tmp/data_science_agent/'):
+                        url_path = html_path.replace('/tmp/data_science_agent/', '')
+                    else:
+                        url_path = filename
+                    
+                    # Avoid duplicates
+                    existing_urls = [p.get("url", "") for p in plots]
+                    new_url = f"/outputs/{url_path}"
+                    if new_url not in existing_urls:
+                        plots.append({
+                            "title": plot_title,
+                            "path": html_path,
+                            "url": new_url,
+                            "type": "html"
+                        })
+                        print(f"[DEBUG] Registered plot from execute_python_code:")
+                        print(f"[DEBUG]   title: {plot_title}")
+                        print(f"[DEBUG]   url: {new_url}")
         
         # Build COMPREHENSIVE response template following user's format
         summary_lines = []

@@ -212,6 +212,7 @@ export const ChatInterface: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
   const processedAnalysisRef = useRef<Set<string>>(new Set()); // Track processed analysis_complete events
+  const [sseReconnectTrigger, setSseReconnectTrigger] = useState(0); // Force SSE reconnection for follow-up queries
   
   // Auth context for user tracking
   const { user, isAuthenticated, dbSessionId, signOut } = useAuth();
@@ -283,12 +284,18 @@ export const ChatInterface: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     }
 
     // Check if we're already connected to the correct session
-    if (sseSessionRef.current === activeSessionId) {
+    // BUT: If sseReconnectTrigger changed, we MUST reconnect (follow-up query sent)
+    if (sseSessionRef.current === activeSessionId && sseReconnectTrigger === 0) {
       // Same session - check if connection is still alive
       if (eventSourceRef.current && eventSourceRef.current.readyState !== 2) {
         console.log('♻️ Reusing existing SSE connection for same session');
         return;
       }
+    }
+    
+    // If reconnect was triggered, log it
+    if (sseReconnectTrigger > 0) {
+      console.log(`🔄 SSE reconnect triggered (trigger=${sseReconnectTrigger})`);
     }
 
     // Different session or connection is closed - need new connection
@@ -417,7 +424,7 @@ export const ChatInterface: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         isCleaningUpRef.current = false;
       }
     };
-  }, [activeSessionId]);
+  }, [activeSessionId, sseReconnectTrigger]); // 🔄 Also reconnect when trigger changes
 
   const processAnalysisResult = (result: any, sessionId: string) => {
     // Extract and display the analysis result from SSE
@@ -554,6 +561,11 @@ export const ChatInterface: React.FC<{ onBack: () => void }> = ({ onBack }) => {
           // Follow-up query - send task description only, backend will use cached dataset
           formData.append('task_description', input);
           console.log(`📤 Follow-up query for session ${sessionKey.slice(0, 8)}...`);
+          
+          // 🔄 CRITICAL: Force SSE reconnection for follow-up queries
+          // The previous SSE was closed after analysis_complete, need new connection
+          console.log('🔄 Triggering SSE reconnection for follow-up query...');
+          setSseReconnectTrigger(prev => prev + 1);
         }
         
         formData.append('session_id', sessionKey);

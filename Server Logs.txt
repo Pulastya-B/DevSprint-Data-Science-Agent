@@ -1,0 +1,250 @@
+✅ SBERT loaded on CPU
+📊 Token Budget: 120,000 tokens available (128,000 - 8,000 reserve)
+✅ Sessions database initialized at ./cache_db/sessions.db
+✅ Created new session: 0af921ec-b3c2-4da2-a86c-3e2ca0625b99
+📁 Output directory: /tmp/data_science_agent/outputs
+INFO:src.api.app:✅ Health check agent initialized with provider: mistral
+INFO:src.api.app:👥 Per-session agents enabled - each user gets isolated instance
+INFO:src.api.app:🤖 Multi-agent architecture enabled with 5 specialists
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:7860 (Press CTRL+C to quit)
+INFO:     10.16.14.243:64867 - "GET /?logs=container HTTP/1.1" 200 OK
+INFO:     10.16.14.243:64867 - "GET /index.css HTTP/1.1" 200 OK
+INFO:     10.16.14.243:64867 - "GET /?logs=container HTTP/1.1" 200 OK
+INFO:     10.16.21.217:19912 - "GET /index.css HTTP/1.1" 200 OK
+INFO:     10.16.21.217:54528 - "GET / HTTP/1.1" 200 OK
+INFO:     10.16.14.243:55708 - "GET /index.css HTTP/1.1" 200 OK
+INFO:     10.16.21.217:54528 - "GET /assets/index-Doh4YfmS.js HTTP/1.1" 304 Not Modified
+INFO:     10.16.14.243:55708 - "GET /favicon.ico HTTP/1.1" 200 OK
+[SSE] ENDPOINT: Client connected for session_id=4b707472-0fe1-4130-8ad5-0c8f6a2cee66
+[SSE] Queue registered, total subscribers: 1
+INFO:     10.16.14.243:8417 - "GET /api/progress/stream/4b707472-0fe1-4130-8ad5-0c8f6a2cee66 HTTP/1.1" 200 OK
+[SSE] SENDING connection event to client
+[SSE] Sending 0 history events
+[SSE] Starting event stream loop for session 4b707472-0fe1-4130-8ad5-0c8f6a2cee66
+INFO:src.api.app:SSE stream cancelled for session 4b707472-0fe1-4130-8ad5-0c8f6a2cee66
+INFO:src.api.app:SSE stream closed for session 4b707472-0fe1-4130-8ad5-0c8f6a2cee66
+INFO:src.api.app:[ASYNC] Created new session: 77dee15c...
+INFO:src.api.app:[ASYNC] File saved: uber_trips_dataset_50k.csv
+INFO:     10.16.21.217:38897 - "POST /run-async HTTP/1.1" 200 OK
+INFO:src.api.app:[BACKGROUND] Starting analysis for session 77dee15c...
+INFO:src.api.app:[🆕] Creating lightweight session for 77dee15c...
+INFO:src.api.app:✅ Session created for 77dee15c (cache: 1/50) - <1s init
+[DEBUG] Session fallback triggered - has_ambiguous_ref=True, resolved={}
+[DEBUG] resolve_ambiguity returning: {}
+[DEBUG] Orchestrator received resolved_params: {}
+[DEBUG] Current file_path: '/tmp/data_science_agent/uber_trips_dataset_50k.csv', target_col: 'None'
+🔍 Extracting dataset schema locally (no LLM)...
+🧠 Semantic layer: Embedded 14 columns
+   Found 10 similar column pairs (potential duplicates)
+🧠 Semantic layer enriched 14 columns
+✅ Schema extracted: 50000 rows × 14 cols
+   File size: 8.46 MB
+💡 Inferred target column: fare_amount (confidence: 0.41)
+   Task type inferred: regression
+🧠 Semantic routing → 📊 Visualization Specialist (confidence: 0.09)
+📝 Reasoning: Selected viz_agent (confidence: 0.13)
+
+📊 Delegating to: Visualization Specialist
+   Specialization: Create visual representations, charts, graphs, and dashboards to display data patterns. Generate interactive plots including scatter plots, line charts, bar graphs, heatmaps, time series visualizations, and statistical plots. Design comprehensive dashboards and visual reports to communicate findings clearly.
+🎯 Agent-specific tools: 17 tools for viz_agent
+   📦 Loaded 17 agent-specific tools
+   🔍 Exploratory analysis detected - disabling auto-ML (question asks about relationships, not predictions)
+💾 Saved to session: dataset=/tmp/data_science_agent/uber_trips_dataset_50k.csv, target=fare_amount
+💰 Token budget: 0/500000 (0%)
+📊 Token Budget Check: 677 / 120,000 tokens
+✅ Within budget
+💰 Token budget: 677/128000 (0.5%)
+[SSE] ENDPOINT: Client connected for session_id=77dee15c-fa80-4df8-946b-cd10f79bad2d
+[SSE] Queue registered, total subscribers: 1
+INFO:     10.16.21.217:38897 - "GET /api/progress/stream/77dee15c-fa80-4df8-946b-cd10f79bad2d HTTP/1.1" 200 OK
+[SSE] SENDING connection event to client
+[SSE] Sending 0 history events
+[SSE] Starting event stream loop for session 77dee15c-fa80-4df8-946b-cd10f79bad2d
+INFO:httpx:HTTP Request: POST https://api.mistral.ai/v1/chat/completions "HTTP/1.1 200 OK"
+📊 Tokens: 2700 this call | 2700/500000 this minute
+[SSE] PROGRESS_MANAGER EMIT: session=77dee15c-fa80-4df8-946b-cd10f79bad2d, event_type=token_update, msg=📊 Tokens: 2700 this call | 2700/500000 this minute
+[SSE] History stored, total events for 77dee15c-fa80-4df8-946b-cd10f79bad2d: 1
+[SSE] Found 1 subscribers for 77dee15c-fa80-4df8-946b-cd10f79bad2d
+[SSE] Successfully queued event to subscriber 1
+
+🔧 Executing: generate_interactive_scatter
+   Arguments: {
+  "file_path": "/tmp/data_science_agent/uber_trips_dataset_50k.csv",
+  "x_col": "distance_km",
+  "y_col": "fare_amount",
+  "color_col": "city",
+  "output_path": "/tmp/data_science_agent/fare_vs_distance.html"
+}
+[SSE] EMIT tool_executing: session=77dee15c-fa80-4df8-946b-cd10f79bad2d, tool=generate_interactive_scatter
+[SSE] PROGRESS_MANAGER EMIT: session=77dee15c-fa80-4df8-946b-cd10f79bad2d, event_type=tool_executing, msg=🔧 Executing: generate_interactive_scatter
+[SSE] History stored, total events for 77dee15c-fa80-4df8-946b-cd10f79bad2d: 2
+[SSE] Found 1 subscribers for 77dee15c-fa80-4df8-946b-cd10f79bad2d
+[SSE] Successfully queued event to subscriber 1
+   📋 Final parameters: ['file_path', 'x_col', 'y_col', 'color_col', 'output_path']
+[SSE] GOT event from queue: token_update
+[SSE] GOT event from queue: tool_executing
+💾 Checkpoint saved: iteration 1, last tool: generate_interactive_scatter
+   ✓ Completed: generate_interactive_scatter
+[SSE] PROGRESS_MANAGER EMIT: session=77dee15c-fa80-4df8-946b-cd10f79bad2d, event_type=tool_completed, msg=✓ Completed: generate_interactive_scatter
+[SSE] History stored, total events for 77dee15c-fa80-4df8-946b-cd10f79bad2d: 3
+[SSE] Found 1 subscribers for 77dee15c-fa80-4df8-946b-cd10f79bad2d
+[SSE] Successfully queued event to subscriber 1
+💰 Token budget: 2700/500000 (1%)
+📊 Token Budget Check: 1,011 / 120,000 tokens
+✅ Within budget
+💰 Token budget: 1011/128000 (0.8%)
+[SSE] GOT event from queue: tool_completed
+INFO:httpx:HTTP Request: POST https://api.mistral.ai/v1/chat/completions "HTTP/1.1 200 OK"
+📊 Tokens: 3033 this call | 5733/500000 this minute
+[SSE] PROGRESS_MANAGER EMIT: session=77dee15c-fa80-4df8-946b-cd10f79bad2d, event_type=token_update, msg=📊 Tokens: 3033 this call | 5733/500000 this minute
+[SSE] History stored, total events for 77dee15c-fa80-4df8-946b-cd10f79bad2d: 4
+[SSE] Found 1 subscribers for 77dee15c-fa80-4df8-946b-cd10f79bad2d
+[SSE] Successfully queued event to subscriber 1
+
+🔧 Executing: generate_interactive_time_series
+   Arguments: {
+  "file_path": "/tmp/data_science_agent/uber_trips_dataset_50k.csv",
+  "time_col": "pickup_time",
+  "value_cols": [
+    "fare_amount",
+    "distance_km"
+  ],
+  "output_path": "/tmp/data_science_agent/fare_over_time.html"
+}
+[SSE] EMIT tool_executing: session=77dee15c-fa80-4df8-946b-cd10f79bad2d, tool=generate_interactive_time_series
+[SSE] PROGRESS_MANAGER EMIT: session=77dee15c-fa80-4df8-946b-cd10f79bad2d, event_type=tool_executing, msg=🔧 Executing: generate_interactive_time_series
+[SSE] History stored, total events for 77dee15c-fa80-4df8-946b-cd10f79bad2d: 5
+[SSE] Found 1 subscribers for 77dee15c-fa80-4df8-946b-cd10f79bad2d
+[SSE] Successfully queued event to subscriber 1
+   📋 Final parameters: ['file_path', 'time_col', 'value_cols', 'output_path']
+[SSE] GOT event from queue: token_update
+[SSE] GOT event from queue: tool_executing
+💾 Checkpoint saved: iteration 2, last tool: generate_interactive_time_series
+   ✓ Completed: generate_interactive_time_series
+[SSE] PROGRESS_MANAGER EMIT: session=77dee15c-fa80-4df8-946b-cd10f79bad2d, event_type=tool_completed, msg=✓ Completed: generate_interactive_time_series
+[SSE] History stored, total events for 77dee15c-fa80-4df8-946b-cd10f79bad2d: 6
+[SSE] Found 1 subscribers for 77dee15c-fa80-4df8-946b-cd10f79bad2d
+[SSE] Successfully queued event to subscriber 1
+💰 Token budget: 5733/500000 (1%)
+📊 Token Budget Check: 1,276 / 120,000 tokens
+✅ Within budget
+💰 Token budget: 1276/128000 (1.0%)
+[SSE] GOT event from queue: tool_completed
+INFO:httpx:HTTP Request: POST https://api.mistral.ai/v1/chat/completions "HTTP/1.1 200 OK"
+📊 Tokens: 3583 this call | 9316/500000 this minute
+[SSE] PROGRESS_MANAGER EMIT: session=77dee15c-fa80-4df8-946b-cd10f79bad2d, event_type=token_update, msg=📊 Tokens: 3583 this call | 9316/500000 this minute
+[SSE] History stored, total events for 77dee15c-fa80-4df8-946b-cd10f79bad2d: 7
+[SSE] Found 1 subscribers for 77dee15c-fa80-4df8-946b-cd10f79bad2d
+[SSE] Successfully queued event to subscriber 1
+[DEBUG] Added plot to array:
+[DEBUG]   title: Scatter
+[DEBUG]   url: /outputs/fare_vs_distance.html
+[DEBUG]   type: html
+[DEBUG] Merging 0 reports into plots array
+[DEBUG] Final plots array length: 1
+✅ Enhanced summary generated with 1 plots, 0 metrics
+[DEBUG] Plots array contains 1 items:
+[DEBUG]   Plot 1: title='Scatter', url='/outputs/fare_vs_distance.html', type='html'
+
+✅ Session saved: 77dee15c-fa80-4df8-946b-cd10f79bad2d
+INFO:src.api.app:[BACKGROUND] Analysis completed for session 77dee15c...
+[SSE] PROGRESS_MANAGER EMIT: session=77dee15c-fa80-4df8-946b-cd10f79bad2d, event_type=analysis_complete, msg=✅ Analysis completed successfully!
+[SSE] History stored, total events for 77dee15c-fa80-4df8-946b-cd10f79bad2d: 8
+[SSE] Found 1 subscribers for 77dee15c-fa80-4df8-946b-cd10f79bad2d
+[SSE] Successfully queued event to subscriber 1
+[SSE] GOT event from queue: token_update
+[SSE] GOT event from queue: analysis_complete
+INFO:src.api.app:SSE stream closed for session 77dee15c-fa80-4df8-946b-cd10f79bad2d
+INFO:     10.16.21.217:42826 - "GET /outputs/fare_vs_distance.html HTTP/1.1" 200 OK
+INFO:     10.16.14.243:46126 - "GET /outputs/fare_vs_distance.html HTTP/1.1" 206 Partial Content
+INFO:     10.16.14.243:46126 - "GET /outputs/fare_vs_distance.html HTTP/1.1" 206 Partial Content
+INFO:     10.16.21.217:54249 - "GET /outputs/fare_vs_distance.html HTTP/1.1" 200 OK
+INFO:     10.16.14.243:42229 - "GET / HTTP/1.1" 200 OK
+INFO:     10.16.21.217:53128 - "GET /outputs/fare_vs_distance.html HTTP/1.1" 200 OK
+INFO:     10.16.14.243:41612 - "GET /outputs/fare_vs_distance.html HTTP/1.1" 206 Partial Content
+INFO:     10.16.21.217:61863 - "GET /outputs/fare_vs_distance.html HTTP/1.1" 206 Partial Content
+INFO:src.api.app:[ASYNC] Reusing session: 77dee15c... (follow-up)
+INFO:src.api.app:[ASYNC] Follow-up query for session 77dee15c... - using cached dataset
+INFO:     10.16.21.217:48177 - "POST /run-async HTTP/1.1" 200 OK
+INFO:src.api.app:[BACKGROUND] Starting analysis for session 77dee15c...
+INFO:src.api.app:[♻️] Reusing session 77dee15c... (requests: 2)
+📂 Checkpoint loaded: iteration 2, last tool: generate_interactive_time_series
+🗑️  Clearing old checkpoint to start fresh workflow
+🗑️ Checkpoint cleared for session 77dee15c-fa80-4df8-946b-cd10f79bad2d
+[DEBUG] Ultimate fallback: Using last_dataset from session: /tmp/data_science_agent/uber_trips_dataset_50k.csv
+[DEBUG] Ultimate fallback: Using last_target_col from session: fare_amount
+[DEBUG] resolve_ambiguity returning: {'file_path': '/tmp/data_science_agent/uber_trips_dataset_50k.csv', 'target_col': 'fare_amount'}
+[DEBUG] Orchestrator received resolved_params: {'file_path': '/tmp/data_science_agent/uber_trips_dataset_50k.csv', 'target_col': 'fare_amount'}
+[DEBUG] Current file_path: '', target_col: 'None'
+📝 Using dataset from session: /tmp/data_science_agent/uber_trips_dataset_50k.csv
+📝 Using target column from session: fare_amount
+
+**Session Context:**
+- Dataset: /tmp/data_science_agent/uber_trips_dataset_50k.csv
+- Target Column: fare_amount
+- Output Files:
+  - other: /tmp/data_science_agent/fare_over_time.html
+
+
+🔍 Extracting dataset schema locally (no LLM)...
+🧠 Semantic layer: Embedded 14 columns
+   Found 10 similar column pairs (potential duplicates)
+🧠 Semantic layer enriched 14 columns
+✅ Schema extracted: 50000 rows × 14 cols
+   File size: 8.46 MB
+   Task type inferred: regression
+🧠 Semantic routing → 📊 Visualization Specialist (confidence: 0.21)
+📝 Reasoning: Selected viz_agent (confidence: 0.31)
+
+📊 Delegating to: Visualization Specialist
+   Specialization: Create visual representations, charts, graphs, and dashboards to display data patterns. Generate interactive plots including scatter plots, line charts, bar graphs, heatmaps, time series visualizations, and statistical plots. Design comprehensive dashboards and visual reports to communicate findings clearly.
+🎯 Agent-specific tools: 17 tools for viz_agent
+   📦 Loaded 17 agent-specific tools
+   🔍 Exploratory analysis detected - disabling auto-ML (question asks about relationships, not predictions)
+💾 Saved to session: dataset=/tmp/data_science_agent/uber_trips_dataset_50k.csv, target=fare_amount
+🔄 Token budget reset (was 9316/500000)
+💰 Token budget: 0/500000 (0%)
+📊 Token Budget Check: 676 / 120,000 tokens
+✅ Within budget
+💰 Token budget: 676/128000 (0.5%)
+INFO:httpx:HTTP Request: POST https://api.mistral.ai/v1/chat/completions "HTTP/1.1 200 OK"
+📊 Tokens: 4220 this call | 4220/500000 this minute
+[SSE] PROGRESS_MANAGER EMIT: session=77dee15c-fa80-4df8-946b-cd10f79bad2d, event_type=token_update, msg=📊 Tokens: 4220 this call | 4220/500000 this minute
+[SSE] History stored, total events for 77dee15c-fa80-4df8-946b-cd10f79bad2d: 9
+[SSE] Found 0 subscribers for 77dee15c-fa80-4df8-946b-cd10f79bad2d
+
+🔧 Executing: execute_python_code
+   Arguments: {
+  "code": "import pandas as pd\nimport plotly.express as px\nimport plotly.graph_objects as go\nfrom plotly.subplots import make_subplots\n\n# Load the dataset\nfile_path = '/tmp/data_science_agent/uber_trips_dataset_50k.csv'\ndf = pd.read_csv(file_path)\n\n# Convert pickup_time to datetime and extract temporal features\ndf['pickup_time'] = pd.to_datetime(df['pickup_time'])\ndf['pickup_date'] = df['pickup_time'].dt.date\ndf['pickup_month'] = df['pickup_time'].dt.to_period('M').astype(str)\ndf['pickup_dayofweek'] = df['pickup_time'].dt.day_name()\ndf['pickup_hour'] = df['pickup_time'].dt.hour\n\n# Create monthly demand analysis\nmonthly_demand = df.groupby('pickup_month').agg({\n    'fare_amount': ['sum', 'mean', 'count'],\n    'distance_km': ['mean']\n}).reset_index()\nmonthly_demand.columns = ['pickup_month', 'total_fare_amount', 'avg_fare_amount', 'trip_count', 'avg_distance_km']\n\n# Create day of week analysis\ndayofweek_order = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']\ndayofweek_demand = df.groupby('pickup_dayofweek').agg({\n    'fare_amount': ['sum', 'mean', 'count'],\n    'distance_km': ['mean']\n}).reindex(dayofweek_order).reset_index()\ndayofweek_demand.columns = ['pickup_dayofweek', 'total_fare_amount', 'avg_fare_amount', 'trip_count', 'avg_distance_km']\n\n# Create hourly analysis\nhourly_demand = df.groupby('pickup_hour').agg({\n    'fare_amount': ['sum', 'mean', 'count'],\n    'distance_km': ['mean']\n}).reset_index()\nhourly_demand.columns = ['pickup_hour', 'total_fare_amount', 'avg_fare_amount', 'trip_count', 'avg_distance_km']\n\n# Create interactive visualizations\nfig1 = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.05,\n                     subplot_titles=('Monthly Trip Count and Total Fare Amount', 'Monthly Average Fare and Distance'))\n\n# Add monthly trip count and total fare\nfig1.add_trace(go.Bar(x=monthly_demand['pickup_month'], y=monthly_demand['trip_count'],\n                      name='Trip Count', marker_color='royalblue'), row=1, col=1)\nfig1.add_trace(go.Scatter(x=monthly_demand['pickup_month'], y=monthly_demand['total_fare_amount'],\n                          name='Total Fare Amount', line=dict(color='firebrick', width=2)), row=1, col=1)\n\n# Add monthly average fare and distance\nfig1.add_trace(go.Scatter(x=monthly_demand['pickup_month'], y=monthly_demand['avg_fare_amount'],\n                          name='Avg Fare Amount', line=dict(color='green', width=2)), row=2, col=1)\nfig1.add_trace(go.Scatter(x=monthly_demand['pickup_month'], y=monthly_demand['avg_distance_km'],\n                          name='Avg Distance', line=dict(color='orange', width=2)), row=2, col=1)\n\nfig1.update_layout(height=800, title_text='Monthly Demand Patterns',\n                  hovermode='x unified', template='plotly_white')\n\n# Create day of week visualization\nfig2 = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.05,\n                     subplot_titles=('Day of Week Trip Count and Total Fare Amount', 'Day of Week Average Fare and Distance'))\n\nfig2.add_trace(go.Bar(x=dayofweek_demand['pickup_dayofweek'], y=dayofweek_demand['trip_count'],\n                      name='Trip Count', marker_color='royalblue'), row=1, col=1)\nfig2.add_trace(go.Scatter(x=dayofweek_demand['pickup_dayofweek'], y=dayofweek_demand['total_fare_amount'],\n                          name='Total Fare Amount', line=dict(color='firebrick', width=2)), row=1, col=1)\n\nfig2.add_trace(go.Scatter(x=dayofweek_demand['pickup_dayofweek'], y=dayofweek_demand['avg_fare_amount'],\n                          name='Avg Fare Amount', line=dict(color='green', width=2)), row=2, col=1)\nfig2.add_trace(go.Scatter(x=dayofweek_demand['pickup_dayofweek'], y=dayofweek_demand['avg_distance_km'],\n                          name='Avg Distance', line=dict(color='orange', width=2)), row=2, col=1)\n\nfig2.update_layout(height=800, title_text='Day of Week Demand Patterns',\n                  hovermode='x unified', template='plotly_white')\n\n# Create hourly visualization\nfig3 = px.line(hourly_demand, x='pickup_hour', y=['trip_count', 'total_fare_amount'],\n                title='Hourly Demand Patterns',\n                labels={'value': 'Count/Amount', 'pickup_hour': 'Hour of Day', 'variable': 'Metric'})\nfig3.update_layout(template='plotly_white', hovermode='x unified')\n\n# Save visualizations\nfig1.write_html('/tmp/data_science_agent/monthly_demand_patterns.html')\nfig2.write_html('/tmp/data_science_agent/dayofweek_demand_patterns.html')\nfig3.write_html('/tmp/data_science_agent/hourly_demand_patterns.html')\n\n# Return summary statistics\nsummary_stats = {\n    'monthly_patterns': monthly_demand.to_dict('records'),\n    'dayofweek_patterns': dayofweek_demand.to_dict('records'),\n    'hourly_patterns': hourly_demand.to_dict('records'),\n    'visualizations_created': [\n        '/tmp/data_science_agent/monthly_demand_patterns.html',\n        '/tmp/data_science_agent/dayofweek_demand_patterns.html',\n        '/tmp/data_science_agent/hourly_demand_patterns.html'\n    ]\n}\n\nsummary_stats",
+  "working_directory": "/tmp/data_science_agent",
+  "timeout": 30
+}
+[SSE] EMIT tool_executing: session=77dee15c-fa80-4df8-946b-cd10f79bad2d, tool=execute_python_code
+[SSE] PROGRESS_MANAGER EMIT: session=77dee15c-fa80-4df8-946b-cd10f79bad2d, event_type=tool_executing, msg=🔧 Executing: execute_python_code
+[SSE] History stored, total events for 77dee15c-fa80-4df8-946b-cd10f79bad2d: 10
+[SSE] Found 0 subscribers for 77dee15c-fa80-4df8-946b-cd10f79bad2d
+   📋 Final parameters: ['code', 'working_directory', 'timeout']
+💾 Checkpoint saved: iteration 1, last tool: execute_python_code
+   ✓ Completed: execute_python_code
+[SSE] PROGRESS_MANAGER EMIT: session=77dee15c-fa80-4df8-946b-cd10f79bad2d, event_type=tool_completed, msg=✓ Completed: execute_python_code
+[SSE] History stored, total events for 77dee15c-fa80-4df8-946b-cd10f79bad2d: 11
+[SSE] Found 0 subscribers for 77dee15c-fa80-4df8-946b-cd10f79bad2d
+💰 Token budget: 4220/500000 (1%)
+📊 Token Budget Check: 1,064 / 120,000 tokens
+✅ Within budget
+💰 Token budget: 1064/128000 (0.8%)
+INFO:httpx:HTTP Request: POST https://api.mistral.ai/v1/chat/completions "HTTP/1.1 200 OK"
+📊 Tokens: 5467 this call | 9687/500000 this minute
+[SSE] PROGRESS_MANAGER EMIT: session=77dee15c-fa80-4df8-946b-cd10f79bad2d, event_type=token_update, msg=📊 Tokens: 5467 this call | 9687/500000 this minute
+[SSE] History stored, total events for 77dee15c-fa80-4df8-946b-cd10f79bad2d: 12
+[SSE] Found 0 subscribers for 77dee15c-fa80-4df8-946b-cd10f79bad2d
+[DEBUG] Merging 0 reports into plots array
+[DEBUG] Final plots array length: 0
+✅ Enhanced summary generated with 0 plots, 0 metrics
+
+✅ Session saved: 77dee15c-fa80-4df8-946b-cd10f79bad2d
+INFO:src.api.app:[BACKGROUND] Analysis completed for session 77dee15c...
+[SSE] PROGRESS_MANAGER EMIT: session=77dee15c-fa80-4df8-946b-cd10f79bad2d, event_type=analysis_complete, msg=✅ Analysis completed successfully!
+[SSE] History stored, total events for 77dee15c-fa80-4df8-946b-cd10f79bad2d: 13
+[SSE] Found 0 subscribers for 77dee15c-fa80-4df8-946b-cd10f79bad2d
