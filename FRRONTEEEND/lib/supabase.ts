@@ -286,7 +286,21 @@ export const updateHuggingFaceToken = async (userId: string, hfToken: string, hf
   }
   
   try {
-    console.log('[HF Token] Attempting direct update...');
+    // Check if user is authenticated in Supabase
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    console.log('[HF Token] Current session:', session ? `User: ${session.user.id}` : 'NO SESSION');
+    
+    if (!session) {
+      console.error('[HF Token] No active Supabase session! RLS will block the query.');
+      console.error('[HF Token] User needs to be logged in via Supabase auth.');
+      return null;
+    }
+    
+    if (session.user.id !== userId) {
+      console.warn('[HF Token] Session user ID mismatch:', session.user.id, '!=', userId);
+    }
+    
+    console.log('[HF Token] Attempting update with authenticated session...');
     
     const updateData = { 
       huggingface_token: hfToken || null,
@@ -295,8 +309,6 @@ export const updateHuggingFaceToken = async (userId: string, hfToken: string, hf
     };
     console.log('[HF Token] Update payload:', { ...updateData, huggingface_token: hfToken ? '****' : null });
     
-    // Don't use .select() - just update and check if any rows were affected
-    // This only requires UPDATE permission, not SELECT
     const { error, count } = await supabase
       .from('user_profiles')
       .update(updateData)
@@ -308,7 +320,6 @@ export const updateHuggingFaceToken = async (userId: string, hfToken: string, hf
     }
     
     console.log('[HF Token] Update successful!');
-    // Return the data we sent since we can't select it back
     return { ...updateData, user_id: userId };
   } catch (err: any) {
     console.error('[HF Token] Unexpected error:', err?.message || err);
