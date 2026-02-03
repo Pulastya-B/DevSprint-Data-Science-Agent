@@ -279,37 +279,15 @@ export const getUserProfile = async (userId: string) => {
 export const updateHuggingFaceToken = async (userId: string, hfToken: string, hfUsername?: string) => {
   console.log('[HF Token] Starting update for user:', userId);
   
+  // Check if Supabase is properly configured
+  if (!isSupabaseConfigured()) {
+    console.error('[HF Token] Supabase not configured!');
+    return null;
+  }
+  
   try {
-    // First check if profile exists with timeout
-    console.log('[HF Token] Checking if profile exists...');
+    console.log('[HF Token] Attempting direct update...');
     
-    const profileCheckPromise = supabase
-      .from('user_profiles')
-      .select('user_id, name, email')
-      .eq('user_id', userId)
-      .single();
-    
-    // Add 5 second timeout
-    const timeoutPromise = new Promise((_, reject) => 
-      setTimeout(() => reject(new Error('Profile check timeout')), 5000)
-    );
-    
-    let existingProfile;
-    try {
-      const result = await Promise.race([profileCheckPromise, timeoutPromise]) as any;
-      if (result.error) {
-        console.error('[HF Token] Profile fetch error:', result.error);
-        return null;
-      }
-      existingProfile = result.data;
-    } catch (timeoutErr) {
-      console.error('[HF Token] Profile check timed out, proceeding with update anyway...');
-      // Proceed with update even if check times out - the update will fail if profile doesn't exist
-    }
-    
-    console.log('[HF Token] Proceeding with update...');
-    
-    // Update HF fields (will fail if profile doesn't exist due to no matching rows)
     const updateData = { 
       huggingface_token: hfToken || null,
       huggingface_username: hfUsername || null,
@@ -317,27 +295,21 @@ export const updateHuggingFaceToken = async (userId: string, hfToken: string, hf
     };
     console.log('[HF Token] Update payload:', { ...updateData, huggingface_token: hfToken ? '****' : null });
     
-    const updatePromise = supabase
+    // Don't use .select() - just update and check if any rows were affected
+    // This only requires UPDATE permission, not SELECT
+    const { error, count } = await supabase
       .from('user_profiles')
       .update(updateData)
-      .eq('user_id', userId)
-      .select()
-      .single();
+      .eq('user_id', userId);
     
-    // Add 5 second timeout for update
-    const updateTimeoutPromise = new Promise((_, reject) => 
-      setTimeout(() => reject(new Error('Update timeout')), 5000)
-    );
-    
-    const updateResult = await Promise.race([updatePromise, updateTimeoutPromise]) as any;
-    
-    if (updateResult.error) {
-      console.error('[HF Token] Update failed:', updateResult.error.message, updateResult.error.code);
+    if (error) {
+      console.error('[HF Token] Update failed:', error.message, error.code, error.hint);
       return null;
     }
     
     console.log('[HF Token] Update successful!');
-    return updateResult.data;
+    // Return the data we sent since we can't select it back
+    return { ...updateData, user_id: userId };
   } catch (err: any) {
     console.error('[HF Token] Unexpected error:', err?.message || err);
     return null;
