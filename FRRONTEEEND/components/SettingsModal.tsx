@@ -101,7 +101,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
       }
 
       // Save to Supabase
+      console.log('[Settings] Saving HF token to Supabase for user:', user.id);
       const result = await updateHuggingFaceToken(user.id, hfToken, validation.username);
+      console.log('[Settings] Save result:', result);
       
       if (result) {
         setIsConnected(true);
@@ -113,10 +115,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
         // Hide success message after 3 seconds
         setTimeout(() => setSaveSuccess(false), 3000);
       } else {
-        setError('Profile not found. Please complete onboarding first or try signing out and back in.');
+        setError('Failed to save token. Please ensure your profile exists and try again.');
       }
-    } catch (err) {
-      setError('An error occurred. Please try again.');
+    } catch (err: any) {
+      console.error('[Settings] Save error:', err);
+      setError(err?.message || 'An error occurred. Please try again.');
     } finally {
       setIsSaving(false);
     }

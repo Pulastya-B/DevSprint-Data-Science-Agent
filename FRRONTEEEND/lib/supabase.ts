@@ -277,38 +277,53 @@ export const getUserProfile = async (userId: string) => {
 
 // Update HuggingFace token for a user (only updates existing profiles)
 export const updateHuggingFaceToken = async (userId: string, hfToken: string, hfUsername?: string) => {
+  console.log('[HF Token] Starting update for user:', userId);
+  
   try {
     // First check if profile exists
+    console.log('[HF Token] Checking if profile exists...');
     const { data: existingProfile, error: fetchError } = await supabase
       .from('user_profiles')
       .select('user_id, name, email')
       .eq('user_id', userId)
       .single();
     
-    if (fetchError || !existingProfile) {
-      console.error('Profile not found, cannot update HF token:', fetchError);
+    if (fetchError) {
+      console.error('[HF Token] Profile fetch error:', fetchError);
       return null;
     }
     
+    if (!existingProfile) {
+      console.error('[HF Token] Profile not found for user:', userId);
+      return null;
+    }
+    
+    console.log('[HF Token] Profile found, updating HF fields...');
+    
     // Profile exists, update only HF fields
+    const updateData = { 
+      huggingface_token: hfToken || null,
+      huggingface_username: hfUsername || null,
+      updated_at: new Date().toISOString()
+    };
+    console.log('[HF Token] Update payload:', { ...updateData, huggingface_token: hfToken ? '****' : null });
+    
     const { data, error } = await supabase
       .from('user_profiles')
-      .update({ 
-        huggingface_token: hfToken,
-        huggingface_username: hfUsername,
-        updated_at: new Date().toISOString()
-      })
+      .update(updateData)
       .eq('user_id', userId)
       .select()
       .single();
     
     if (error) {
-      console.error('Failed to update HF token:', error);
+      console.error('[HF Token] Update failed:', error.message, error.code, error.details);
       return null;
     }
+    
+    console.log('[HF Token] Update successful!');
     return data;
   } catch (err) {
-    console.error('HF token update error:', err);
+    console.error('[HF Token] Unexpected error:', err);
     return null;
   }
 };
