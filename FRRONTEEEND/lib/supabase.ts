@@ -275,19 +275,30 @@ export const getUserProfile = async (userId: string) => {
   }
 };
 
-// Update HuggingFace token for a user (UPSERT to handle new users)
+// Update HuggingFace token for a user (only updates existing profiles)
 export const updateHuggingFaceToken = async (userId: string, hfToken: string, hfUsername?: string) => {
   try {
+    // First check if profile exists
+    const { data: existingProfile, error: fetchError } = await supabase
+      .from('user_profiles')
+      .select('user_id, name, email')
+      .eq('user_id', userId)
+      .single();
+    
+    if (fetchError || !existingProfile) {
+      console.error('Profile not found, cannot update HF token:', fetchError);
+      return null;
+    }
+    
+    // Profile exists, update only HF fields
     const { data, error } = await supabase
       .from('user_profiles')
-      .upsert({ 
-        user_id: userId,
+      .update({ 
         huggingface_token: hfToken,
         huggingface_username: hfUsername,
         updated_at: new Date().toISOString()
-      }, {
-        onConflict: 'user_id'
       })
+      .eq('user_id', userId)
       .select()
       .single();
     

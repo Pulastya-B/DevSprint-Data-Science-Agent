@@ -202,6 +202,31 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onSuccess, onSkip }) => {
       }
       
       // Save user profile data to database
+      let hfUsername = null;
+      
+      // If HF token provided, validate it first
+      if (formData.huggingfaceToken?.trim()) {
+        console.log('Validating HuggingFace token...');
+        try {
+          const hfResponse = await fetch('https://huggingface.co/api/whoami-v2', {
+            headers: { 'Authorization': `Bearer ${formData.huggingfaceToken}` }
+          });
+          
+          if (hfResponse.ok) {
+            const hfData = await hfResponse.json();
+            hfUsername = hfData.name;
+            console.log('HF token valid, username:', hfUsername);
+          } else {
+            console.warn('HF token invalid, will skip saving it');
+            // Don't fail the whole signup, just skip HF token
+            formData.huggingfaceToken = null;
+          }
+        } catch (err) {
+          console.warn('HF validation failed, will skip saving token:', err);
+          formData.huggingfaceToken = null;
+        }
+      }
+      
       const profileData = {
         user_id: userId,
         name: formData.name,
@@ -213,6 +238,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onSuccess, onSkip }) => {
         experience: formData.experience,
         industry: formData.industry,
         huggingface_token: formData.huggingfaceToken || null,
+        huggingface_username: hfUsername,
         onboarding_completed: true
       };
       

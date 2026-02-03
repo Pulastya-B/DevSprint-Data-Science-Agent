@@ -113,7 +113,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
         // Hide success message after 3 seconds
         setTimeout(() => setSaveSuccess(false), 3000);
       } else {
-        setError('Failed to save token. Please try again.');
+        setError('Profile not found. Please complete onboarding first or try signing out and back in.');
       }
     } catch (err) {
       setError('An error occurred. Please try again.');
