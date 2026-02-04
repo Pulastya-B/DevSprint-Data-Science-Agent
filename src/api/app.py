@@ -1441,50 +1441,69 @@ async def export_to_huggingface(request: HuggingFaceExportRequest):
         uploaded_files = []
         errors = []
         
-        # Session-specific output directory
+        # Session-specific output directory - check /tmp/data_science_agent for HF Spaces
         session_outputs_dir = Path(f"./outputs/{request.session_id}")
         global_outputs_dir = Path("./outputs")
+        tmp_outputs_dir = Path("/tmp/data_science_agent")
+        
+        logger.info(f"[HF Export] Looking for files in: {session_outputs_dir}, {global_outputs_dir}, {tmp_outputs_dir}")
         
         # Upload datasets (CSVs)
         csv_patterns = [
             session_outputs_dir / "*.csv",
-            global_outputs_dir / "*.csv"
+            global_outputs_dir / "*.csv",
+            tmp_outputs_dir / "*.csv"
         ]
         for pattern in csv_patterns:
             for csv_file in glob.glob(str(pattern)):
                 try:
+                    logger.info(f"[HF Export] Uploading dataset: {csv_file}")
                     result = hf_service.upload_dataset(
                         file_path=csv_file,
-                        dataset_name=Path(csv_file).stem,
-                        description=f"Dataset from DS Agent session {request.session_id[:8]}"
+                        session_id=request.session_id,
+                        file_name=Path(csv_file).name,
+                        compress=True
                     )
-                    uploaded_files.append({"type": "dataset", "name": Path(csv_file).name, "url": result.get("url")})
+                    if result.get("success"):
+                        uploaded_files.append({"type": "dataset", "name": Path(csv_file).name, "url": result.get("url")})
+                    else:
+                        errors.append(f"Dataset {Path(csv_file).name}: {result.get('error', 'Unknown error')}")
                 except Exception as e:
+                    logger.error(f"[HF Export] Dataset upload error: {e}")
                     errors.append(f"Dataset {Path(csv_file).name}: {str(e)}")
         
         # Upload models (PKL files)
         model_patterns = [
             session_outputs_dir / "models" / "*.pkl",
-            global_outputs_dir / "models" / "*.pkl"
+            global_outputs_dir / "models" / "*.pkl",
+            tmp_outputs_dir / "models" / "*.pkl"
         ]
         for pattern in model_patterns:
             for model_file in glob.glob(str(pattern)):
                 try:
+                    logger.info(f"[HF Export] Uploading model: {model_file}")
                     result = hf_service.upload_model(
                         model_path=model_file,
+                        session_id=request.session_id,
                         model_name=Path(model_file).stem,
-                        description=f"Model from DS Agent session {request.session_id[:8]}"
+                        model_type="sklearn"
                     )
-                    uploaded_files.append({"type": "model", "name": Path(model_file).name, "url": result.get("url")})
+                    if result.get("success"):
+                        uploaded_files.append({"type": "model", "name": Path(model_file).name, "url": result.get("url")})
+                    else:
+                        errors.append(f"Model {Path(model_file).name}: {result.get('error', 'Unknown error')}")
                 except Exception as e:
+                    logger.error(f"[HF Export] Model upload error: {e}")
                     errors.append(f"Model {Path(model_file).name}: {str(e)}")
         
-        # Upload visualizations (HTML plots)
+        # Upload visualizations (HTML plots) - use upload_report for HTML files
         plot_patterns = [
             session_outputs_dir / "*.html",
             global_outputs_dir / "*.html",
             session_outputs_dir / "plots" / "*.html",
-            global_outputs_dir / "plots" / "*.html"
+            global_outputs_dir / "plots" / "*.html",
+            tmp_outputs_dir / "*.html",
+            tmp_outputs_dir / "plots" / "*.html"
         ]
         for pattern in plot_patterns:
             for plot_file in glob.glob(str(pattern)):
@@ -1492,32 +1511,46 @@ async def export_to_huggingface(request: HuggingFaceExportRequest):
                 if "index" in Path(plot_file).name.lower():
                     continue
                 try:
-                    result = hf_service.upload_plot(
-                        plot_path=plot_file,
-                        plot_name=Path(plot_file).stem,
-                        plot_type="interactive"
+                    logger.info(f"[HF Export] Uploading HTML plot: {plot_file}")
+                    result = hf_service.upload_report(
+                        report_path=plot_file,
+                        session_id=request.session_id,
+                        report_name=Path(plot_file).stem,
+                        compress=False  # Don't compress HTML plots for direct viewing
                     )
-                    uploaded_files.append({"type": "plot", "name": Path(plot_file).name, "url": result.get("url")})
+                    if result.get("success"):
+                        uploaded_files.append({"type": "plot", "name": Path(plot_file).name, "url": result.get("url")})
+                    else:
+                        errors.append(f"Plot {Path(plot_file).name}: {result.get('error', 'Unknown error')}")
                 except Exception as e:
+                    logger.error(f"[HF Export] Plot upload error: {e}")
                     errors.append(f"Plot {Path(plot_file).name}: {str(e)}")
         
-        # Upload PNG images
+        # Upload PNG images - use upload_report with no compression
         image_patterns = [
             session_outputs_dir / "*.png",
             global_outputs_dir / "*.png",
             session_outputs_dir / "plots" / "*.png",
-            global_outputs_dir / "plots" / "*.png"
+            global_outputs_dir / "plots" / "*.png",
+            tmp_outputs_dir / "*.png",
+            tmp_outputs_dir / "plots" / "*.png"
         ]
         for pattern in image_patterns:
             for image_file in glob.glob(str(pattern)):
                 try:
-                    result = hf_service.upload_plot(
-                        plot_path=image_file,
-                        plot_name=Path(image_file).stem,
-                        plot_type="static"
+                    logger.info(f"[HF Export] Uploading image: {image_file}")
+                    result = hf_service.upload_report(
+                        report_path=image_file,
+                        session_id=request.session_id,
+                        report_name=Path(image_file).stem,
+                        compress=False
                     )
-                    uploaded_files.append({"type": "image", "name": Path(image_file).name, "url": result.get("url")})
+                    if result.get("success"):
+                        uploaded_files.append({"type": "image", "name": Path(image_file).name, "url": result.get("url")})
+                    else:
+                        errors.append(f"Image {Path(image_file).name}: {result.get('error', 'Unknown error')}")
                 except Exception as e:
+                    logger.error(f"[HF Export] Image upload error: {e}")
                     errors.append(f"Image {Path(image_file).name}: {str(e)}")
         
         if not uploaded_files and errors:
