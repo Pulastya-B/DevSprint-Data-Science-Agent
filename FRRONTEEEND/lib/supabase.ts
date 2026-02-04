@@ -330,6 +330,10 @@ export const updateHuggingFaceToken = async (userId: string, hfToken: string, hf
     
     const data = await response.json();
     console.log('[HF Token] Upsert successful!', data);
+    
+    // Clear cached status so next check fetches fresh data
+    clearHfStatusCache();
+    
     return Array.isArray(data) ? data[0] : data;
   } catch (err: any) {
     console.error('[HF Token] Error:', err?.message || err);
@@ -337,14 +341,37 @@ export const updateHuggingFaceToken = async (userId: string, hfToken: string, hf
   }
 };
 
+// Forward declaration for clearHfStatusCache (defined below getHuggingFaceStatus)
+let clearHfStatusCache: () => void;
+
 // Get HuggingFace token status for a user (from dedicated hf_tokens table)
+// Debounce tracking to prevent multiple simultaneous calls
+let hfStatusCheckInProgress = false;
+let lastHfStatusResult: { connected: boolean; username?: string; tokenMasked?: string | null } | null = null;
+let lastHfStatusUserId: string | null = null;
+
 export const getHuggingFaceStatus = async (userId: string) => {
   console.log('[HF Status] Checking HF connection for user:', userId);
   
+  // Return cached result if a check is already in progress for the same user
+  if (hfStatusCheckInProgress && lastHfStatusUserId === userId && lastHfStatusResult !== null) {
+    console.log('[HF Status] Check in progress, returning cached result');
+    return lastHfStatusResult;
+  }
+  
+  hfStatusCheckInProgress = true;
+  lastHfStatusUserId = userId;
+  
   try {
     // Get current session for auth header
-    const { data: sessionData } = await supabase.auth.getSession();
+    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+    
+    if (sessionError) {
+      console.error('[HF Status] Session error:', sessionError);
+    }
+    
     const accessToken = sessionData?.session?.access_token;
+    console.log('[HF Status] Has valid session:', !!accessToken);
     
     // Use direct REST API call
     const config = getSupabaseConfig();
@@ -364,7 +391,8 @@ export const getHuggingFaceStatus = async (userId: string) => {
     if (!response.ok) {
       const errorText = await response.text();
       console.error('[HF Status] REST API error:', response.status, errorText);
-      return { connected: false };
+      lastHfStatusResult = { connected: false };
+      return lastHfStatusResult;
     }
     
     const data = await response.json();
@@ -372,7 +400,8 @@ export const getHuggingFaceStatus = async (userId: string) => {
     
     if (!data || data.length === 0) {
       console.log('[HF Status] No token found for user');
-      return { connected: false };
+      lastHfStatusResult = { connected: false };
+      return lastHfStatusResult;
     }
     
     const row = data[0];
@@ -383,12 +412,27 @@ export const getHuggingFaceStatus = async (userId: string) => {
     };
     
     console.log('[HF Status] Result:', result.connected ? `Connected as ${result.username}` : 'Not connected');
+    lastHfStatusResult = result;
     return result;
   } catch (err: any) {
     console.error('[HF Status] Error:', err?.message || err);
-    return { connected: false };
+    lastHfStatusResult = { connected: false };
+    return lastHfStatusResult;
+  } finally {
+    hfStatusCheckInProgress = false;
   }
 };
+
+// Clear cached HF status (call after token updates) - assign to the forward-declared variable
+clearHfStatusCache = () => {
+  console.log('[HF Status] Clearing cached status');
+  lastHfStatusResult = null;
+  lastHfStatusUserId = null;
+  hfStatusCheckInProgress = false;
+};
+
+// Export the function for external use
+export { clearHfStatusCache };
 
 // Get the actual HuggingFace token (for export functionality)
 export const getHuggingFaceToken = async (userId: string): Promise<string | null> => {

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Settings, Eye, EyeOff, Check, Loader2, ExternalLink, AlertTriangle } from 'lucide-react';
 import { useAuth } from '../lib/AuthContext';
-import { updateHuggingFaceToken, getHuggingFaceStatus } from '../lib/supabase';
+import { updateHuggingFaceToken, getHuggingFaceStatus, clearHfStatusCache } from '../lib/supabase';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -38,6 +38,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
   useEffect(() => {
     const loadHfStatus = async () => {
       if (user?.id) {
+        // Clear cache to ensure fresh data when modal opens
+        clearHfStatusCache();
         const status = await getHuggingFaceStatus(user.id);
         setIsConnected(status.connected);
         setHfUsername(status.username || '');

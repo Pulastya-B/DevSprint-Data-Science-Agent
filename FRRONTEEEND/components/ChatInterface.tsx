@@ -218,17 +218,26 @@ export const ChatInterface: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   const { user, isAuthenticated, dbSessionId, signOut } = useAuth();
   
   const activeSession = sessions.find(s => s.id === activeSessionId) || sessions[0];
+  const hfStatusCheckedRef = useRef(false); // Prevent multiple HF status checks
 
-  // Check HuggingFace connection status
+  // Check HuggingFace connection status (only once on mount or when user changes)
   useEffect(() => {
     const checkHfStatus = async () => {
-      if (user?.id) {
+      if (user?.id && !hfStatusCheckedRef.current) {
+        hfStatusCheckedRef.current = true;
         const status = await getHuggingFaceStatus(user.id);
         setHfConnected(status.connected);
       }
     };
     checkHfStatus();
-  }, [user]);
+    
+    // Reset the ref when user changes (e.g., logout/login)
+    return () => {
+      if (!user?.id) {
+        hfStatusCheckedRef.current = false;
+      }
+    };
+  }, [user?.id]); // Only depend on user.id, not the whole user object
 
   // Persist sessions to localStorage whenever they change
   useEffect(() => {
@@ -1628,7 +1637,9 @@ export const ChatInterface: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         onClose={() => {
           setShowSettings(false);
           // Refresh HF connection status when settings modal closes
+          // Reset the ref to allow a fresh check
           if (user?.id) {
+            hfStatusCheckedRef.current = false;
             getHuggingFaceStatus(user.id).then(status => setHfConnected(status.connected));
           }
         }} 
