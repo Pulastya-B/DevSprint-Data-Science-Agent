@@ -1404,21 +1404,21 @@ async def export_to_huggingface(request: HuggingFaceExportRequest):
         
         supabase: Client = create_client(supabase_url, supabase_key)
         
-        # Fetch user's HuggingFace token from profiles
-        result = supabase.table("user_profiles").select(
+        # Fetch user's HuggingFace token from hf_tokens table (not user_profiles)
+        result = supabase.table("hf_tokens").select(
             "huggingface_token, huggingface_username"
         ).eq("user_id", request.user_id).single().execute()
         
         if not result.data:
-            raise HTTPException(status_code=404, detail="User profile not found")
+            raise HTTPException(status_code=404, detail="HuggingFace not connected. Please connect in Settings first.")
         
         hf_token = result.data.get("huggingface_token")
         hf_username = result.data.get("huggingface_username")
         
-        if not hf_token or not hf_username:
+        if not hf_token:
             raise HTTPException(
                 status_code=400, 
-                detail="HuggingFace not connected. Please connect in Settings."
+                detail="HuggingFace token not found. Please connect in Settings."
             )
         
         # Import HuggingFace storage service
