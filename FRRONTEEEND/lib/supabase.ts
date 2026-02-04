@@ -302,6 +302,10 @@ export const updateHuggingFaceToken = async (userId: string, hfToken: string, hf
     };
     console.log('[HF Token] Upsert payload:', { ...tokenData, huggingface_token: hfToken ? '****' : null });
     
+    // Check current auth session
+    const { data: sessionData } = await supabase.auth.getSession();
+    console.log('[HF Token] Auth session exists:', !!sessionData?.session);
+    
     // Use UPSERT with timeout - inserts if not exists, updates if exists
     const { data, error } = await withTimeout(
       supabase
@@ -309,16 +313,16 @@ export const updateHuggingFaceToken = async (userId: string, hfToken: string, hf
         .upsert(tokenData, { onConflict: 'user_id' })
         .select()
         .single(),
-      8000,
-      'HF token save timeout - please check if hf_tokens table exists in Supabase'
+      15000,  // Increased timeout
+      'HF token save timeout - check RLS policies in Supabase'
     );
     
     if (error) {
-      console.error('[HF Token] Upsert failed:', error.message, error.code, error.hint);
+      console.error('[HF Token] Upsert failed:', error.message, error.code, error.hint, error.details);
       return null;
     }
     
-    console.log('[HF Token] Upsert successful!');
+    console.log('[HF Token] Upsert successful!', data);
     return data;
   } catch (err: any) {
     console.error('[HF Token] Error:', err?.message || err);
@@ -337,12 +341,12 @@ export const getHuggingFaceStatus = async (userId: string) => {
         .select('huggingface_token, huggingface_username')
         .eq('user_id', userId)
         .maybeSingle(),
-      5000,
-      'HF status check timeout'
+      10000,  // Increased timeout
+      'HF status check timeout - check RLS policies'
     );
     
     if (error) {
-      console.error('[HF Status] Query error:', error.message, error.code);
+      console.error('[HF Status] Query error:', error.message, error.code, error.hint);
       return { connected: false };
     }
     
