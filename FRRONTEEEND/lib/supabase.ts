@@ -302,13 +302,16 @@ export const updateHuggingFaceToken = async (userId: string, hfToken: string, hf
     };
     console.log('[HF Token] Upsert payload:', { ...tokenData, huggingface_token: hfToken ? '****' : null });
     
-    // Use UPSERT - inserts if not exists, updates if exists
-    // This is simpler and doesn't require profile to exist first
-    const { data, error } = await supabase
-      .from('hf_tokens')
-      .upsert(tokenData, { onConflict: 'user_id' })
-      .select()
-      .single();
+    // Use UPSERT with timeout - inserts if not exists, updates if exists
+    const { data, error } = await withTimeout(
+      supabase
+        .from('hf_tokens')
+        .upsert(tokenData, { onConflict: 'user_id' })
+        .select()
+        .single(),
+      8000,
+      'HF token save timeout - please check if hf_tokens table exists in Supabase'
+    );
     
     if (error) {
       console.error('[HF Token] Upsert failed:', error.message, error.code, error.hint);
@@ -328,11 +331,15 @@ export const getHuggingFaceStatus = async (userId: string) => {
   console.log('[HF Status] Checking HF connection for user:', userId);
   
   try {
-    const { data, error } = await supabase
-      .from('hf_tokens')
-      .select('huggingface_token, huggingface_username')
-      .eq('user_id', userId)
-      .maybeSingle();  // Returns null if not found instead of error
+    const { data, error } = await withTimeout(
+      supabase
+        .from('hf_tokens')
+        .select('huggingface_token, huggingface_username')
+        .eq('user_id', userId)
+        .maybeSingle(),
+      5000,
+      'HF status check timeout'
+    );
     
     if (error) {
       console.error('[HF Status] Query error:', error.message, error.code);
