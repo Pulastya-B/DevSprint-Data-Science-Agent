@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 # Optional: huggingface_hub for HF operations
 try:
-    from huggingface_hub import HfApi, HfFolder, create_repo, upload_file, upload_folder
+    from huggingface_hub import HfApi, upload_folder
     from huggingface_hub.utils import RepositoryNotFoundError
     HF_AVAILABLE = True
 except ImportError:
@@ -106,11 +106,11 @@ class HuggingFaceStorage:
             logger.info(f"Repo {repo_id} exists")
         except RepositoryNotFoundError:
             logger.info(f"Creating repo {repo_id}")
-            create_repo(
+            self.api.create_repo(
                 repo_id=repo_id,
                 repo_type=repo_kind,
                 private=True,  # Default to private
-                token=self.token
+                exist_ok=True  # Don't fail if already exists
             )
         
         return repo_id
@@ -156,13 +156,12 @@ class HuggingFaceStorage:
         path_in_repo = f"datasets/{session_id}/{file_name}"
         
         try:
-            result = upload_file(
+            result = self.api.upload_file(
                 path_or_fileobj=upload_path,
                 path_in_repo=path_in_repo,
                 repo_id=repo_id,
                 repo_type="dataset",
-                token=self.token,
-                commit_message=f"Add dataset: {file_name}"
+                                commit_message=f"Add dataset: {file_name}"
             )
             
             # Upload metadata if provided
@@ -177,13 +176,12 @@ class HuggingFaceStorage:
                     }, tmp)
                     tmp.flush()
                     
-                    upload_file(
+                    self.api.upload_file(
                         path_or_fileobj=tmp.name,
                         path_in_repo=metadata_path,
                         repo_id=repo_id,
                         repo_type="dataset",
-                        token=self.token,
-                        commit_message=f"Add metadata for {file_name}"
+                                                commit_message=f"Add metadata for {file_name}"
                     )
             
             file_size = os.path.getsize(upload_path)
@@ -244,13 +242,12 @@ class HuggingFaceStorage:
         
         try:
             # Upload the model file
-            upload_file(
+            self.api.upload_file(
                 path_or_fileobj=model_path,
                 path_in_repo=f"{path_in_repo}/{model_file_name}",
                 repo_id=repo_id,
                 repo_type="model",
-                token=self.token,
-                commit_message=f"Add model: {model_name}"
+                                commit_message=f"Add model: {model_name}"
             )
             
             # Create and upload model card
@@ -266,13 +263,12 @@ class HuggingFaceStorage:
                 tmp.write(model_card)
                 tmp.flush()
                 
-                upload_file(
+                self.api.upload_file(
                     path_or_fileobj=tmp.name,
                     path_in_repo=f"{path_in_repo}/README.md",
                     repo_id=repo_id,
                     repo_type="model",
-                    token=self.token,
-                    commit_message=f"Add model card for {model_name}"
+                                        commit_message=f"Add model card for {model_name}"
                 )
             
             # Upload config
@@ -291,13 +287,12 @@ class HuggingFaceStorage:
                 json.dump(config, tmp, indent=2)
                 tmp.flush()
                 
-                upload_file(
+                self.api.upload_file(
                     path_or_fileobj=tmp.name,
                     path_in_repo=f"{path_in_repo}/config.json",
                     repo_id=repo_id,
                     repo_type="model",
-                    token=self.token,
-                    commit_message=f"Add config for {model_name}"
+                                        commit_message=f"Add config for {model_name}"
                 )
             
             return {
@@ -353,13 +348,12 @@ class HuggingFaceStorage:
                 tmp.write(plot_json)
                 tmp.flush()
                 
-                upload_file(
+                self.api.upload_file(
                     path_or_fileobj=tmp.name,
                     path_in_repo=path_in_repo,
                     repo_id=repo_id,
                     repo_type="dataset",
-                    token=self.token,
-                    commit_message=f"Add plot: {plot_name}"
+                                        commit_message=f"Add plot: {plot_name}"
                 )
             
             return {
@@ -416,13 +410,12 @@ class HuggingFaceStorage:
         path_in_repo = f"reports/{session_id}/{file_name}"
         
         try:
-            upload_file(
+            self.api.upload_file(
                 path_or_fileobj=upload_path,
                 path_in_repo=path_in_repo,
                 repo_id=repo_id,
                 repo_type="dataset",
-                token=self.token,
-                commit_message=f"Add report: {report_name}"
+                                commit_message=f"Add report: {report_name}"
             )
             
             file_size = os.path.getsize(upload_path)
@@ -450,6 +443,55 @@ class HuggingFaceStorage:
                 except:
                     pass
     
+    def upload_generic_file(
+        self,
+        file_path: str,
+        session_id: str,
+        subfolder: str = "files"
+    ) -> Dict[str, Any]:
+        """
+        Upload any file to user's HuggingFace outputs repo.
+        
+        Args:
+            file_path: Local path to the file
+            session_id: Session ID
+            subfolder: Subfolder within outputs (e.g., "plots", "images", "files")
+        
+        Returns:
+            Dict with upload info
+        """
+        repo_id = self._ensure_repo_exists("outputs", "dataset")
+        
+        file_name = Path(file_path).name
+        path_in_repo = f"{subfolder}/{session_id}/{file_name}"
+        
+        try:
+            self.api.upload_file(
+                path_or_fileobj=file_path,
+                path_in_repo=path_in_repo,
+                repo_id=repo_id,
+                repo_type="dataset",
+                                commit_message=f"Add {subfolder}: {file_name}"
+            )
+            
+            file_size = os.path.getsize(file_path)
+            
+            return {
+                "success": True,
+                "repo_id": repo_id,
+                "path": path_in_repo,
+                "url": f"https://huggingface.co/datasets/{repo_id}/blob/main/{path_in_repo}",
+                "download_url": f"https://huggingface.co/datasets/{repo_id}/resolve/main/{path_in_repo}",
+                "size_bytes": file_size
+            }
+            
+        except Exception as e:
+            logger.error(f"Failed to upload file: {e}")
+            return {
+                "success": False,
+                "error": str(e)
+            }
+
     def list_user_files(
         self,
         session_id: Optional[str] = None,
