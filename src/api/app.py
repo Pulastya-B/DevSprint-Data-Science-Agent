@@ -1435,7 +1435,7 @@ async def export_to_huggingface(request: HuggingFaceExportRequest):
         # Import HuggingFace storage service
         from src.storage.huggingface_storage import HuggingFaceStorage
         
-        hf_service = HuggingFaceStorage(token=hf_token, username=hf_username)
+        hf_service = HuggingFaceStorage(hf_token=hf_token)
         
         # Collect all session assets
         uploaded_files = []
