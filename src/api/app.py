@@ -1391,13 +1391,23 @@ async def export_to_huggingface(request: HuggingFaceExportRequest):
     
     Requires user to have connected their HuggingFace token in settings.
     """
-    from supabase import create_client, Client
     import glob
     
+    logger.info(f"[HF Export] Starting export for user {request.user_id[:8]}... session {request.session_id[:8]}...")
+    
     try:
+        # Try to import supabase - may not be installed
+        try:
+            from supabase import create_client, Client
+        except ImportError as e:
+            logger.error(f"[HF Export] Supabase package not installed: {e}")
+            raise HTTPException(status_code=500, detail="Server error: supabase package not installed")
+        
         # Get user's HuggingFace credentials from Supabase
         supabase_url = os.getenv("VITE_SUPABASE_URL") or os.getenv("SUPABASE_URL")
         supabase_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("VITE_SUPABASE_ANON_KEY")
+        
+        logger.info(f"[HF Export] Supabase URL configured: {bool(supabase_url)}, Key configured: {bool(supabase_key)}")
         
         if not supabase_url or not supabase_key:
             raise HTTPException(status_code=500, detail="Supabase configuration missing")
@@ -1405,6 +1415,7 @@ async def export_to_huggingface(request: HuggingFaceExportRequest):
         supabase: Client = create_client(supabase_url, supabase_key)
         
         # Fetch user's HuggingFace token from hf_tokens table (not user_profiles)
+        logger.info(f"[HF Export] Fetching HF token from hf_tokens table...")
         result = supabase.table("hf_tokens").select(
             "huggingface_token, huggingface_username"
         ).eq("user_id", request.user_id).single().execute()
