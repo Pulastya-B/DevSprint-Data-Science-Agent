@@ -13,7 +13,7 @@ declare global {
 }
 
 // Try to get config from runtime injection first (HuggingFace), then fall back to Vite env vars
-const getSupabaseConfig = () => {
+export const getSupabaseConfig = () => {
   // Check for runtime config (injected by server)
   if (typeof window !== 'undefined' && window.__SUPABASE_CONFIG__) {
     return {
@@ -302,28 +302,35 @@ export const updateHuggingFaceToken = async (userId: string, hfToken: string, hf
     };
     console.log('[HF Token] Upsert payload:', { ...tokenData, huggingface_token: hfToken ? '****' : null });
     
-    // Check current auth session
+    // Get current session for auth header
     const { data: sessionData } = await supabase.auth.getSession();
-    console.log('[HF Token] Auth session exists:', !!sessionData?.session);
+    const accessToken = sessionData?.session?.access_token;
+    console.log('[HF Token] Has auth session:', !!accessToken);
     
-    // Use UPSERT with timeout - inserts if not exists, updates if exists
-    const { data, error } = await withTimeout(
-      supabase
-        .from('hf_tokens')
-        .upsert(tokenData, { onConflict: 'user_id' })
-        .select()
-        .single(),
-      15000,  // Increased timeout
-      'HF token save timeout - check RLS policies in Supabase'
-    );
+    // Use direct REST API call instead of Supabase client (more reliable)
+    const config = getSupabaseConfig();
+    const response = await fetch(`${config.url}/rest/v1/hf_tokens`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': config.anonKey,
+        'Authorization': `Bearer ${accessToken || config.anonKey}`,
+        'Prefer': 'resolution=merge-duplicates,return=representation'
+      },
+      body: JSON.stringify(tokenData)
+    });
     
-    if (error) {
-      console.error('[HF Token] Upsert failed:', error.message, error.code, error.hint, error.details);
+    console.log('[HF Token] REST API response status:', response.status);
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('[HF Token] REST API error:', response.status, errorText);
       return null;
     }
     
+    const data = await response.json();
     console.log('[HF Token] Upsert successful!', data);
-    return data;
+    return Array.isArray(data) ? data[0] : data;
   } catch (err: any) {
     console.error('[HF Token] Error:', err?.message || err);
     return null;
@@ -335,30 +342,44 @@ export const getHuggingFaceStatus = async (userId: string) => {
   console.log('[HF Status] Checking HF connection for user:', userId);
   
   try {
-    const { data, error } = await withTimeout(
-      supabase
-        .from('hf_tokens')
-        .select('huggingface_token, huggingface_username')
-        .eq('user_id', userId)
-        .maybeSingle(),
-      10000,  // Increased timeout
-      'HF status check timeout - check RLS policies'
+    // Get current session for auth header
+    const { data: sessionData } = await supabase.auth.getSession();
+    const accessToken = sessionData?.session?.access_token;
+    
+    // Use direct REST API call
+    const config = getSupabaseConfig();
+    const response = await fetch(
+      `${config.url}/rest/v1/hf_tokens?user_id=eq.${userId}&select=huggingface_token,huggingface_username`,
+      {
+        method: 'GET',
+        headers: {
+          'apikey': config.anonKey,
+          'Authorization': `Bearer ${accessToken || config.anonKey}`,
+        }
+      }
     );
     
-    if (error) {
-      console.error('[HF Status] Query error:', error.message, error.code, error.hint);
+    console.log('[HF Status] REST API response status:', response.status);
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('[HF Status] REST API error:', response.status, errorText);
       return { connected: false };
     }
     
-    if (!data) {
+    const data = await response.json();
+    console.log('[HF Status] Query result:', data);
+    
+    if (!data || data.length === 0) {
       console.log('[HF Status] No token found for user');
       return { connected: false };
     }
     
+    const row = data[0];
     const result = {
-      connected: !!data.huggingface_token,
-      username: data.huggingface_username,
-      tokenMasked: data.huggingface_token ? `hf_****${data.huggingface_token.slice(-4)}` : null
+      connected: !!row.huggingface_token,
+      username: row.huggingface_username,
+      tokenMasked: row.huggingface_token ? `hf_****${row.huggingface_token.slice(-4)}` : null
     };
     
     console.log('[HF Status] Result:', result.connected ? `Connected as ${result.username}` : 'Not connected');
