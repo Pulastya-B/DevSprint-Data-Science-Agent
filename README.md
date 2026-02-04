@@ -34,6 +34,12 @@ An intelligent **multi-agent AI system** for automated end-to-end data science w
 - **Session Memory**: Maintains context across follow-up queries
 - **Error Recovery**: Graceful fallbacks and parameter validation
 - **Large Dataset Support**: Automatic sampling for 100K+ row datasets
+- **HuggingFace Export**: Export datasets, models, and outputs directly to your HuggingFace repos
+
+### 🔐 Authentication & Integration
+- **Supabase Auth**: Secure user authentication with email/password and OAuth
+- **HuggingFace Integration**: Connect your HF account to export artifacts
+- **Personal Token Support**: Use your own HF write tokens for private uploads
 
 ## 🏗️ Architecture
 
@@ -95,6 +101,12 @@ An intelligent **multi-agent AI system** for automated end-to-end data science w
 "What are the key insights from this analysis?"
 ```
 
+### HuggingFace Export
+1. **Connect** your HuggingFace account via Settings → Add your HF token
+2. **Generate** artifacts (datasets, models, visualizations)
+3. **Export** directly to your HuggingFace repos from the Assets sidebar
+4. **Share** your work with the ML community
+
 ## 🛠️ Tech Stack
 
 | Component | Technology |
@@ -107,6 +119,8 @@ An intelligent **multi-agent AI system** for automated end-to-end data science w
 | **Hyperparameter Tuning** | Optuna with MedianPruner |
 | **Semantic Search** | Sentence-BERT (all-MiniLM-L6-v2) |
 | **Streaming** | Server-Sent Events (SSE) |
+| **Authentication** | Supabase Auth |
+| **Cloud Storage** | HuggingFace Hub API |
 
 ## 📁 Project Structure
 
@@ -117,6 +131,9 @@ src/
 ├── orchestrator.py         # Main workflow orchestration (4500+ lines)
 ├── session_memory.py       # Context persistence across queries
 ├── session_store.py        # Session database management
+├── storage/
+│   ├── huggingface_storage.py  # HuggingFace Hub integration
+│   └── artifact_store.py       # Local artifact management
 ├── tools/
 │   ├── data_profiling.py   # YData profiling, statistics
 │   ├── data_cleaning.py    # Missing values, outliers
@@ -147,6 +164,10 @@ GROQ_API_KEY=your_groq_key            # Alternative
 # Optional
 LLM_PROVIDER=mistral                  # mistral, gemini, or groq
 MAX_ITERATIONS=20                     # Max workflow steps
+
+# Supabase (for authentication)
+SUPABASE_URL=your_supabase_url
+SUPABASE_ANON_KEY=your_supabase_anon_key
 ```
 
 ### HuggingFace Spaces
@@ -212,6 +233,12 @@ Real-time training progress with elapsed time:
 - ✅ **SBERT Fallback**: Graceful keyword routing if embeddings fail
 - ✅ **Tool Name Mapping**: Maps 8+ common hallucinated tool names
 - ✅ **NoneType Safety**: Validates all comparison operands
+
+### HuggingFace Integration
+- ✅ **One-Click Export**: Export datasets, models, and outputs to HuggingFace
+- ✅ **Personal Repos**: Auto-creates `ds-agent-data`, `ds-agent-models`, `ds-agent-outputs` repos
+- ✅ **Secure Tokens**: User tokens stored securely in Supabase
+- ✅ **Status Caching**: Efficient HF connection status checking
 
 ## 🐳 Docker Deployment
 
