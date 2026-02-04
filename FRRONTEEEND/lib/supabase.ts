@@ -283,9 +283,9 @@ const withTimeout = <T>(promise: Promise<T>, ms: number, errorMsg: string): Prom
   return Promise.race([promise, timeout]);
 };
 
-// Update HuggingFace token for a user (only updates existing profiles)
+// Update HuggingFace token for a user (uses dedicated hf_tokens table)
 export const updateHuggingFaceToken = async (userId: string, hfToken: string, hfUsername?: string) => {
-  console.log('[HF Token] Starting update for user:', userId);
+  console.log('[HF Token] Starting upsert for user:', userId);
   
   // Check if Supabase is properly configured
   if (!isSupabaseConfigured()) {
@@ -294,89 +294,60 @@ export const updateHuggingFaceToken = async (userId: string, hfToken: string, hf
   }
   
   try {
-    // Check if user is authenticated in Supabase (with timeout)
-    console.log('[HF Token] Getting session...');
-    const { data: { session } } = await withTimeout(
-      supabase.auth.getSession(),
-      5000,
-      'Session check timeout'
-    );
-    console.log('[HF Token] Session:', session ? `User: ${session.user.id}` : 'NO SESSION');
-    
-    if (!session) {
-      console.error('[HF Token] No active Supabase session! RLS will block the query.');
-      return null;
-    }
-    
-    console.log('[HF Token] Attempting update...');
-    
-    const updateData = { 
+    const tokenData = { 
+      user_id: userId,
       huggingface_token: hfToken || null,
       huggingface_username: hfUsername || null,
       updated_at: new Date().toISOString()
     };
-    console.log('[HF Token] Update payload:', { ...updateData, huggingface_token: hfToken ? '****' : null });
+    console.log('[HF Token] Upsert payload:', { ...tokenData, huggingface_token: hfToken ? '****' : null });
     
-    const { error } = await withTimeout(
-      supabase
-        .from('user_profiles')
-        .update(updateData)
-        .eq('user_id', userId),
-      8000,
-      'Update query timeout'
-    );
+    // Use UPSERT - inserts if not exists, updates if exists
+    // This is simpler and doesn't require profile to exist first
+    const { data, error } = await supabase
+      .from('hf_tokens')
+      .upsert(tokenData, { onConflict: 'user_id' })
+      .select()
+      .single();
     
     if (error) {
-      console.error('[HF Token] Update failed:', error.message, error.code, error.hint);
+      console.error('[HF Token] Upsert failed:', error.message, error.code, error.hint);
       return null;
     }
     
-    console.log('[HF Token] Update successful!');
-    return { ...updateData, user_id: userId };
+    console.log('[HF Token] Upsert successful!');
+    return data;
   } catch (err: any) {
     console.error('[HF Token] Error:', err?.message || err);
     return null;
   }
 };
 
-// Get HuggingFace token for a user (returns masked token for security)
+// Get HuggingFace token status for a user (from dedicated hf_tokens table)
 export const getHuggingFaceStatus = async (userId: string) => {
   console.log('[HF Status] Checking HF connection for user:', userId);
   
   try {
-    // Check if user is authenticated (with timeout)
-    console.log('[HF Status] Getting session...');
-    const { data: { session } } = await withTimeout(
-      supabase.auth.getSession(),
-      5000,
-      'Session check timeout'
-    );
-    
-    if (!session) {
-      console.log('[HF Status] No session, returning not connected');
-      return { connected: false };
-    }
-    console.log('[HF Status] Session found, querying profile...');
-    
-    const { data, error } = await withTimeout(
-      supabase
-        .from('user_profiles')
-        .select('huggingface_token, huggingface_username')
-        .eq('user_id', userId)
-        .single(),
-      5000,
-      'Profile query timeout'
-    );
+    const { data, error } = await supabase
+      .from('hf_tokens')
+      .select('huggingface_token, huggingface_username')
+      .eq('user_id', userId)
+      .maybeSingle();  // Returns null if not found instead of error
     
     if (error) {
-      console.error('[HF Status] Query error:', error.message);
+      console.error('[HF Status] Query error:', error.message, error.code);
+      return { connected: false };
+    }
+    
+    if (!data) {
+      console.log('[HF Status] No token found for user');
       return { connected: false };
     }
     
     const result = {
-      connected: !!data?.huggingface_token,
-      username: data?.huggingface_username,
-      tokenMasked: data?.huggingface_token ? `hf_****${data.huggingface_token.slice(-4)}` : null
+      connected: !!data.huggingface_token,
+      username: data.huggingface_username,
+      tokenMasked: data.huggingface_token ? `hf_****${data.huggingface_token.slice(-4)}` : null
     };
     
     console.log('[HF Status] Result:', result.connected ? `Connected as ${result.username}` : 'Not connected');
@@ -384,6 +355,29 @@ export const getHuggingFaceStatus = async (userId: string) => {
   } catch (err: any) {
     console.error('[HF Status] Error:', err?.message || err);
     return { connected: false };
+  }
+};
+
+// Get the actual HuggingFace token (for export functionality)
+export const getHuggingFaceToken = async (userId: string): Promise<string | null> => {
+  console.log('[HF Token] Getting full token for user:', userId);
+  
+  try {
+    const { data, error } = await supabase
+      .from('hf_tokens')
+      .select('huggingface_token')
+      .eq('user_id', userId)
+      .maybeSingle();
+    
+    if (error || !data) {
+      console.error('[HF Token] Failed to get token:', error?.message);
+      return null;
+    }
+    
+    return data.huggingface_token;
+  } catch (err: any) {
+    console.error('[HF Token] Error:', err?.message || err);
+    return null;
   }
 };
 
