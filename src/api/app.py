@@ -1416,15 +1416,23 @@ async def export_to_huggingface(request: HuggingFaceExportRequest):
         
         # Fetch user's HuggingFace token from hf_tokens table (not user_profiles)
         logger.info(f"[HF Export] Fetching HF token from hf_tokens table...")
-        result = supabase.table("hf_tokens").select(
-            "huggingface_token, huggingface_username"
-        ).eq("user_id", request.user_id).single().execute()
-        
-        if not result.data:
-            raise HTTPException(status_code=404, detail="HuggingFace not connected. Please connect in Settings first.")
-        
-        hf_token = result.data.get("huggingface_token")
-        hf_username = result.data.get("huggingface_username")
+        try:
+            result = supabase.table("hf_tokens").select(
+                "huggingface_token, huggingface_username"
+            ).eq("user_id", request.user_id).execute()
+            
+            logger.info(f"[HF Export] Query result: {result.data}")
+            
+            if not result.data or len(result.data) == 0:
+                raise HTTPException(status_code=404, detail="HuggingFace not connected. Please connect in Settings first.")
+            
+            hf_token = result.data[0].get("huggingface_token")
+            hf_username = result.data[0].get("huggingface_username")
+        except HTTPException:
+            raise
+        except Exception as db_error:
+            logger.error(f"[HF Export] Database query error: {db_error}")
+            raise HTTPException(status_code=500, detail=f"Database error: {str(db_error)}")
         
         if not hf_token:
             raise HTTPException(
@@ -1432,10 +1440,19 @@ async def export_to_huggingface(request: HuggingFaceExportRequest):
                 detail="HuggingFace token not found. Please connect in Settings."
             )
         
-        # Import HuggingFace storage service
-        from src.storage.huggingface_storage import HuggingFaceStorage
+        logger.info(f"[HF Export] Got HF token for user {hf_username}, initializing HuggingFace storage...")
         
-        hf_service = HuggingFaceStorage(hf_token=hf_token)
+        # Import HuggingFace storage service
+        try:
+            from src.storage.huggingface_storage import HuggingFaceStorage
+            hf_service = HuggingFaceStorage(hf_token=hf_token)
+            logger.info(f"[HF Export] HuggingFace storage initialized successfully")
+        except ImportError as e:
+            logger.error(f"[HF Export] Failed to import HuggingFaceStorage: {e}")
+            raise HTTPException(status_code=500, detail="Server error: huggingface_hub package not installed")
+        except Exception as e:
+            logger.error(f"[HF Export] Failed to initialize HuggingFace storage: {e}")
+            raise HTTPException(status_code=500, detail=f"HuggingFace initialization failed: {str(e)}")
         
         # Collect all session assets
         uploaded_files = []
@@ -1447,6 +1464,14 @@ async def export_to_huggingface(request: HuggingFaceExportRequest):
         tmp_outputs_dir = Path("/tmp/data_science_agent")
         
         logger.info(f"[HF Export] Looking for files in: {session_outputs_dir}, {global_outputs_dir}, {tmp_outputs_dir}")
+        
+        # Log directory contents for debugging
+        for dir_path in [session_outputs_dir, global_outputs_dir, tmp_outputs_dir]:
+            if dir_path.exists():
+                files = list(dir_path.glob("*"))
+                logger.info(f"[HF Export] Files in {dir_path}: {[f.name for f in files[:10]]}")
+            else:
+                logger.info(f"[HF Export] Directory does not exist: {dir_path}")
         
         # Upload datasets (CSVs)
         csv_patterns = [
@@ -1554,10 +1579,22 @@ async def export_to_huggingface(request: HuggingFaceExportRequest):
                     errors.append(f"Image {Path(image_file).name}: {str(e)}")
         
         if not uploaded_files and errors:
+            logger.error(f"[HF Export] All uploads failed: {errors}")
             raise HTTPException(
                 status_code=500, 
                 detail=f"Export failed: {'; '.join(errors)}"
             )
+        
+        if not uploaded_files and not errors:
+            logger.warning(f"[HF Export] No files found to export for session {request.session_id}")
+            return JSONResponse({
+                "success": True,
+                "uploaded_files": [],
+                "errors": None,
+                "message": "No files found to export. Run some analysis first to generate outputs."
+            })
+        
+        logger.info(f"[HF Export] Export complete: {len(uploaded_files)} files uploaded, {len(errors)} errors")
         
         return JSONResponse({
             "success": True,
@@ -1569,7 +1606,7 @@ async def export_to_huggingface(request: HuggingFaceExportRequest):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"HuggingFace export failed: {str(e)}")
+        logger.error(f"[HF Export] Unexpected error: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Export failed: {str(e)}")
 
 
