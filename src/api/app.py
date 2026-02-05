@@ -1328,17 +1328,23 @@ async def serve_output_files(file_path: str):
     search_paths = [
         Path("./outputs") / file_path,  # Local development
         Path("/tmp/data_science_agent/outputs") / file_path,  # Production with subdirs
-        Path("/tmp/data_science_agent") / file_path,  # Production flat
+        Path("/tmp/data_science_agent") / file_path,  # Production flat OR relative paths like plots/xxx.html
         Path("/tmp/data_science_agent/outputs") / Path(file_path).name,  # Production filename only
+        Path("/tmp/data_science_agent") / Path(file_path).name,  # Production root filename only
+        Path("./outputs") / Path(file_path).name,  # Local development filename only
     ]
     
     output_path = None
     for path in search_paths:
+        logger.debug(f"Checking path: {path}")
         if path.exists() and path.is_file():
             output_path = path
+            logger.info(f"Found file at: {path}")
             break
     
     if output_path is None:
+        logger.error(f"File not found in any location: {file_path}")
+        logger.error(f"Searched paths: {[str(p) for p in search_paths]}")
         raise HTTPException(status_code=404, detail=f"File not found: {file_path}")
     
     # Security: prevent directory traversal

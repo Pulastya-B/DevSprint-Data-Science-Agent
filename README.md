@@ -261,6 +261,31 @@ CMD ["uvicorn", "src.api.app:app", "--host", "0.0.0.0", "--port", "7860"]
 | 50K rows | ~15s | ~2 min | ~5 min |
 | 175K rows | ~45s | ~5 min | ~10 min |
 
+## 🔮 Future Enhancements
+
+We're actively working on exciting new features to make the Data Science Agent even more powerful:
+
+### 🗄️ BigQuery Integration
+- **Direct BigQuery Connection**: Query and analyze massive datasets directly from Google BigQuery
+- **Smart Sampling**: Intelligent sampling strategies for billion-row tables
+- **Cost Optimization**: Query cost estimation before execution
+- **Schema Discovery**: Auto-detect tables, columns, and relationships
+
+### 🔗 LangChain / LlamaIndex Compatibility
+- **Framework Agnostic**: Use as a tool within LangChain agents or LlamaIndex pipelines
+- **Custom Tool Registration**: Expose 50+ data science tools as LangChain tools
+- **RAG Integration**: Combine with document retrieval for context-aware analysis
+- **Memory Backends**: Support for LangChain memory stores and conversation history
+
+### 💻 First-Class CLI Experience & Beautiful TUI
+- **Rich Terminal UI**: Interactive dashboards with progress bars, tables, and charts
+- **Keyboard Navigation**: Full workflow control without leaving the terminal
+- **Pipeline Scripting**: Define reproducible workflows in YAML/TOML
+- **Offline Mode**: Run locally without requiring a browser
+- **SSH-Friendly**: Perfect for remote server analysis
+
+---
+
 ## 🤝 Contributing
 
 Contributions welcome! Please:
