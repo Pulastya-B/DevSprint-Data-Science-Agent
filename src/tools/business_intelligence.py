@@ -649,8 +649,69 @@ def detect_causal_relationships(
             result["statistical_significance"] = float(p_value)
             result["causal_effect"] = float(uplift)
             
+        elif method == "dowhy":
+            # DoWhy causal inference - formal causal graph approach
+            try:
+                import dowhy
+                from dowhy import CausalModel
+            except ImportError:
+                raise ValueError("dowhy not installed. Install with: pip install dowhy>=0.11")
+            
+            print("  Building DoWhy causal model...")
+            
+            df = data.to_pandas()
+            
+            # Build causal model
+            # Construct a simple causal graph: covariates -> treatment -> outcome
+            if covariates:
+                graph_dot = f'digraph {{ {treatment_column} -> {outcome_column};'
+                for cov in covariates:
+                    graph_dot += f' {cov} -> {treatment_column}; {cov} -> {outcome_column};'
+                graph_dot += ' }'
+            else:
+                graph_dot = f'digraph {{ {treatment_column} -> {outcome_column}; }}'
+            
+            model = CausalModel(
+                data=df,
+                treatment=treatment_column,
+                outcome=outcome_column,
+                common_causes=covariates,
+                graph=graph_dot
+            )
+            
+            # Identify causal effect
+            identified_estimand = model.identify_effect(proceed_when_unidentifiable=True)
+            
+            # Estimate using linear regression (lightweight)
+            estimate = model.estimate_effect(
+                identified_estimand,
+                method_name="backdoor.linear_regression"
+            )
+            
+            # Refutation test (placebo treatment)
+            try:
+                refutation = model.refute_estimate(
+                    identified_estimand,
+                    estimate,
+                    method_name="placebo_treatment_refuter",
+                    placebo_type="permute",
+                    num_simulations=20
+                )
+                refutation_result = {
+                    "new_effect": float(refutation.new_effect) if hasattr(refutation, 'new_effect') else None,
+                    "p_value": float(refutation.refutation_result.get('p_value', 1.0)) if hasattr(refutation, 'refutation_result') and isinstance(refutation.refutation_result, dict) else None
+                }
+            except Exception:
+                refutation_result = {"note": "Refutation test could not be completed"}
+            
+            result["causal_effect"] = float(estimate.value)
+            result["estimand"] = str(identified_estimand)
+            result["estimation_method"] = "backdoor.linear_regression"
+            result["refutation"] = refutation_result
+            result["statistical_significance"] = None  # DoWhy uses refutation instead
+            
         else:
-            raise ValueError(f"Unknown method '{method}'. Use 'granger', 'propensity', or 'uplift'")
+            raise ValueError(f"Unknown method '{method}'. Use 'granger', 'propensity', 'uplift', or 'dowhy'")
         
         print(f"✅ Causal analysis complete!")
         if result.get("causal_effect") is not None:

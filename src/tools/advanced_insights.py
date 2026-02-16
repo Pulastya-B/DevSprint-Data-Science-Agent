@@ -466,14 +466,16 @@ def analyze_distribution(file_path: str,
 
 def perform_segment_analysis(file_path: str,
                              n_segments: int = 5,
-                             features: Optional[List[str]] = None) -> Dict[str, Any]:
+                             features: Optional[List[str]] = None,
+                             method: str = "kmeans") -> Dict[str, Any]:
     """
     Perform cluster-based segment analysis.
     
     Args:
         file_path: Path to dataset
-        n_segments: Number of segments to create
+        n_segments: Number of segments to create (ignored for HDBSCAN)
         features: Features to use for clustering (all numeric if None)
+        method: Clustering method ('kmeans' or 'hdbscan')
         
     Returns:
         Dictionary with segment analysis results
@@ -498,18 +500,44 @@ def perform_segment_analysis(file_path: str,
     X_scaled = scaler.fit_transform(X)
     
     # Perform clustering
-    kmeans = KMeans(n_clusters=n_segments, random_state=42, n_init=10)
-    labels = kmeans.fit_predict(X_scaled)
+    if method == "hdbscan":
+        try:
+            from sklearn.cluster import HDBSCAN as SklearnHDBSCAN
+            
+            print("🔍 Using HDBSCAN for density-based segmentation...")
+            clusterer = SklearnHDBSCAN(
+                min_cluster_size=max(5, len(X) // 50),
+                min_samples=max(3, len(X) // 100),
+                cluster_selection_method='eom'
+            )
+            labels = clusterer.fit_predict(X_scaled)
+            
+            # HDBSCAN assigns -1 to noise points
+            n_clusters = len(set(labels)) - (1 if -1 in labels else 0)
+            n_noise = int((labels == -1).sum())
+            n_segments = n_clusters
+            
+            print(f"   Found {n_clusters} clusters + {n_noise} noise points")
+            
+        except ImportError:
+            print("⚠️ HDBSCAN not available (requires scikit-learn >= 1.3). Falling back to KMeans.")
+            method = "kmeans"
+    
+    if method == "kmeans":
+        kmeans = KMeans(n_clusters=n_segments, random_state=42, n_init=10)
+        labels = kmeans.fit_predict(X_scaled)
     
     # Add cluster labels to dataframe
     df['segment'] = labels
     
-    # Analyze segments
+    # Analyze segments (include noise cluster -1 for HDBSCAN)
+    unique_labels = sorted(set(labels))
     segment_profiles = []
-    for i in range(n_segments):
-        segment_data = df[df['segment'] == i]
+    for label in unique_labels:
+        segment_data = df[df['segment'] == label]
         profile = {
-            "segment_id": i,
+            "segment_id": int(label),
+            "label": "noise" if label == -1 else f"cluster_{label}",
             "size": len(segment_data),
             "percentage": float((len(segment_data) / len(df)) * 100),
             "characteristics": {}
@@ -525,20 +553,26 @@ def perform_segment_analysis(file_path: str,
         segment_profiles.append(profile)
     
     results = {
+        "method": method,
         "n_segments": n_segments,
         "features_used": features,
         "total_samples": len(df),
         "segments": segment_profiles,
         "insights": [
-            f"🎯 Created {n_segments} segments from {len(df)} samples",
+            f"🎯 Created {n_segments} segments from {len(df)} samples using {method.upper()}",
             f"📊 Used {len(features)} features for segmentation"
         ]
     }
     
+    if method == "hdbscan" and n_noise > 0:
+        results["noise_points"] = n_noise
+        results["insights"].append(f"🔇 {n_noise} samples classified as noise (outliers)")
+    
     # Find most distinctive features for each segment
-    for i, profile in enumerate(segment_profiles):
-        results["insights"].append(
-            f"Segment {i}: {profile['size']} samples ({profile['percentage']:.1f}%)"
-        )
+    for profile in segment_profiles:
+        if profile["segment_id"] != -1:
+            results["insights"].append(
+                f"Segment {profile['segment_id']}: {profile['size']} samples ({profile['percentage']:.1f}%)"
+            )
     
     return results

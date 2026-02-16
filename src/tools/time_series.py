@@ -46,7 +46,7 @@ def forecast_time_series(
         time_col: Time/date column name
         target_col: Target variable to forecast
         forecast_horizon: Number of periods to forecast ahead
-        method: Forecasting method ('arima', 'sarima', 'prophet', 'exponential_smoothing')
+        method: Forecasting method ('arima', 'auto_arima', 'sarima', 'prophet', 'exponential_smoothing')
         seasonal_period: Seasonal period (e.g., 7 for weekly, 12 for monthly)
         output_path: Path to save forecast results
         
@@ -108,6 +108,57 @@ def forecast_time_series(
             }
         }
         
+    elif method == "auto_arima":
+        # Auto ARIMA using pmdarima - automatically finds best (p,d,q) order
+        try:
+            import pmdarima as pm
+        except ImportError:
+            return {
+                'status': 'error',
+                'message': 'pmdarima not installed. Install with: pip install pmdarima>=2.0'
+            }
+        
+        ts_data = df_pd.set_index(time_col)[target_col]
+        
+        print("🔧 Running auto_arima to find optimal ARIMA order...")
+        auto_model = pm.auto_arima(
+            ts_data,
+            seasonal=bool(seasonal_period),
+            m=seasonal_period or 1,
+            stepwise=True,
+            suppress_warnings=True,
+            error_action='ignore',
+            max_p=5, max_q=5, max_d=2,
+            max_P=2, max_Q=2, max_D=1,
+            trace=False
+        )
+        
+        # Forecast
+        forecast_vals, conf_int = auto_model.predict(
+            n_periods=forecast_horizon,
+            return_conf_int=True
+        )
+        forecast_index = pd.date_range(start=ts_data.index[-1], periods=forecast_horizon+1, freq='D')[1:]
+        
+        result = {
+            'method': 'auto_arima',
+            'order': str(auto_model.order),
+            'seasonal_order': str(auto_model.seasonal_order) if seasonal_period else None,
+            'forecast': [
+                {
+                    'date': str(date),
+                    'value': float(val),
+                    'lower_ci': float(ci[0]),
+                    'upper_ci': float(ci[1])
+                }
+                for date, val, ci in zip(forecast_index, forecast_vals, conf_int)
+            ],
+            'aic': float(auto_model.aic()),
+            'bic': float(auto_model.bic()),
+            'model_summary': str(auto_model.summary())
+        }
+        print(f"   ✅ Best order: {auto_model.order} | AIC: {auto_model.aic():.2f}")
+    
     elif method == "arima":
         # ARIMA model
         ts_data = df_pd.set_index(time_col)[target_col]

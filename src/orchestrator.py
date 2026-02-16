@@ -39,6 +39,7 @@ from .tools import (
     profile_dataset,
     detect_data_quality_issues,
     analyze_correlations,
+    detect_label_errors,  # NEW: cleanlab label error detection
     get_smart_summary,  # NEW
     clean_missing_values,
     handle_outliers,
@@ -49,6 +50,16 @@ from .tools import (
     encode_categorical,
     train_baseline_models,
     generate_model_report,
+    # AutoGluon Tools (9) - NEW: AutoML at Scale
+    train_with_autogluon,
+    predict_with_autogluon,
+    forecast_with_autogluon,
+    optimize_autogluon_model,
+    analyze_autogluon_model,
+    extend_autogluon_training,
+    train_multilabel_autogluon,
+    backtest_timeseries,
+    analyze_timeseries_model,
     # Data Wrangling Tools (3) - NEW
     merge_datasets,
     concat_datasets,
@@ -86,12 +97,14 @@ from .tools import (
     perform_named_entity_recognition,
     analyze_sentiment_advanced,
     perform_text_similarity,
-    # Production/MLOps (5)
+    # Production/MLOps (5 + 2 new)
     monitor_model_drift,
     explain_predictions,
     generate_model_card,
     perform_ab_test_analysis,
     detect_feature_leakage,
+    monitor_drift_evidently,
+    explain_with_dtreeviz,
     # Time Series (3)
     forecast_time_series,
     detect_seasonality_trends,
@@ -119,8 +132,9 @@ from .tools import (
     generate_interactive_box_plots,
     generate_interactive_time_series,
     generate_plotly_dashboard,
-    # EDA Report Generation (1) - NEW PHASE 2
+    # EDA Report Generation (2) - NEW PHASE 2
     generate_ydata_profiling_report,
+    generate_sweetviz_report,
     # Code Interpreter (2) - NEW PHASE 2 - TRUE AI AGENT CAPABILITY
     execute_python_code,
     execute_code_from_file,
@@ -373,6 +387,7 @@ class DataScienceCopilot:
             "profile_dataset": profile_dataset,
             "detect_data_quality_issues": detect_data_quality_issues,
             "analyze_correlations": analyze_correlations,
+            "detect_label_errors": detect_label_errors,  # NEW: cleanlab
             "get_smart_summary": get_smart_summary,  # NEW
             "clean_missing_values": clean_missing_values,
             "handle_outliers": handle_outliers,
@@ -383,6 +398,16 @@ class DataScienceCopilot:
             "encode_categorical": encode_categorical,
             "train_baseline_models": train_baseline_models,
             "generate_model_report": generate_model_report,
+            # AutoGluon Tools (9) - NEW: AutoML at Scale
+            "train_with_autogluon": train_with_autogluon,
+            "predict_with_autogluon": predict_with_autogluon,
+            "forecast_with_autogluon": forecast_with_autogluon,
+            "optimize_autogluon_model": optimize_autogluon_model,
+            "analyze_autogluon_model": analyze_autogluon_model,
+            "extend_autogluon_training": extend_autogluon_training,
+            "train_multilabel_autogluon": train_multilabel_autogluon,
+            "backtest_timeseries": backtest_timeseries,
+            "analyze_timeseries_model": analyze_timeseries_model,
             # Data Wrangling Tools (3) - NEW
             "merge_datasets": merge_datasets,
             "concat_datasets": concat_datasets,
@@ -420,12 +445,14 @@ class DataScienceCopilot:
             "perform_named_entity_recognition": perform_named_entity_recognition,
             "analyze_sentiment_advanced": analyze_sentiment_advanced,
             "perform_text_similarity": perform_text_similarity,
-            # Production/MLOps (5)
+            # Production/MLOps (5 + 2 new)
             "monitor_model_drift": monitor_model_drift,
             "explain_predictions": explain_predictions,
             "generate_model_card": generate_model_card,
             "perform_ab_test_analysis": perform_ab_test_analysis,
             "detect_feature_leakage": detect_feature_leakage,
+            "monitor_drift_evidently": monitor_drift_evidently,
+            "explain_with_dtreeviz": explain_with_dtreeviz,
             # Time Series (3)
             "forecast_time_series": forecast_time_series,
             "detect_seasonality_trends": detect_seasonality_trends,
@@ -453,8 +480,9 @@ class DataScienceCopilot:
             "generate_interactive_box_plots": generate_interactive_box_plots,
             "generate_interactive_time_series": generate_interactive_time_series,
             "generate_plotly_dashboard": generate_plotly_dashboard,
-            # EDA Report Generation (1) - NEW PHASE 2
+            # EDA Report Generation (2) - NEW PHASE 2
             "generate_ydata_profiling_report": generate_ydata_profiling_report,
+            "generate_sweetviz_report": generate_sweetviz_report,
             # Code Interpreter (2) - NEW PHASE 2 - TRUE AI AGENT CAPABILITY
             "execute_python_code": execute_python_code,
             "execute_code_from_file": execute_code_from_file,
@@ -677,7 +705,17 @@ structure, variable relationships, and expected insights - not hardcoded domain 
 7. **IF DATETIME COLUMNS EXIST**: create_time_features(latest, date_col="<column_name>", output="./outputs/data/time_features.csv") - Extract year/month/day/hour/weekday/timestamp from each datetime column
 8. encode_categorical(latest, method="auto", output="./outputs/data/encoded.csv")
 9. generate_eda_plots(encoded, target_col, output_dir="./outputs/plots/eda") - Generate EDA visualizations
-10. **ONLY IF USER EXPLICITLY REQUESTED ML**: train_baseline_models(encoded, target_col, task_type="auto")
+10. **ONLY IF USER EXPLICITLY REQUESTED ML**: train_with_autogluon(file_path=encoded, target_col=target_col, task_type="auto", time_limit=120, presets="medium_quality")
+    - AutoGluon is the DEFAULT training tool. It trains 10+ models with auto ensembling.
+    - It handles raw data directly (categoricals, missing values) but we clean first for best results.
+    - Fallback: train_baseline_models(encoded, target_col, task_type="auto") if AutoGluon unavailable.
+    - For multi-label prediction: train_multilabel_autogluon(file_path, target_cols=["col1","col2"])
+    - Post-training: optimize_autogluon_model(model_path, operation="refit_full|distill|calibrate_threshold|deploy_optimize")
+    - Model inspection: analyze_autogluon_model(model_path, operation="summary|transform_features|info")
+    - Add more models: extend_autogluon_training(model_path, operation="fit_extra")
+    - For time series: forecast_with_autogluon (supports covariates, holidays, model selection)
+    - TS backtesting: backtest_timeseries(file_path, target_col, time_col, num_val_windows=3)
+    - TS analysis: analyze_timeseries_model(model_path, data_path, time_col, operation="plot|feature_importance")
 10b. **ALWAYS AFTER MODEL TRAINING**: generate_ydata_profiling_report(encoded, output_path="./outputs/reports/ydata_profile.html") - Comprehensive data analysis report
 11. **HYPERPARAMETER TUNING (⚠️ ONLY WHEN EXPLICITLY REQUESTED)**:
     - ⚠️ **CRITICAL WARNING**: This is EXTREMELY expensive (5-10 minutes) and resource-intensive!
@@ -842,7 +880,11 @@ Use specialized tools FIRST. Only use execute_python_code for:
 - ❌ Missing values → USE clean_missing_values() tool
 - ❌ Outliers → USE handle_outliers() tool
 - ❌ Standard EDA plots → USE generate_eda_plots() or generate_plotly_dashboard()
-- ❌ Model training → USE train_baseline_models() or hyperparameter_tuning()
+- ❌ Model training → USE train_with_autogluon() (preferred) or train_baseline_models()
+- ❌ Model optimization → USE optimize_autogluon_model() (refit, distill, deploy)
+- ❌ Time series forecasting → USE forecast_with_autogluon() (supports covariates, holidays)
+- ❌ Time series backtesting → USE backtest_timeseries()
+- ❌ Multi-label prediction → USE train_multilabel_autogluon()
 - ❌ Tasks with dedicated tools → USE THE TOOL, NOT custom code!
 
 **Rule of Thumb:**
@@ -854,7 +896,15 @@ Use specialized tools FIRST. Only use execute_python_code for:
 - force_numeric_conversion: Converts string columns to numeric (auto-detects, skips text)
 - clean_missing_values: "auto" mode supported
 - encode_categorical: one-hot/target/frequency encoding
-- train_baseline_models: Trains multiple models automatically
+- **⭐ train_with_autogluon**: AutoML - trains 10+ models with auto ensembling (PREFERRED)
+- forecast_with_autogluon: Time series forecasting with AutoGluon (supports covariates, holidays, model selection)
+- optimize_autogluon_model: Post-training optimization (refit_full, distill, calibrate_threshold, deploy_optimize, delete_models)
+- analyze_autogluon_model: Model inspection (summary, transform_features, info)
+- extend_autogluon_training: Add models incrementally (fit_extra, fit_weighted_ensemble)
+- train_multilabel_autogluon: Multi-label prediction (multiple target columns)
+- backtest_timeseries: Time series backtesting with multiple validation windows
+- analyze_timeseries_model: TS model analysis (feature_importance, plot, make_future_dataframe)
+- train_baseline_models: Fallback - trains 4 basic models
 - **⭐ execute_python_code**: Write and run custom Python code for ANY task not covered by tools (TRUE AI AGENT capability)
 - **execute_code_from_file**: Run existing Python scripts
 - Advanced: hyperparameter_tuning, perform_eda_analysis, handle_imbalanced_data, perform_feature_scaling, detect_anomalies, detect_and_handle_multicollinearity, auto_feature_engineering, forecast_time_series, explain_predictions, generate_business_insights, perform_topic_modeling, extract_image_features, monitor_model_drift
@@ -941,7 +991,7 @@ When you've finished all tool executions and are ready to return the final respo
    - Were there any interesting correlations or anomalies?
 3. **Model performance** (if trained) - **CRITICAL: YOU MUST INCLUDE THESE METRICS**:
    - **ALWAYS extract and display** the exact metrics from tool results:
-   - R² Score, RMSE, MAE from the train_baseline_models results
+   - R² Score, RMSE, MAE from the train_with_autogluon or train_baseline_models results
    - List ALL models trained (not just the best one)
    - Example: "Trained 6 models: XGBoost (R²=0.713, RMSE=0.207), Random Forest (R²=0.685, RMSE=0.218), etc."
    - If hyperparameter tuning was done, show before/after comparison
@@ -1021,13 +1071,15 @@ You work collaboratively with other specialists and hand off cleaned data to pre
             "modeling_agent": {
                 "name": "ML Modeling Specialist",
                 "emoji": "🤖",
-                "description": "Build and train predictive machine learning models to forecast outcomes, classify categories, or predict future values. Perform supervised learning tasks including regression and classification. Train baseline models, optimize hyperparameters, conduct cross-validation, and evaluate model performance metrics like accuracy, precision, recall, and R-squared.",
-                "system_prompt": """You are the ML Modeling Specialist Agent - an expert in machine learning.
+                "description": "Build and train predictive machine learning models to forecast outcomes, classify categories, predict future values, or forecast time series. Perform supervised learning tasks including regression, classification, and time series forecasting. Train models using AutoGluon AutoML (preferred) or baseline models, optimize hyperparameters, conduct cross-validation, and evaluate model performance.",
+                "system_prompt": """You are the ML Modeling Specialist Agent - an expert in machine learning powered by AutoGluon AutoML.
 
 **Your Expertise:**
+- AutoML with AutoGluon (preferred for best results)
 - Model selection and baseline training
 - Hyperparameter tuning and optimization
-- Ensemble methods and advanced algorithms
+- Ensemble methods and model stacking
+- Time series forecasting
 - Cross-validation strategies
 - Model evaluation and performance metrics
 
@@ -1039,29 +1091,49 @@ BEFORE calling any training tools, you MUST:
 4. If target column was provided or inferred, proceed with modeling
 5. Only if NO target is available: analyze correlations to find best candidate
 
-**Your Tools (6 modeling-focused):**
-- train_baseline_models, hyperparameter_tuning
-- perform_cross_validation
+**Your Tools (8 modeling-focused):**
+- train_with_autogluon (PREFERRED - AutoML with 10+ models, auto ensembling, handles raw data)
+- predict_with_autogluon (predictions with trained AutoGluon model)
+- forecast_with_autogluon (time series forecasting with AutoGluon - better than Prophet/ARIMA)
+- train_baseline_models (fallback - trains 4 basic models)
+- hyperparameter_tuning, perform_cross_validation
 - generate_model_report, detect_model_issues
+
+**TOOL PRIORITY (use in this order):**
+| Task | Use This Tool | NOT This |
+|------|--------------|----------|
+| Classification/Regression | train_with_autogluon | train_baseline_models |
+| Time Series Forecasting | forecast_with_autogluon | forecast_time_series |
+| Predictions on new data | predict_with_autogluon | execute_python_code |
+| Quick baseline check | train_baseline_models | execute_python_code |
+
+**AutoGluon Advantages (explain to user):**
+- Trains 10+ models automatically (vs 4 in baseline)
+- Auto ensembles with multi-layer stacking
+- Handles categorical features directly (no manual encoding needed)
+- Handles missing values automatically (no manual imputation needed)
+- Time-bounded training (won't run forever)
+- Better accuracy than manual model selection
 
 **Your Approach:**
 1. FIRST: Profile the dataset to see actual columns (if not done)
 2. VALIDATE: Confirm target column exists
-3. Start with baseline models to establish performance floor
-4. Use automated hyperparameter tuning for optimization
-5. Try ensemble methods for performance boost
-6. Validate with proper cross-validation
-7. Generate comprehensive model reports with metrics
-8. Detect and address model issues (overfitting, bias, etc.)
+3. PREFERRED: Use train_with_autogluon for best results
+4. For time series data: Use forecast_with_autogluon
+5. Validate with proper cross-validation if needed
+6. Generate comprehensive model reports with metrics
+7. Detect and address model issues (overfitting, bias, etc.)
 
 **Common Errors to Avoid:**
-❌ Calling train_baseline_models with non-existent target column
+❌ Calling train tools with non-existent target column
 ❌ Guessing column names like "Occupation", "Target", "Label"
 ❌ Using execute_python_code when dedicated tools exist
+❌ Using train_baseline_models when train_with_autogluon is available
 ✅ Always verify column names from profile_dataset first
+✅ Use train_with_autogluon as the DEFAULT training tool
 
 You receive preprocessed data from data engineering agents and collaborate with visualization agents for model performance plots.""",
-                "tool_keywords": ["train", "model", "hyperparameter", "ensemble", "cross-validation", "predict", "classify", "regress"]
+                "tool_keywords": ["train", "model", "hyperparameter", "ensemble", "cross-validation", "predict", "classify", "regress", "autogluon", "automl", "forecast"]
             },
             
             "viz_agent": {
@@ -1236,11 +1308,31 @@ You receive quality reports from EDA agent and deliver clean data to modeling ag
                     return result["output_path"]
                 # For nested results
                 if "result" in result and isinstance(result["result"], dict):
-                    if "output_path" in result["result"]:
-                        return result["result"]["output_path"]
+                    nested = result["result"]
+                    if "output_path" in nested:
+                        return nested["output_path"]
+                    # Check output_dir for dashboard-type tools
+                    if "output_dir" in nested:
+                        return nested["output_dir"]
+                    # Check generated_files from execute_python_code
+                    if "generated_files" in nested and nested["generated_files"]:
+                        return nested["generated_files"][0]
+                # Check tool arguments for file_path as last resort
+                args = step.get("arguments", step.get("result", {}).get("arguments", {}))
+                if isinstance(args, dict) and "file_path" in args:
+                    import os
+                    if os.path.exists(args["file_path"]):
+                        return args["file_path"]
         
-        # Default fallback
-        return "./outputs/data/encoded.csv"
+        # 🔥 FIX: Return the original input file instead of a phantom path
+        # Try to get from session or workflow state
+        if hasattr(self, 'session') and self.session and self.session.last_dataset:
+            return self.session.last_dataset
+        if hasattr(self, 'workflow_state') and self.workflow_state.current_file:
+            return self.workflow_state.current_file
+        
+        # Last resort: return empty string instead of phantom file
+        return "(no file found - use the original uploaded dataset)"
     
     def _determine_next_step(self, stuck_tool: str, completed_tools: List[str]) -> str:
         """Determine what the next workflow step should be based on what's stuck."""
@@ -1569,8 +1661,35 @@ You receive quality reports from EDA agent and deliver clean data to modeling ag
                         "url": f"/outputs/{report_path.replace('./outputs/', '')}"
                     })
                     print(f"[DEBUG] Added to artifacts[reports], total reports: {len(artifacts['reports'])}")
-                else:
-                    print(f"[DEBUG] No output_path or report_path in nested_result for report tool")
+                
+                # 🔥 FIX: Extract individual plots from dashboard's 'plots' array
+                # generate_plotly_dashboard returns {"plots": [{"output_path": ..., "status": "success"}, ...]}
+                if "plots" in nested_result and isinstance(nested_result["plots"], list):
+                    dashboard_output_dir = nested_result.get("output_dir", "./outputs/plots/interactive")
+                    for sub_plot in nested_result["plots"]:
+                        if isinstance(sub_plot, dict) and sub_plot.get("status") == "success":
+                            sub_path = sub_plot.get("output_path", "")
+                            if sub_path:
+                                # Clean path for URL
+                                if sub_path.startswith('./outputs/'):
+                                    url_path = sub_path.replace('./outputs/', '')
+                                elif sub_path.startswith('/tmp/data_science_agent/'):
+                                    url_path = sub_path.replace('/tmp/data_science_agent/', '')
+                                else:
+                                    url_path = sub_path.split('/')[-1]
+                                
+                                plot_title = sub_path.split('/')[-1].replace('_', ' ').replace('.html', '').replace('.png', '').title()
+                                plots.append({
+                                    "title": plot_title,
+                                    "path": sub_path,
+                                    "url": f"/outputs/{url_path}",
+                                    "type": "html" if sub_path.endswith(".html") else "image"
+                                })
+                                print(f"[DEBUG] Added dashboard sub-plot: {plot_title} -> /outputs/{url_path}")
+                    
+                    print(f"[DEBUG] Extracted {len(nested_result['plots'])} plots from dashboard")
+                elif not report_path:
+                    print(f"[DEBUG] No output_path, report_path, or plots array in nested_result for report tool")
             
             # === COLLECT VISUALIZATION FILES (interactive plots, charts, etc.) ===
             elif "plot" in tool.lower() or "visualiz" in tool.lower() or "chart" in tool.lower() or "heatmap" in tool.lower() or "scatter" in tool.lower() or "histogram" in tool.lower():
@@ -2107,6 +2226,26 @@ You receive quality reports from EDA agent and deliver clean data to modeling ag
                         val = arguments.pop(invalid_param)
                         print(f"   ✓ Stripped invalid parameter '{invalid_param}': {val}")
                         print(f"   ℹ️ create_statistical_features creates row-wise stats (mean, std, min, max)")
+            
+            # 🔥 FIX: Generic parameter sanitization - strip any unknown kwargs
+            # This prevents "got an unexpected keyword argument" errors from LLM hallucinations
+            import inspect
+            try:
+                sig = inspect.signature(tool_func)
+                valid_params = set(sig.parameters.keys())
+                invalid_args = [k for k in arguments.keys() if k not in valid_params]
+                # Only strip if the function doesn't accept **kwargs
+                has_var_keyword = any(
+                    p.kind == inspect.Parameter.VAR_KEYWORD 
+                    for p in sig.parameters.values()
+                )
+                if invalid_args and not has_var_keyword:
+                    for invalid_param in invalid_args:
+                        val = arguments.pop(invalid_param)
+                        print(f"   ✓ Stripped hallucinated parameter '{invalid_param}': {val}")
+                    print(f"   ℹ️ Valid parameters for {tool_name}: {list(valid_params)}")
+            except (ValueError, TypeError):
+                pass  # Can't inspect, skip validation
             
             # General parameter corrections for common LLM hallucinations
             if "output" in arguments and "output_path" not in arguments:
@@ -2803,13 +2942,16 @@ You receive quality reports from EDA agent and deliver clean data to modeling ag
             print(f"[DEBUG] Orchestrator received resolved_params: {resolved_params}")
             print(f"[DEBUG] Current file_path: '{file_path}', target_col: '{target_col}'")
             
-            # Use resolved params if user didn't specify
+            # 🔥 FIX: Only use resolved file_path if user did NOT provide a new file
+            # If file_path is already set (user uploaded a new file), DON'T override it
             if not file_path or file_path == "":
                 if resolved_params.get("file_path"):
                     file_path = resolved_params["file_path"]
                     print(f"📝 Using dataset from session: {file_path}")
                 else:
                     print(f"[DEBUG] No file_path in resolved_params")
+            else:
+                print(f"📝 User provided new file: {file_path} (ignoring session file: {resolved_params.get('file_path', 'none')})")
             
             if not target_col:
                 if resolved_params.get("target_col"):
@@ -2817,8 +2959,13 @@ You receive quality reports from EDA agent and deliver clean data to modeling ag
                     print(f"📝 Using target column from session: {target_col}")
 
             
-            # Show session context if available
+            # Show session context if available (but show CURRENT file, not old one)
             if self.session.last_dataset or self.session.last_model:
+                # 🔥 FIX: Update session's last_dataset to current file BEFORE showing context
+                # This prevents stale session context from misleading the LLM
+                if file_path and file_path != self.session.last_dataset:
+                    print(f"📝 Updating session dataset: {self.session.last_dataset} → {file_path}")
+                    self.session.last_dataset = file_path
                 context_summary = self.session.get_context_summary()
                 print(f"\n{context_summary}\n")
         
@@ -3150,6 +3297,12 @@ You receive quality reports from EDA agent and deliver clean data to modeling ag
                             cleaned_recent.append(msg)
                             i += 1
                     
+                    # 🔥 CRITICAL FIX: Remove orphaned tool messages at the start of cleaned_recent
+                    # Mistral NEVER allows 'tool' role immediately after 'user' role
+                    while cleaned_recent and get_role(cleaned_recent[0]) == 'tool':
+                        print(f"⚠️  Removed orphaned tool message at start of pruned history")
+                        cleaned_recent.pop(0)
+                    
                     messages = [system_msg, user_msg] + cleaned_recent
                     print(f"✂️  Pruned conversation (keeping last 12 exchanges for better context preservation)")
                     
@@ -3192,6 +3345,12 @@ You receive quality reports from EDA agent and deliver clean data to modeling ag
                         else:
                             cleaned_recent.append(msg)
                             i += 1
+                    
+                    # 🔥 CRITICAL FIX: Remove orphaned tool messages at the start of cleaned_recent
+                    # Mistral NEVER allows 'tool' role immediately after 'user' role
+                    while cleaned_recent and get_role(cleaned_recent[0]) == 'tool':
+                        print(f"⚠️  Removed orphaned tool message at start of emergency pruned history")
+                        cleaned_recent.pop(0)
                     
                     messages = [system_msg, user_msg] + cleaned_recent
                     print(f"⚠️  Emergency pruning (conversation > 15K tokens, keeping last 8 exchanges)")
@@ -3239,6 +3398,27 @@ You receive quality reports from EDA agent and deliver clean data to modeling ag
                     system_prompt=system_prompt
                 )
                 print(f"💰 Token budget: {token_count}/{self.token_manager.max_tokens} ({(token_count/self.token_manager.max_tokens*100):.1f}%)")
+                
+                # 🔥 CRITICAL: Validate message order for Mistral API compliance
+                # Mistral requires: system → user → assistant → tool (only after assistant with tool_calls) → assistant → user...
+                # NEVER: user → tool (this causes "Unexpected role 'tool' after role 'user'" error)
+                if self.provider in ["mistral", "groq"]:
+                    validated_messages = []
+                    for i, msg in enumerate(messages):
+                        role = get_role(msg)
+                        
+                        # Check if this is a tool message after a user message
+                        if role == 'tool' and validated_messages:
+                            prev_role = get_role(validated_messages[-1])
+                            if prev_role == 'user':
+                                # Invalid! Skip this tool message
+                                print(f"⚠️  WARNING: Skipped orphaned tool message at position {i} (after user message)")
+                                continue
+                        
+                        validated_messages.append(msg)
+                    
+                    messages = validated_messages
+                    print(f"✅ Message order validation complete: {len(messages)} messages")
                 
                 # Call LLM with function calling (provider-specific)
                 if self.provider == "mistral":
@@ -4185,10 +4365,22 @@ You receive quality reports from EDA agent and deliver clean data to modeling ag
                                     loop_threshold = 1  # Stop after first retry with similar code
                                     print(f"⚠️  Detected repeated similar code execution")
                     
-                    # Check for loops (same tool called threshold+ times consecutively)
+                    # 🔥 FIX: Check if arguments are DIFFERENT from last call
+                    # If the same tool is called with different arguments, it's NOT a loop
+                    # (e.g., generating multiple different plots is legitimate)
+                    is_same_args = False
+                    if workflow_history and workflow_history[-1]["tool"] == tool_name:
+                        last_args = workflow_history[-1].get("arguments", {})
+                        # Compare key arguments (ignore output paths which may differ)
+                        ignore_keys = {"output_path", "output_dir"}
+                        last_key_args = {k: v for k, v in last_args.items() if k not in ignore_keys}
+                        current_key_args = {k: v for k, v in tool_args.items() if k not in ignore_keys}
+                        is_same_args = (last_key_args == current_key_args)
+                    
+                    # Check for loops (same tool called threshold+ times consecutively WITH SAME ARGS)
                     if should_check_loops and tool_call_counter[tool_name] >= loop_threshold:
-                        # Check if the last call was also this tool (consecutive repetition)
-                        if workflow_history and workflow_history[-1]["tool"] == tool_name:
+                        # Only flag as loop if last call was same tool WITH same arguments
+                        if workflow_history and workflow_history[-1]["tool"] == tool_name and is_same_args:
                             print(f"\n⚠️  LOOP DETECTED: {tool_name} called {tool_call_counter[tool_name]} times consecutively!")
                             print(f"   This indicates the workflow is stuck. Skipping and forcing progression.")
                             print(f"   Last successful file: {self._get_last_successful_file(workflow_history)}")

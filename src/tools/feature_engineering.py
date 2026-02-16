@@ -242,7 +242,7 @@ def encode_categorical(file_path: str, method: str = "auto", columns: Optional[L
                 # Create new column with frequencies
                 new_col_name = f"{col}_freq"
                 df = df.with_columns(
-                    pl.col(col).map_dict(freq_map, default=0.0).alias(new_col_name)
+                    pl.col(col).replace_strict(freq_map, default=0.0).alias(new_col_name)
                 )
                 
                 # Drop original column
@@ -274,7 +274,7 @@ def encode_categorical(file_path: str, method: str = "auto", columns: Optional[L
                 # Create new column with target encoding
                 new_col_name = f"{col}_target_enc"
                 df = df.with_columns(
-                    pl.col(col).map_dict(target_map, default=global_mean).alias(new_col_name)
+                    pl.col(col).replace_strict(target_map, default=global_mean).alias(new_col_name)
                 )
                 
                 # Drop original column

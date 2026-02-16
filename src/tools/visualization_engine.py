@@ -181,7 +181,7 @@ def generate_data_quality_plots(file_path: str, output_dir: str) -> Dict[str, An
     return {"plot_paths": plots, "figures": figures, "n_plots": len(plots)}
 
 
-def generate_eda_plots(file_path: str, target_col: Optional[str], output_dir: str) -> Dict[str, Any]:
+def generate_eda_plots(file_path: str, target_col: Optional[str] = None, output_dir: str = "./outputs/plots/eda") -> Dict[str, Any]:
     """Generate exploratory data analysis plots using Matplotlib."""
     df = load_dataframe(file_path).to_pandas()
     plots = []

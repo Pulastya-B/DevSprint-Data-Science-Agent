@@ -177,8 +177,10 @@ except Exception as e:
         
         # Track existing files BEFORE execution to detect new files
         existing_files = set()
+        # 🔥 FIX: Also scan /tmp/data_science_agent/ since LLM often saves files there
+        scan_dirs = ['./outputs/code', './outputs/data', './outputs/plots', '/tmp/data_science_agent']
         if allow_file_operations:
-            for output_dir in ['./outputs/code', './outputs/data', './outputs/plots']:
+            for output_dir in scan_dirs:
                 if os.path.exists(output_dir):
                     for file_path in Path(output_dir).resolve().glob('**/*'):
                         if file_path.is_file():
@@ -229,9 +231,11 @@ except Exception as e:
             
             # Success! Find NEWLY generated files (not existing before execution)
             generated_files = []
+            # 🔥 FIX: Also scan /tmp/data_science_agent/ for files created by LLM code
+            scan_dirs = ['./outputs/code', './outputs/data', './outputs/plots', '/tmp/data_science_agent']
             if allow_file_operations:
                 cwd = Path.cwd()
-                for output_dir in ['./outputs/code', './outputs/data', './outputs/plots']:
+                for output_dir in scan_dirs:
                     if os.path.exists(output_dir):
                         abs_output_dir = Path(output_dir).resolve()
                         for file_path in abs_output_dir.glob('**/*'):

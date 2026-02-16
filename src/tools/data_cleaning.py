@@ -124,10 +124,81 @@ def clean_missing_values(file_path: str, strategy,
             strategy = strategy_dict
             print(f"🔧 Applying '{list(strategy_dict.values())[0] if strategy_dict else strategy}' strategy to {len(strategy_dict)} columns with missing values")
         
+        elif strategy in ["iterative", "mice"]:
+            # MICE / Iterative Imputation using sklearn IterativeImputer
+            # This handles ALL numeric columns at once (multivariate imputation)
+            print(f"🔧 Applying Iterative (MICE) imputation to numeric columns...")
+            try:
+                from sklearn.experimental import enable_iterative_imputer  # noqa: F401
+                from sklearn.impute import IterativeImputer
+                from sklearn.linear_model import BayesianRidge
+                import pandas as pd
+                
+                # Identify numeric columns with missing values
+                numeric_cols_with_nulls = [
+                    col for col in numeric_cols if df[col].null_count() > 0
+                ]
+                
+                if not numeric_cols_with_nulls:
+                    print("   ℹ️ No numeric columns with missing values for MICE imputation")
+                else:
+                    # Convert numeric columns to pandas for IterativeImputer
+                    df_pd = df.select(numeric_cols).to_pandas()
+                    
+                    # Fit and transform
+                    imputer = IterativeImputer(
+                        estimator=BayesianRidge(),
+                        max_iter=10,
+                        random_state=42,
+                        missing_values=float('nan')
+                    )
+                    imputed_data = imputer.fit_transform(df_pd)
+                    
+                    # Replace columns back in Polars DataFrame
+                    for i, col_name in enumerate(numeric_cols):
+                        df = df.with_columns(
+                            pl.Series(col_name, imputed_data[:, i])
+                        )
+                    
+                    for col_name in numeric_cols_with_nulls:
+                        report["columns_processed"][col_name] = {
+                            "status": "success",
+                            "strategy": "iterative_mice",
+                            "nulls_before": int(df[col_name].null_count()),  # Should be 0 now
+                            "nulls_after": 0
+                        }
+                    
+                    print(f"   ✅ MICE imputed {len(numeric_cols_with_nulls)} numeric columns using {len(numeric_cols)} features")
+                
+                # Handle remaining non-numeric columns with mode
+                for col in df.columns:
+                    if df[col].null_count() > 0 and col not in numeric_cols:
+                        mode_val = df[col].drop_nulls().mode().first()
+                        if mode_val is not None:
+                            df = df.with_columns(
+                                pl.col(col).fill_null(mode_val).alias(col)
+                            )
+                            report["columns_processed"][col] = {
+                                "status": "success",
+                                "strategy": "mode (non-numeric fallback)",
+                                "nulls_before": int(df[col].null_count()),
+                                "nulls_after": 0
+                            }
+                
+            except ImportError:
+                return {
+                    "success": False,
+                    "error": "IterativeImputer requires scikit-learn >= 1.4. Install with: pip install scikit-learn>=1.4",
+                    "error_type": "MissingDependency"
+                }
+            
+            # Skip per-column processing for MICE (already handled above)
+            strategy = {}
+        
         else:
             return {
                 "success": False,
-                "error": f"Invalid strategy '{strategy}'. Use 'auto', 'median', 'mean', 'mode', 'forward_fill', 'drop', or provide a dictionary.",
+                "error": f"Invalid strategy '{strategy}'. Use 'auto', 'median', 'mean', 'mode', 'forward_fill', 'drop', 'iterative', 'mice', or provide a dictionary.",
                 "error_type": "ValueError"
             }
     

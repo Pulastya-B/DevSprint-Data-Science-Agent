@@ -659,3 +659,194 @@ def detect_feature_leakage(
         'total_issues': total_issues,
         'recommendation': 'Review and remove suspicious features before training' if total_issues > 0 else 'No obvious leakage detected'
     }
+
+
+def monitor_drift_evidently(
+    reference_data_path: str,
+    current_data_path: str,
+    output_path: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Generate a comprehensive data drift report using Evidently AI.
+    
+    Evidently provides production-grade drift detection with:
+    - Statistical tests per feature (KS, Chi-squared, Jensen-Shannon)
+    - Data quality metrics
+    - Interactive HTML dashboard
+    
+    Args:
+        reference_data_path: Path to training/reference dataset
+        current_data_path: Path to production/current dataset
+        output_path: Path to save HTML drift report
+        
+    Returns:
+        Dictionary with drift metrics and report path
+    """
+    try:
+        from evidently.report import Report
+        from evidently.metric_preset import DataDriftPreset, DataQualityPreset
+    except ImportError:
+        return {
+            'status': 'error',
+            'message': 'evidently not installed. Install with: pip install evidently>=0.4'
+        }
+    
+    import pandas as pd_ev
+    
+    validate_file_exists(reference_data_path)
+    validate_file_exists(current_data_path)
+    
+    # Load data as pandas (evidently requires pandas)
+    ref_df = load_dataframe(reference_data_path).to_pandas()
+    curr_df = load_dataframe(current_data_path).to_pandas()
+    
+    print("🔍 Generating Evidently drift report...")
+    
+    # Create drift report
+    report = Report(metrics=[
+        DataDriftPreset(),
+        DataQualityPreset()
+    ])
+    
+    report.run(reference_data=ref_df, current_data=curr_df)
+    
+    # Save HTML report
+    if output_path is None:
+        output_path = "./outputs/reports/evidently_drift_report.html"
+    
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    report.save_html(output_path)
+    
+    # Extract results as dict
+    report_dict = report.as_dict()
+    
+    # Parse drift results
+    drift_metrics = report_dict.get('metrics', [])
+    
+    drifted_features = []
+    total_features = 0
+    for metric in drift_metrics:
+        result_data = metric.get('result', {})
+        if 'drift_by_columns' in result_data:
+            for col_name, col_data in result_data['drift_by_columns'].items():
+                total_features += 1
+                if col_data.get('drift_detected', False):
+                    drifted_features.append(col_name)
+    
+    print(f"✅ Evidently report saved to: {output_path}")
+    print(f"   📊 {len(drifted_features)}/{total_features} features with drift detected")
+    
+    return {
+        'status': 'success',
+        'report_path': output_path,
+        'total_features_analyzed': total_features,
+        'drifted_features': drifted_features,
+        'n_drifted': len(drifted_features),
+        'recommendation': 'Retrain model' if drifted_features else 'No significant drift detected'
+    }
+
+
+def explain_with_dtreeviz(
+    model_path: str,
+    data_path: str,
+    target_col: str,
+    feature_names: Optional[List[str]] = None,
+    instance_index: int = 0,
+    output_path: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Generate tree visualization using dtreeviz for tree-based models.
+    
+    Creates publication-quality decision tree visualizations showing:
+    - Decision path for individual predictions
+    - Feature distributions at each node
+    - Split thresholds with data histograms
+    
+    Args:
+        model_path: Path to trained tree-based model (.pkl)
+        data_path: Path to dataset
+        target_col: Target column name
+        feature_names: List of feature names (auto-detected if None)
+        instance_index: Index of instance to trace through tree
+        output_path: Path to save SVG visualization
+        
+    Returns:
+        Dictionary with visualization path and tree info
+    """
+    try:
+        import dtreeviz
+    except ImportError:
+        return {
+            'status': 'error',
+            'message': 'dtreeviz not installed. Install with: pip install dtreeviz>=2.2'
+        }
+    
+    validate_file_exists(model_path)
+    validate_file_exists(data_path)
+    
+    model = joblib.load(model_path)
+    df = load_dataframe(data_path)
+    validate_dataframe(df)
+    
+    # Prepare data
+    if target_col in df.columns:
+        X = df.drop(target_col).to_pandas()
+        y = df[target_col].to_pandas()
+    else:
+        X = df.to_pandas()
+        y = None
+    
+    if feature_names is None:
+        feature_names = X.columns.tolist()
+    
+    print(f"🌳 Generating dtreeviz visualization...")
+    
+    if output_path is None:
+        output_path = "./outputs/reports/dtreeviz_tree.svg"
+    
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    
+    try:
+        # Check if model is a tree-based model
+        from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
+        from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
+        
+        # For ensemble models, use the first estimator
+        tree_model = model
+        if hasattr(model, 'estimators_'):
+            tree_model = model.estimators_[0]
+            print("   📌 Using first estimator from ensemble for visualization")
+        
+        # Determine task type
+        is_classifier = hasattr(model, 'predict_proba')
+        
+        # Create visualization
+        viz_model = dtreeviz.model(
+            tree_model,
+            X_train=X,
+            y_train=y,
+            feature_names=feature_names,
+            target_name=target_col,
+            class_names=list(map(str, sorted(y.unique()))) if is_classifier and y is not None else None
+        )
+        
+        # Generate tree visualization
+        v = viz_model.view(x=X.iloc[instance_index])
+        v.save(output_path)
+        
+        print(f"✅ Tree visualization saved to: {output_path}")
+        
+        return {
+            'status': 'success',
+            'visualization_path': output_path,
+            'model_type': type(model).__name__,
+            'n_features': len(feature_names),
+            'instance_explained': instance_index,
+            'tree_depth': tree_model.get_depth() if hasattr(tree_model, 'get_depth') else 'unknown'
+        }
+        
+    except Exception as e:
+        return {
+            'status': 'error',
+            'message': f'dtreeviz visualization failed: {str(e)}. Ensure model is tree-based (DecisionTree, RandomForest, XGBoost).'
+        }

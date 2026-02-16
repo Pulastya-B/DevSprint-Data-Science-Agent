@@ -268,3 +268,110 @@ def validate_strategy_config(strategy: Dict[str, Any],
         raise ValidationError(
             f"Missing required strategy keys: {', '.join(missing)}"
         )
+
+
+def validate_schema_pandera(
+    df: pl.DataFrame,
+    schema_config: Dict[str, Any]
+) -> Dict[str, Any]:
+    """
+    Validate a DataFrame against a pandera schema.
+    
+    Schema config format:
+    {
+        "columns": {
+            "age": {"dtype": "int", "nullable": False, "checks": {"ge": 0, "le": 150}},
+            "name": {"dtype": "str", "nullable": False},
+            "salary": {"dtype": "float", "nullable": True, "checks": {"ge": 0}}
+        },
+        "coerce": True
+    }
+    
+    Args:
+        df: Polars DataFrame to validate
+        schema_config: Dictionary defining the expected schema
+        
+    Returns:
+        Dictionary with validation results and any errors found
+    """
+    try:
+        import pandera as pa
+        import pandas as pd
+    except ImportError:
+        return {
+            'status': 'error',
+            'message': 'pandera not installed. Install with: pip install pandera>=0.18'
+        }
+    
+    columns_config = schema_config.get("columns", {})
+    coerce = schema_config.get("coerce", True)
+    
+    # Build pandera schema from config
+    schema_columns = {}
+    dtype_map = {
+        "int": pa.Int,
+        "float": pa.Float,
+        "str": pa.String,
+        "bool": pa.Bool,
+        "datetime": pa.DateTime,
+    }
+    
+    check_map = {
+        "ge": lambda v: pa.Check.ge(v),
+        "le": lambda v: pa.Check.le(v),
+        "gt": lambda v: pa.Check.gt(v),
+        "lt": lambda v: pa.Check.lt(v),
+        "in_range": lambda v: pa.Check.in_range(v[0], v[1]),
+        "isin": lambda v: pa.Check.isin(v),
+        "str_matches": lambda v: pa.Check.str_matches(v),
+        "str_length": lambda v: pa.Check.str_length(max_value=v),
+    }
+    
+    for col_name, col_config in columns_config.items():
+        col_dtype = dtype_map.get(col_config.get("dtype", ""), None)
+        nullable = col_config.get("nullable", True)
+        checks_config = col_config.get("checks", {})
+        
+        checks = []
+        for check_name, check_val in checks_config.items():
+            if check_name in check_map:
+                checks.append(check_map[check_name](check_val))
+        
+        schema_columns[col_name] = pa.Column(
+            dtype=col_dtype,
+            nullable=nullable,
+            checks=checks if checks else None,
+            coerce=coerce
+        )
+    
+    schema = pa.DataFrameSchema(columns=schema_columns, coerce=coerce)
+    
+    # Convert Polars to Pandas for pandera validation
+    df_pd = df.to_pandas()
+    
+    try:
+        schema.validate(df_pd, lazy=True)
+        return {
+            'status': 'success',
+            'valid': True,
+            'message': 'DataFrame passed all schema validations',
+            'columns_validated': list(columns_config.keys())
+        }
+    except pa.errors.SchemaErrors as err:
+        errors = []
+        for _, row in err.failure_cases.iterrows():
+            errors.append({
+                'column': str(row.get('column', '')),
+                'check': str(row.get('check', '')),
+                'failure_case': str(row.get('failure_case', '')),
+                'index': int(row.get('index', -1)) if row.get('index') is not None else None
+            })
+        
+        return {
+            'status': 'success',
+            'valid': False,
+            'message': f'Schema validation failed with {len(errors)} errors',
+            'errors': errors[:50],  # Limit to 50 errors
+            'total_errors': len(errors),
+            'columns_validated': list(columns_config.keys())
+        }

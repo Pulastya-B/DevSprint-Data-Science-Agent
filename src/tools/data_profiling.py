@@ -486,3 +486,108 @@ def analyze_correlations(file_path: str, target: Optional[str] = None) -> Dict[s
             }
     
     return result
+
+
+def detect_label_errors(
+    file_path: str,
+    target_col: str,
+    features: Optional[List[str]] = None,
+    n_folds: int = 5,
+    output_path: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Detect potential label errors in a classification dataset using cleanlab.
+    
+    Uses confident learning to find mislabeled examples by:
+    1. Training cross-validated classifiers
+    2. Computing out-of-sample predicted probabilities
+    3. Identifying labels that disagree with model predictions
+    
+    Args:
+        file_path: Path to dataset
+        target_col: Target/label column name
+        features: Feature columns to use (None = all numeric)
+        n_folds: Number of cross-validation folds
+        output_path: Optional path to save flagged rows
+        
+    Returns:
+        Dictionary with label error analysis results
+    """
+    try:
+        from cleanlab.classification import CleanLearning
+    except ImportError:
+        return {
+            'status': 'error',
+            'message': 'cleanlab not installed. Install with: pip install cleanlab>=2.6'
+        }
+    
+    from sklearn.linear_model import LogisticRegression
+    from sklearn.preprocessing import LabelEncoder
+    
+    validate_file_exists(file_path)
+    validate_file_format(file_path)
+    
+    df = load_dataframe(file_path)
+    validate_dataframe(df)
+    validate_column_exists(df, target_col)
+    
+    print(f"🔍 Detecting label errors in '{target_col}' using cleanlab...")
+    
+    # Get features
+    if features is None:
+        features = get_numeric_columns(df)
+        features = [f for f in features if f != target_col]
+    
+    if not features:
+        return {'status': 'error', 'message': 'No numeric features found for label error detection'}
+    
+    # Convert to pandas/numpy
+    df_pd = df.to_pandas()
+    X = df_pd[features].fillna(0).values
+    y_raw = df_pd[target_col].values
+    
+    # Encode labels
+    le = LabelEncoder()
+    y = le.fit_transform(y_raw)
+    
+    # Use CleanLearning to find label issues
+    cl = CleanLearning(
+        clf=LogisticRegression(max_iter=500, solver='lbfgs', multi_class='auto'),
+        cv_n_folds=n_folds
+    )
+    
+    label_issues = cl.find_label_issues(X, y)
+    
+    # Extract results
+    n_issues = label_issues['is_label_issue'].sum()
+    issue_indices = label_issues[label_issues['is_label_issue']].index.tolist()
+    
+    # Get details for flagged rows
+    flagged_rows = []
+    for idx in issue_indices[:50]:  # Limit to top 50
+        flagged_rows.append({
+            'row_index': int(idx),
+            'current_label': str(y_raw[idx]),
+            'suggested_label': str(le.inverse_transform([label_issues.loc[idx, 'predicted_label']])[0]) if 'predicted_label' in label_issues.columns else 'unknown',
+            'confidence': float(1 - label_issues.loc[idx, 'label_quality']) if 'label_quality' in label_issues.columns else None
+        })
+    
+    print(f"   🚨 Found {n_issues} potential label errors ({n_issues/len(y)*100:.1f}%)")
+    
+    # Save flagged rows
+    if output_path and issue_indices:
+        flagged_df = df_pd.iloc[issue_indices]
+        flagged_df.to_csv(output_path, index=False)
+        print(f"   💾 Flagged rows saved to: {output_path}")
+    
+    return {
+        'status': 'success',
+        'total_samples': len(y),
+        'label_errors_found': int(n_issues),
+        'error_percentage': round(n_issues / len(y) * 100, 2),
+        'flagged_rows': flagged_rows,
+        'n_classes': len(le.classes_),
+        'classes': le.classes_.tolist(),
+        'output_path': output_path,
+        'recommendation': f'Review {n_issues} flagged samples for potential mislabeling' if n_issues > 0 else 'No label errors detected'
+    }

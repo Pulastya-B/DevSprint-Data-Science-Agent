@@ -483,20 +483,48 @@ def analyze_sentiment_advanced(
                     result["emotions"] = None
             
         else:
-            # Fallback to TextBlob
-            print("  Using TextBlob for sentiment analysis...")
+            # Check if method is 'vader' - use vaderSentiment
+            if method == "vader":
+                try:
+                    from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
+                    print("  Using VADER for sentiment analysis...")
+                    
+                    analyzer = SentimentIntensityAnalyzer()
+                    sentiments = []
+                    for text in texts_clean:
+                        scores = analyzer.polarity_scores(text)
+                        label = "POSITIVE" if scores['compound'] > 0.05 else "NEGATIVE" if scores['compound'] < -0.05 else "NEUTRAL"
+                        sentiments.append({
+                            "compound": scores['compound'],
+                            "positive": scores['pos'],
+                            "negative": scores['neg'],
+                            "neutral": scores['neu'],
+                            "label": label,
+                            "text": text[:100]
+                        })
+                    
+                    result["sentiments"] = sentiments
+                    
+                except ImportError:
+                    print("⚠️ vaderSentiment not installed. Falling back to TextBlob.")
+                    print("   Install with: pip install vaderSentiment>=3.3")
+                    method = "textblob"
             
-            sentiments = []
-            for text in texts_clean:
-                blob = TextBlob(text)
-                sentiments.append({
-                    "polarity": blob.sentiment.polarity,
-                    "subjectivity": blob.sentiment.subjectivity,
-                    "label": "POSITIVE" if blob.sentiment.polarity > 0 else "NEGATIVE" if blob.sentiment.polarity < 0 else "NEUTRAL",
-                    "text": text[:100]
-                })
-            
-            result["sentiments"] = sentiments
+            if method in ["textblob", "transformer"]:
+                # Fallback to TextBlob
+                print("  Using TextBlob for sentiment analysis...")
+                
+                sentiments = []
+                for text in texts_clean:
+                    blob = TextBlob(text)
+                    sentiments.append({
+                        "polarity": blob.sentiment.polarity,
+                        "subjectivity": blob.sentiment.subjectivity,
+                        "label": "POSITIVE" if blob.sentiment.polarity > 0 else "NEGATIVE" if blob.sentiment.polarity < 0 else "NEUTRAL",
+                        "text": text[:100]
+                    })
+                
+                result["sentiments"] = sentiments
         
         # Aspect-based sentiment
         if aspects:

@@ -5,7 +5,8 @@ from .data_profiling import (
     profile_dataset,
     detect_data_quality_issues,
     analyze_correlations,
-    get_smart_summary  # NEW: Enhanced data summary
+    get_smart_summary,  # NEW: Enhanced data summary
+    detect_label_errors  # NEW: cleanlab label error detection
 )
 
 from .data_cleaning import (
@@ -34,6 +35,19 @@ from .feature_engineering import (
 from .model_training import (
     train_baseline_models,
     generate_model_report
+)
+
+# AutoGluon-Powered Training (9) - Classification, Regression, Time Series, Optimization
+from .autogluon_training import (
+    train_with_autogluon,
+    predict_with_autogluon,
+    forecast_with_autogluon,
+    optimize_autogluon_model,
+    analyze_autogluon_model,
+    extend_autogluon_training,
+    train_multilabel_autogluon,
+    backtest_timeseries,
+    analyze_timeseries_model
 )
 
 # Advanced Analysis Tools (5)
@@ -90,13 +104,15 @@ from .nlp_text_analytics import (
     perform_text_similarity
 )
 
-# Production/MLOps Tools (5)
+# Production/MLOps Tools (5 + 2 new)
 from .production_mlops import (
     monitor_model_drift,
     explain_predictions,
     generate_model_card,
     perform_ab_test_analysis,
-    detect_feature_leakage
+    detect_feature_leakage,
+    monitor_drift_evidently,  # NEW: Evidently drift reports
+    explain_with_dtreeviz  # NEW: Decision tree visualization
 )
 
 # Time Series Tools (3)
@@ -141,9 +157,10 @@ from .plotly_visualizations import (
     generate_plotly_dashboard
 )
 
-# EDA Report Generation (1) - NEW PHASE 2
+# EDA Report Generation (2) - NEW PHASE 2
 from .eda_reports import (
-    generate_ydata_profiling_report
+    generate_ydata_profiling_report,
+    generate_sweetviz_report  # NEW: Sweetviz EDA with comparison
 )
 
 # Code Interpreter (2) - NEW PHASE 2 - CRITICAL for True AI Agent
@@ -170,11 +187,12 @@ from .enhanced_feature_engineering import (
 )
 
 __all__ = [
-    # Basic Data Profiling (4) - UPDATED
+    # Basic Data Profiling (4 + 1 new) - UPDATED
     "profile_dataset",
     "detect_data_quality_issues",
     "analyze_correlations",
     "get_smart_summary",  # NEW
+    "detect_label_errors",  # NEW: cleanlab
     
     # Basic Data Cleaning (3)
     "clean_missing_values",
@@ -197,6 +215,17 @@ __all__ = [
     # Basic Model Training (2)
     "train_baseline_models",
     "generate_model_report",
+    
+    # AutoGluon Training (9) - NEW
+    "train_with_autogluon",
+    "predict_with_autogluon",
+    "forecast_with_autogluon",
+    "optimize_autogluon_model",
+    "analyze_autogluon_model",
+    "extend_autogluon_training",
+    "train_multilabel_autogluon",
+    "backtest_timeseries",
+    "analyze_timeseries_model",
     
     # Advanced Analysis (5)
     "perform_eda_analysis",
@@ -238,12 +267,14 @@ __all__ = [
     "analyze_sentiment_advanced",
     "perform_text_similarity",
     
-    # Production/MLOps (5)
+    # Production/MLOps (5 + 2 new)
     "monitor_model_drift",
     "explain_predictions",
     "generate_model_card",
     "perform_ab_test_analysis",
     "detect_feature_leakage",
+    "monitor_drift_evidently",  # NEW: Evidently
+    "explain_with_dtreeviz",  # NEW: dtreeviz
     
     # Time Series (3)
     "forecast_time_series",
@@ -277,8 +308,9 @@ __all__ = [
     "generate_interactive_time_series",
     "generate_plotly_dashboard",
     
-    # EDA Report Generation (1) - NEW PHASE 2
+    # EDA Report Generation (2) - NEW PHASE 2
     "generate_ydata_profiling_report",
+    "generate_sweetviz_report",  # NEW: Sweetviz
     
     # Code Interpreter (2) - NEW PHASE 2 - CRITICAL for True AI Agent
     "execute_python_code",

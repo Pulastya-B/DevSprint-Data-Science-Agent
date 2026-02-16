@@ -195,6 +195,8 @@ def perform_feature_scaling(
             - 'standard': StandardScaler (mean=0, std=1)
             - 'minmax': MinMaxScaler (range 0-1)
             - 'robust': RobustScaler (median, IQR - robust to outliers)
+            - 'power': PowerTransformer (Yeo-Johnson, makes data more Gaussian)
+            - 'quantile': QuantileTransformer (uniform or normal output distribution)
         columns: List of columns to scale (None = all numeric columns)
         output_path: Path to save scaled dataset
         scaler_save_path: Path to save fitted scaler for future use
@@ -231,8 +233,16 @@ def perform_feature_scaling(
         scaler = MinMaxScaler()
     elif scaler_type == "robust":
         scaler = RobustScaler()
+    elif scaler_type == "power":
+        from sklearn.preprocessing import PowerTransformer
+        scaler = PowerTransformer(method='yeo-johnson', standardize=True)
+        print("   📐 Using Yeo-Johnson PowerTransformer (makes data more Gaussian)")
+    elif scaler_type == "quantile":
+        from sklearn.preprocessing import QuantileTransformer
+        scaler = QuantileTransformer(output_distribution='normal', random_state=42, n_quantiles=min(1000, len(df)))
+        print("   📐 Using QuantileTransformer (maps to normal distribution)")
     else:
-        raise ValueError(f"Unsupported scaler_type: {scaler_type}")
+        raise ValueError(f"Unsupported scaler_type: {scaler_type}. Use 'standard', 'minmax', 'robust', 'power', or 'quantile'.")
     
     # Get original statistics
     original_stats = {}

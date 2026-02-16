@@ -42,6 +42,12 @@ TOOL_CATEGORIES = {
     ],
     "modeling": [
         "train_baseline_models",
+        "train_with_autogluon",
+        "predict_with_autogluon",
+        "optimize_autogluon_model",
+        "analyze_autogluon_model",
+        "extend_autogluon_training",
+        "train_multilabel_autogluon",
         "hyperparameter_tuning",
         "perform_cross_validation",
         "train_ensemble_models",
@@ -53,6 +59,9 @@ TOOL_CATEGORIES = {
         "decompose_time_series",
         "forecast_arima",
         "forecast_prophet",
+        "forecast_with_autogluon",
+        "backtest_timeseries",
+        "analyze_timeseries_model",
         "detect_anomalies_time_series",
     ],
     "nlp": [

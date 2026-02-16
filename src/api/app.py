@@ -383,10 +383,23 @@ async def stream_progress(session_id: str):
             print(f"[SSE] SENDING connection event to client")
             yield f"data: {safe_json_dumps(connection_event)}\n\n"
             
-            # ❌ DON'T replay history - causes duplicate results when reconnecting
-            # Each new query should only show events from that query, not previous ones
-            # History is only useful for debugging, not for client display
-            print(f"[SSE] Skipping history replay (follow-up query should show fresh events)")
+            # 🔥 FIX: Replay any events that were emitted BEFORE this subscriber connected
+            # This handles the race condition where background analysis starts emitting events
+            # before the frontend's SSE reconnection completes
+            history = progress_manager.get_history(session_id)
+            if history:
+                print(f"[SSE] Replaying {len(history)} missed events for late-joining subscriber")
+                for past_event in history:
+                    # Don't replay if it's already a terminal event
+                    if past_event.get('type') != 'analysis_complete':
+                        yield f"data: {safe_json_dumps(past_event)}\n\n"
+                    else:
+                        # If analysis already completed before we connected, send it and close
+                        yield f"data: {safe_json_dumps(past_event)}\n\n"
+                        print(f"[SSE] Analysis already completed before subscriber connected - closing")
+                        return
+            else:
+                print(f"[SSE] No history to replay (fresh session)")
             
             print(f"[SSE] Starting event stream loop for session {session_id}")
             

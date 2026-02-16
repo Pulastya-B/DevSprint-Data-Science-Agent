@@ -1067,6 +1067,40 @@ TOOLS = [
             }
         }
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "monitor_drift_evidently",
+            "description": "Generate comprehensive data drift report using Evidently AI. Provides statistical tests per feature, data quality metrics, and interactive HTML dashboard.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "reference_data_path": {"type": "string", "description": "Path to training/reference dataset"},
+                    "current_data_path": {"type": "string", "description": "Path to production/current dataset"},
+                    "output_path": {"type": "string", "description": "Path to save HTML drift report"}
+                },
+                "required": ["reference_data_path", "current_data_path"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "explain_with_dtreeviz",
+            "description": "Generate publication-quality decision tree visualizations using dtreeviz. Shows decision path, feature distributions at each node, and split thresholds.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "model_path": {"type": "string", "description": "Path to trained tree-based model (.pkl)"},
+                    "data_path": {"type": "string", "description": "Path to dataset"},
+                    "target_col": {"type": "string", "description": "Target column name"},
+                    "instance_index": {"type": "integer", "description": "Index of instance to trace through tree (default: 0)"},
+                    "output_path": {"type": "string", "description": "Path to save SVG visualization"}
+                },
+                "required": ["model_path", "data_path", "target_col"]
+            }
+        }
+    },
     
     # ============================================
     # TIME SERIES (3)
@@ -1449,6 +1483,55 @@ TOOLS = [
             }
         }
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "generate_sweetviz_report",
+            "description": "Generate interactive EDA report using Sweetviz. Provides feature-by-feature analysis, target associations, and dataset comparison. Great for train vs test comparison.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "file_path": {"type": "string", "description": "Path to the dataset CSV/Parquet file"},
+                    "target_col": {"type": "string", "description": "Optional target column for supervised analysis"},
+                    "compare_file_path": {"type": "string", "description": "Optional second dataset for comparison (e.g., test set)"},
+                    "output_path": {"type": "string", "description": "Where to save HTML report (default: ./outputs/reports/sweetviz_report.html)"}
+                },
+                "required": ["file_path"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "detect_label_errors",
+            "description": "Detect potential label errors in classification datasets using cleanlab. Uses confident learning to find mislabeled examples by cross-validating classifiers and identifying disagreements.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "file_path": {"type": "string", "description": "Path to classification dataset"},
+                    "target_col": {"type": "string", "description": "Target/label column name"},
+                    "features": {"type": "array", "items": {"type": "string"}, "description": "Feature columns (None = all numeric)"},
+                    "output_path": {"type": "string", "description": "Path to save flagged rows"}
+                },
+                "required": ["file_path", "target_col"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "validate_schema_pandera",
+            "description": "Validate a DataFrame against a pandera schema. Check column types, nullability, value ranges, and custom constraints.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "file_path": {"type": "string", "description": "Path to dataset to validate"},
+                    "schema_config": {"type": "object", "description": "Schema configuration with column definitions"}
+                },
+                "required": ["file_path", "schema_config"]
+            }
+        }
+    },
     # ========================================
     # CODE INTERPRETER - THE GAME CHANGER 🚀
     # ========================================
@@ -1630,6 +1713,390 @@ TOOLS = [
                     }
                 },
                 "required": ["project_id", "query"]
+            }
+        }
+    },
+    
+    # ============================================
+    # AUTOGLUON TRAINING (3) - AutoML at Scale
+    # ============================================
+    {
+        "type": "function",
+        "function": {
+            "name": "train_with_autogluon",
+            "description": "Train ML models using AutoGluon AutoML. Automatically trains and ensembles 10+ models (LightGBM, XGBoost, CatBoost, RandomForest, etc.) with stacking. Handles raw data directly - no need to manually encode categoricals or impute missing values. Supports classification (binary/multiclass) and regression. Use this instead of train_baseline_models for best performance.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "file_path": {
+                        "type": "string",
+                        "description": "Path to CSV/Parquet dataset"
+                    },
+                    "target_col": {
+                        "type": "string",
+                        "description": "Column to predict"
+                    },
+                    "task_type": {
+                        "type": "string",
+                        "enum": ["classification", "regression", "auto"],
+                        "description": "Type of ML task. 'auto' to detect automatically."
+                    },
+                    "time_limit": {
+                        "type": "integer",
+                        "description": "Max training time in seconds (default: 120). Higher = better models."
+                    },
+                    "presets": {
+                        "type": "string",
+                        "enum": ["medium_quality", "good_quality", "best_quality"],
+                        "description": "Quality preset. medium_quality=fast, best_quality=slower but better."
+                    },
+                    "eval_metric": {
+                        "type": "string",
+                        "description": "Metric to optimize. Classification: 'accuracy','f1','roc_auc'. Regression: 'rmse','mae','r2'. Auto-selected if None."
+                    },
+                    "output_dir": {
+                        "type": "string",
+                        "description": "Directory to save trained model (default: ./outputs/autogluon_model)"
+                    },
+                    "infer_limit": {
+                        "type": "number",
+                        "description": "Max inference time per row in seconds. Only models meeting this speed constraint are kept. E.g. 0.01 = 10ms/row."
+                    }
+                },
+                "required": ["file_path", "target_col"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "predict_with_autogluon",
+            "description": "Make predictions on new data using a trained AutoGluon model. Returns predictions and probability scores for classification tasks.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "model_path": {
+                        "type": "string",
+                        "description": "Path to saved AutoGluon model directory"
+                    },
+                    "data_path": {
+                        "type": "string",
+                        "description": "Path to new data CSV/Parquet for prediction"
+                    },
+                    "output_path": {
+                        "type": "string",
+                        "description": "Path to save predictions CSV"
+                    }
+                },
+                "required": ["model_path", "data_path"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "forecast_with_autogluon",
+            "description": "Forecast time series using AutoGluon TimeSeriesPredictor. Trains and ensembles multiple models including DeepAR, ETS, ARIMA, Theta, and Chronos. Supports covariates, holiday features, model selection, and probabilistic forecasts. Much more powerful than basic ARIMA/Prophet.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "file_path": {
+                        "type": "string",
+                        "description": "Path to time series CSV/Parquet"
+                    },
+                    "target_col": {
+                        "type": "string",
+                        "description": "Column with values to forecast"
+                    },
+                    "time_col": {
+                        "type": "string",
+                        "description": "Column with timestamps/dates"
+                    },
+                    "forecast_horizon": {
+                        "type": "integer",
+                        "description": "Number of future periods to predict (default: 30)"
+                    },
+                    "id_col": {
+                        "type": "string",
+                        "description": "Column identifying different series (for multi-series forecasting)"
+                    },
+                    "freq": {
+                        "type": "string",
+                        "description": "Frequency: 'D'=daily, 'h'=hourly, 'W'=weekly, 'MS'=monthly. Auto-detected if omitted."
+                    },
+                    "time_limit": {
+                        "type": "integer",
+                        "description": "Max training time in seconds (default: 120)"
+                    },
+                    "presets": {
+                        "type": "string",
+                        "enum": ["fast_training", "medium_quality", "best_quality"],
+                        "description": "Quality preset for forecasting models"
+                    },
+                    "output_path": {
+                        "type": "string",
+                        "description": "Path to save forecast CSV"
+                    },
+                    "static_features_path": {
+                        "type": "string",
+                        "description": "CSV with per-series metadata (one row per series). Improves cross-series learning."
+                    },
+                    "known_covariates_cols": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Columns with future-known values (holidays, promotions, day_of_week)"
+                    },
+                    "holiday_country": {
+                        "type": "string",
+                        "description": "Country code for auto holiday features: 'US', 'UK', 'IN', 'DE', etc."
+                    },
+                    "fill_missing": {
+                        "type": "boolean",
+                        "description": "Auto-fill missing values in time series (default: true)"
+                    },
+                    "models": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Specific models to train: 'ETS', 'AutoARIMA', 'Theta', 'DeepAR', 'PatchTST', 'DLinear', 'TFT', 'SeasonalNaive'"
+                    },
+                    "quantile_levels": {
+                        "type": "array",
+                        "items": {"type": "number"},
+                        "description": "Quantile levels for probabilistic forecasts. E.g. [0.1, 0.5, 0.9] for 10th/50th/90th percentile."
+                    }
+                },
+                "required": ["file_path", "target_col", "time_col"]
+            }
+        }
+    },
+    
+    # ============================================
+    # AUTOGLUON ADVANCED (6) - Post-Training, Analysis, Multi-Label, Backtesting
+    # ============================================
+    {
+        "type": "function",
+        "function": {
+            "name": "optimize_autogluon_model",
+            "description": "Post-training optimization on a trained AutoGluon model. Operations: refit_full (re-train on 100% data for deployment), distill (compress ensemble into single model), calibrate_threshold (optimize binary classification threshold), deploy_optimize (strip artifacts for minimal deployment), delete_models (remove specific models to free resources).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "model_path": {
+                        "type": "string",
+                        "description": "Path to saved AutoGluon model directory"
+                    },
+                    "operation": {
+                        "type": "string",
+                        "enum": ["refit_full", "distill", "calibrate_threshold", "deploy_optimize", "delete_models"],
+                        "description": "Optimization operation to perform"
+                    },
+                    "data_path": {
+                        "type": "string",
+                        "description": "Path to dataset (required for distill, calibrate_threshold)"
+                    },
+                    "metric": {
+                        "type": "string",
+                        "enum": ["f1", "balanced_accuracy", "precision", "recall"],
+                        "description": "Metric for calibrate_threshold optimization"
+                    },
+                    "models_to_delete": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Model names to delete (for delete_models operation)"
+                    },
+                    "output_dir": {
+                        "type": "string",
+                        "description": "Output directory for deploy_optimize"
+                    }
+                },
+                "required": ["model_path", "operation"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "analyze_autogluon_model",
+            "description": "Inspect and analyze a trained AutoGluon model. Operations: summary (extended leaderboard with stack levels, memory, inference speed), transform_features (get internally transformed feature matrix), info (comprehensive model metadata and training summary).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "model_path": {
+                        "type": "string",
+                        "description": "Path to saved AutoGluon model directory"
+                    },
+                    "data_path": {
+                        "type": "string",
+                        "description": "Path to dataset (required for transform_features)"
+                    },
+                    "operation": {
+                        "type": "string",
+                        "enum": ["summary", "transform_features", "info"],
+                        "description": "Analysis operation to perform"
+                    }
+                },
+                "required": ["model_path"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "extend_autogluon_training",
+            "description": "Add models or re-fit ensemble on an existing AutoGluon predictor without retraining from scratch. Operations: fit_extra (train additional models/hyperparameters), fit_weighted_ensemble (re-fit ensemble weights on existing base models).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "model_path": {
+                        "type": "string",
+                        "description": "Path to saved AutoGluon model directory"
+                    },
+                    "operation": {
+                        "type": "string",
+                        "enum": ["fit_extra", "fit_weighted_ensemble"],
+                        "description": "Extension operation to perform"
+                    },
+                    "data_path": {
+                        "type": "string",
+                        "description": "Path to training data (required for fit_extra)"
+                    },
+                    "time_limit": {
+                        "type": "integer",
+                        "description": "Additional training time in seconds (default: 60)"
+                    },
+                    "hyperparameters": {
+                        "type": "object",
+                        "description": "Model hyperparameters dict. E.g. {\"GBM\": {\"num_boost_round\": 500}, \"RF\": {}}"
+                    }
+                },
+                "required": ["model_path"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "train_multilabel_autogluon",
+            "description": "Train multi-label prediction model. Predicts multiple target columns simultaneously by training separate AutoGluon TabularPredictors per label with shared feature engineering. Use when dataset has multiple columns to predict.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "file_path": {
+                        "type": "string",
+                        "description": "Path to CSV/Parquet dataset"
+                    },
+                    "target_cols": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "List of columns to predict (e.g. ['label1', 'label2'])"
+                    },
+                    "time_limit": {
+                        "type": "integer",
+                        "description": "Max training time per label in seconds (default: 120)"
+                    },
+                    "presets": {
+                        "type": "string",
+                        "enum": ["medium_quality", "good_quality", "best_quality"],
+                        "description": "Quality preset"
+                    },
+                    "output_dir": {
+                        "type": "string",
+                        "description": "Where to save trained model"
+                    }
+                },
+                "required": ["file_path", "target_cols"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "backtest_timeseries",
+            "description": "Backtest time series models using multiple validation windows. More robust performance estimation than single train/test split. Trains models with multi-window cross-validation and returns per-window evaluation.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "file_path": {
+                        "type": "string",
+                        "description": "Path to time series CSV/Parquet"
+                    },
+                    "target_col": {
+                        "type": "string",
+                        "description": "Column with values to forecast"
+                    },
+                    "time_col": {
+                        "type": "string",
+                        "description": "Column with timestamps/dates"
+                    },
+                    "forecast_horizon": {
+                        "type": "integer",
+                        "description": "Periods to predict per window (default: 30)"
+                    },
+                    "id_col": {
+                        "type": "string",
+                        "description": "Column identifying different series"
+                    },
+                    "freq": {
+                        "type": "string",
+                        "description": "Frequency string"
+                    },
+                    "num_val_windows": {
+                        "type": "integer",
+                        "description": "Number of backtesting windows (default: 3)"
+                    },
+                    "time_limit": {
+                        "type": "integer",
+                        "description": "Max training time in seconds"
+                    },
+                    "presets": {
+                        "type": "string",
+                        "enum": ["fast_training", "medium_quality", "best_quality"],
+                        "description": "Quality preset"
+                    },
+                    "output_path": {
+                        "type": "string",
+                        "description": "Path to save backtest predictions CSV"
+                    }
+                },
+                "required": ["file_path", "target_col", "time_col"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "analyze_timeseries_model",
+            "description": "Analyze a trained AutoGluon time series model. Operations: feature_importance (permutation importance of covariates), plot (forecast vs actuals visualization), make_future_dataframe (generate future timestamp skeleton for prediction with covariates).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "model_path": {
+                        "type": "string",
+                        "description": "Path to saved AutoGluon TimeSeriesPredictor"
+                    },
+                    "data_path": {
+                        "type": "string",
+                        "description": "Path to time series data"
+                    },
+                    "time_col": {
+                        "type": "string",
+                        "description": "Column with timestamps/dates"
+                    },
+                    "id_col": {
+                        "type": "string",
+                        "description": "Column identifying different series"
+                    },
+                    "operation": {
+                        "type": "string",
+                        "enum": ["feature_importance", "plot", "make_future_dataframe"],
+                        "description": "Analysis operation to perform"
+                    },
+                    "output_path": {
+                        "type": "string",
+                        "description": "Path to save output (plot image or CSV)"
+                    }
+                },
+                "required": ["model_path", "data_path", "time_col"]
             }
         }
     }

@@ -16,6 +16,11 @@ lightgbm>=4.6.0
 catboost>=1.2.8
 optuna>=3.5.0
 
+# AutoGluon AutoML (modular install - only tabular + timeseries)
+autogluon.tabular>=1.2
+autogluon.timeseries>=1.2
+holidays>=0.40  # Holiday calendar for time series covariates
+
 # Explainability
 shap>=0.44.1
 
@@ -33,6 +38,7 @@ plotly>=5.18.0  # Interactive visualizations
 
 # EDA Report Generation
 ydata-profiling>=4.17.0  # Comprehensive automated EDA reports with Python 3.13 compatibility
+sweetviz>=2.3.0  # Interactive EDA with comparison support
 
 # User Interface
 # gradio>=5.49.1  # Replaced with React frontend
@@ -44,14 +50,18 @@ python-multipart>=0.0.6  # For file uploads
 
 # Text Processing
 textblob>=0.17.1
+vaderSentiment>=3.3.2  # Rule-based sentiment analysis (fast, no GPU needed)
 
 # Time Series Forecasting
 prophet>=1.1.5
 holidays>=0.38
+pmdarima>=2.0  # Auto ARIMA (auto_arima) for optimal order selection
 
 # MLOps & Explainability
 lime==0.2.0.1
 fairlearn==0.10.0
+evidently>=0.4.0  # Production-grade data drift detection & monitoring
+dtreeviz>=2.2  # Decision tree visualization
 
 # NLP & Semantic Layer (REQUIRED for column understanding and agent routing)
 sentence-transformers>=2.2.2  # For semantic column embeddings and agent routing
@@ -74,6 +84,12 @@ Pillow==10.1.0  # For basic image processing
 # These are optional but add specialized capabilities
 # lifetimes==0.11.3  # For customer lifetime value modeling
 # econml==0.15.0  # For advanced causal inference
+dowhy>=0.11  # Formal causal inference with DAG-based reasoning
+
+# Data Quality & Validation
+cleanlab>=2.6  # Label error detection using confident learning
+pandera>=0.18  # Schema-based DataFrame validation
+boruta>=0.3  # All-relevant feature selection (BorutaPy)
 
 # CLI & UI
 typer==0.9.0

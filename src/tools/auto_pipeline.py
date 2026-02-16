@@ -239,7 +239,7 @@ def auto_feature_selection(file_path: str,
         target_col: Target column
         task_type: 'classification', 'regression', or 'auto'
         max_features: Maximum number of features to keep
-        method: 'mutual_info', 'f_test', or 'auto'
+        method: 'mutual_info', 'f_test', 'boruta', or 'auto'
         output_path: Where to save selected features
         
     Returns:
@@ -275,6 +275,60 @@ def auto_feature_selection(file_path: str,
     
     # Perform selection
     n_features_to_select = min(max_features, len(numeric_features))
+    
+    if method == "boruta":
+        # BorutaPy - all-relevant feature selection
+        try:
+            from boruta import BorutaPy
+            from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
+            
+            print("🔍 Running BorutaPy all-relevant feature selection...")
+            
+            if task_type == "classification":
+                rf = RandomForestClassifier(n_jobs=-1, max_depth=5, random_state=42)
+            else:
+                rf = RandomForestRegressor(n_jobs=-1, max_depth=5, random_state=42)
+            
+            boruta_selector = BorutaPy(
+                rf,
+                n_estimators='auto',
+                max_iter=100,
+                random_state=42,
+                verbose=0
+            )
+            
+            X_filled = X_numeric.fillna(0).values
+            boruta_selector.fit(X_filled, y.values if hasattr(y, 'values') else y)
+            
+            # Get selected features
+            selected_mask = boruta_selector.support_
+            selected_features = np.array(numeric_features)[selected_mask].tolist()
+            
+            # Get ranking
+            feature_scores = dict(zip(numeric_features, boruta_selector.ranking_.tolist()))
+            sorted_features = sorted(feature_scores.items(), key=lambda x: x[1])
+            
+            results = {
+                "n_features_original": len(numeric_features),
+                "n_features_selected": len(selected_features),
+                "selected_features": selected_features,
+                "feature_rankings": dict(sorted_features),
+                "tentative_features": np.array(numeric_features)[boruta_selector.support_weak_].tolist(),
+                "selection_method": "boruta",
+                "task_type": task_type
+            }
+            
+            # Save selected features + target
+            if output_path:
+                df_selected = df[selected_features + [target_col]]
+                df_selected.to_csv(output_path, index=False)
+                results["output_path"] = output_path
+            
+            return results
+            
+        except ImportError:
+            print("⚠️ boruta not installed. Falling back to mutual_info. Install with: pip install boruta>=0.3")
+            method = "mutual_info" if task_type == "classification" else "f_test"
     
     if method == "mutual_info":
         if task_type == "classification":

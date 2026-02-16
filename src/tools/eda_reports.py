@@ -161,3 +161,100 @@ def generate_ydata_profiling_report(
             "error": f"Failed to generate ydata-profiling report: {str(e)}",
             "error_type": type(e).__name__
         }
+
+
+def generate_sweetviz_report(
+    file_path: str,
+    target_col: Optional[str] = None,
+    compare_file_path: Optional[str] = None,
+    output_path: str = "./outputs/reports/sweetviz_report.html",
+    title: str = "Sweetviz EDA Report"
+) -> Dict[str, Any]:
+    """
+    Generate an interactive EDA report using Sweetviz.
+    
+    Sweetviz provides:
+    - Feature-by-feature analysis with distributions
+    - Target analysis (associations with target variable)
+    - Dataset comparison (train vs test)
+    - Correlations/associations for numeric and categorical features
+    
+    Args:
+        file_path: Path to the dataset CSV file
+        target_col: Optional target column for supervised analysis
+        compare_file_path: Optional second dataset for comparison (e.g., test set)
+        output_path: Where to save the HTML report
+        title: Title for the report
+        
+    Returns:
+        Dict with success status and report path
+    """
+    try:
+        import sweetviz as sv
+        import pandas as pd
+    except ImportError:
+        return {
+            "success": False,
+            "error": "sweetviz not installed. Install with: pip install sweetviz>=2.3",
+            "error_type": "MissingDependency"
+        }
+    
+    try:
+        # Read dataset
+        if file_path.endswith('.csv'):
+            df = pd.read_csv(file_path)
+        elif file_path.endswith('.parquet'):
+            df = pd.read_parquet(file_path)
+        else:
+            raise ValueError(f"Unsupported file format: {file_path}")
+        
+        # Create output directory
+        os.makedirs(os.path.dirname(output_path) or "./outputs/reports", exist_ok=True)
+        
+        # Generate report
+        if compare_file_path:
+            # Comparison report (train vs test)
+            if compare_file_path.endswith('.csv'):
+                df_compare = pd.read_csv(compare_file_path)
+            else:
+                df_compare = pd.read_parquet(compare_file_path)
+            
+            print(f"📊 Generating Sweetviz comparison report...")
+            if target_col and target_col in df.columns:
+                report = sv.compare([df, "Dataset 1"], [df_compare, "Dataset 2"], target_feat=target_col)
+            else:
+                report = sv.compare([df, "Dataset 1"], [df_compare, "Dataset 2"])
+        else:
+            # Single dataset analysis
+            print(f"📊 Generating Sweetviz EDA report...")
+            if target_col and target_col in df.columns:
+                report = sv.analyze(df, target_feat=target_col)
+            else:
+                report = sv.analyze(df)
+        
+        # Save report (show_html=False prevents auto-opening browser)
+        report.show_html(output_path, open_browser=False)
+        
+        num_features = len(df.columns)
+        num_rows = len(df)
+        
+        print(f"✅ Sweetviz report saved to: {output_path}")
+        
+        return {
+            "success": True,
+            "report_path": output_path,
+            "message": f"✅ Sweetviz report generated at: {output_path}",
+            "statistics": {
+                "rows": num_rows,
+                "columns": num_features,
+                "target_column": target_col,
+                "comparison_mode": compare_file_path is not None
+            }
+        }
+        
+    except Exception as e:
+        return {
+            "success": False,
+            "error": f"Failed to generate Sweetviz report: {str(e)}",
+            "error_type": type(e).__name__
+        }

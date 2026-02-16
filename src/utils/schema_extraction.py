@@ -22,13 +22,27 @@ def extract_schema_local(file_path: str, sample_rows: int = 5) -> Dict[str, Any]
     try:
         # Read with Polars (faster than pandas)
         if file_path.endswith('.csv'):
-            df = pl.read_csv(file_path)
+            # 🔥 FIX: Use infer_schema_length and ignore_errors to handle mixed-type columns
+            # This prevents failures like: could not parse `835.159865` as dtype `i64`
+            try:
+                df = pl.read_csv(file_path, infer_schema_length=10000, ignore_errors=True)
+            except Exception:
+                # Final fallback: read everything as strings, then let Polars infer
+                try:
+                    import pandas as pd
+                    pdf = pd.read_csv(file_path, low_memory=False)
+                    df = pl.from_pandas(pdf)
+                except Exception as e2:
+                    return {
+                        'error': f"Failed to read CSV: {str(e2)}",
+                        'file_path': file_path
+                    }
         elif file_path.endswith('.parquet'):
             df = pl.read_parquet(file_path)
         else:
             # Fallback to pandas
             import pandas as pd
-            pdf = pd.read_csv(file_path)
+            pdf = pd.read_csv(file_path, low_memory=False)
             df = pl.from_pandas(pdf)
         
         # Basic metadata
