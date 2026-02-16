@@ -65,7 +65,6 @@ WORKDIR /home/user/app
 
 # Copy backend code (as user)
 COPY --chown=user:user src/ ./src/
-COPY --chown=user:user examples/ ./examples/
 
 # Copy frontend build
 COPY --from=frontend-builder --chown=user:user /frontend/dist ./FRRONTEEEND/dist
