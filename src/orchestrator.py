@@ -1303,25 +1303,35 @@ You receive quality reports from EDA agent and deliver clean data to modeling ag
         return self.cache._generate_key(cache_key_str)
     
     def _get_last_successful_file(self, workflow_history: List[Dict]) -> str:
-        """Find the last successfully created file from workflow history."""
+        """Find the last successfully created DATA file from workflow history.
+        
+        Only returns actual data files (CSV, parquet, etc.), NOT visualization
+        artifacts (HTML, PNG, etc.) which would break downstream tools.
+        """
+        data_extensions = ('.csv', '.parquet', '.xlsx', '.xls', '.json', '.tsv')
+        
         # Check in reverse order for file-creating tools
         for step in reversed(workflow_history):
             result = step.get("result", {})
             if result.get("success"):
                 # Check for output_path in result
                 if "output_path" in result:
-                    return result["output_path"]
+                    if result["output_path"].lower().endswith(data_extensions):
+                        return result["output_path"]
                 # For nested results
                 if "result" in result and isinstance(result["result"], dict):
                     nested = result["result"]
                     if "output_path" in nested:
-                        return nested["output_path"]
+                        if nested["output_path"].lower().endswith(data_extensions):
+                            return nested["output_path"]
                     # Check output_dir for dashboard-type tools
                     if "output_dir" in nested:
                         return nested["output_dir"]
                     # Check generated_files from execute_python_code
                     if "generated_files" in nested and nested["generated_files"]:
-                        return nested["generated_files"][0]
+                        for gen_file in nested["generated_files"]:
+                            if gen_file.lower().endswith(data_extensions):
+                                return gen_file
                 # Check tool arguments for file_path as last resort
                 args = step.get("arguments", step.get("result", {}).get("arguments", {}))
                 if isinstance(args, dict) and "file_path" in args:
@@ -1660,10 +1670,19 @@ You receive quality reports from EDA agent and deliver clean data to modeling ag
                 report_path = nested_result.get("output_path") or nested_result.get("report_path")
                 if report_path:
                     print(f"[DEBUG] Report path found: {report_path}")
+                    # Clean path for URL — handle both ./outputs and /tmp paths
+                    if report_path.startswith('./outputs/'):
+                        url_path = report_path.replace('./outputs/', '')
+                    elif report_path.startswith('/tmp/data_science_agent/outputs/'):
+                        url_path = report_path.replace('/tmp/data_science_agent/outputs/', '')
+                    elif report_path.startswith('/tmp/data_science_agent/'):
+                        url_path = report_path.replace('/tmp/data_science_agent/', '')
+                    else:
+                        url_path = report_path.split('/')[-1]
                     artifacts["reports"].append({
                         "name": tool.replace("_", " ").title(),
                         "path": report_path,
-                        "url": f"/outputs/{report_path.replace('./outputs/', '')}"
+                        "url": f"/outputs/{url_path}"
                     })
                     print(f"[DEBUG] Added to artifacts[reports], total reports: {len(artifacts['reports'])}")
                 
@@ -3098,7 +3117,8 @@ You receive quality reports from EDA agent and deliver clean data to modeling ag
         
         # Track for API response
         workflow_history = []
-        current_file = file_path  # Tracks the latest output file
+        original_data_file = file_path  # NEVER changes — always the uploaded dataset
+        current_file = file_path        # Tracks the latest DATA file (csv/parquet only)
         
         # Emit mode info for UI
         if hasattr(self, 'session') and self.session:
@@ -3220,13 +3240,20 @@ You receive quality reports from EDA agent and deliver clean data to modeling ag
             
             tool_result = self._execute_tool(tool_name, tool_args)
             
-            # Track output file for next iteration
+            # Track output file for next iteration — ONLY update for data files
             if tool_result.get("success", True):
                 result_data = tool_result.get("result", {})
                 if isinstance(result_data, dict):
                     new_file = result_data.get("output_file") or result_data.get("output_path")
                     if new_file:
-                        current_file = new_file
+                        # Only update current_file for actual data files (CSV, parquet, etc.)
+                        # NOT for visualizations (HTML, PNG, JPG) or reports
+                        data_extensions = ('.csv', '.parquet', '.xlsx', '.xls', '.json', '.tsv')
+                        if new_file.lower().endswith(data_extensions):
+                            current_file = new_file
+                            print(f"   📂 Updated current data file: {new_file}")
+                        else:
+                            print(f"   📊 Output artifact (not updating data file): {new_file}")
                 
                 # Emit success
                 if hasattr(self, 'session') and self.session:

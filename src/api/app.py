@@ -165,7 +165,7 @@ class SessionState:
     request_count: int = 0
 
 session_states: Dict[str, SessionState] = {}  # session_id -> SessionState
-agent_cache_lock = asyncio.Lock()
+agent_cache_lock = threading.Lock()  # threading.Lock for cross-event-loop safety
 MAX_CACHED_SESSIONS = 50  # Increased limit for scale
 SESSION_TTL_MINUTES = 60  # Sessions expire after 1 hour of inactivity
 logger.info("👥 Multi-user session isolation initialized (fast mode)")
@@ -189,8 +189,8 @@ async def get_agent_for_session(session_id: str) -> DataScienceCopilot:
     Session state is isolated using thread-local storage to prevent race conditions.
     This reduces per-user initialization from 20s to <1s.
     
-    THREAD SAFETY: Uses threading.local() so each request thread gets its own
-    agent reference with isolated session, preventing cross-contamination.
+    THREAD SAFETY: Uses threading.Lock so this works from both the main event loop
+    AND background thread-pool workers (avoiding asyncio event-loop binding issues).
     
     Args:
         session_id: Unique session identifier
@@ -200,7 +200,7 @@ async def get_agent_for_session(session_id: str) -> DataScienceCopilot:
     """
     global agent
     
-    async with agent_cache_lock:
+    with agent_cache_lock:
         # Ensure base agent exists (heavy components loaded once at startup)
         if agent is None:
             logger.warning("Base agent not initialized - this shouldn't happen after startup")
@@ -294,7 +294,10 @@ def cleanup_expired_sessions():
 # - Race conditions on file writes
 # - Memory exhaustion from parallel model training
 # - Session state corruption
-workflow_lock = asyncio.Lock()
+# NOTE: Uses threading.Lock (not asyncio.Lock) because run_analysis_background
+# is executed in a Starlette thread pool worker, not the main event loop.
+import threading
+workflow_lock = threading.Lock()
 logger.info("🔒 Workflow lock initialized for request queuing")
 
 # Mount static files for React frontend
@@ -466,65 +469,67 @@ class AnalysisRequest(BaseModel):
 
 def run_analysis_background(file_path: str, task_description: str, target_col: Optional[str], 
                             use_cache: bool, max_iterations: int, session_id: str):
-    """Background task to run analysis and emit events."""
-    async def _run_with_lock():
-        """Wrap analysis in lock to ensure sequential execution."""
-        async with workflow_lock:
+    """Background task to run analysis and emit events.
+    
+    Runs in a Starlette thread-pool worker. Uses threading.Lock (not asyncio)
+    to serialize concurrent analysis requests.
+    """
+    with workflow_lock:
+        try:
+            logger.info(f"[BACKGROUND] Starting analysis for session {session_id[:8]}...")
+            
+            # 🧹 Clear SSE history for fresh event stream (prevents duplicate results)
+            print(f"[🧹] Clearing SSE history for {session_id[:8]}...")
+            if session_id in progress_manager._history:
+                progress_manager._history[session_id] = []
+            
+            # 👥 Get isolated agent for this session
+            # get_agent_for_session is async but now uses threading.Lock internally,
+            # so we need a small event loop just for the await
+            import asyncio
             try:
-                logger.info(f"[BACKGROUND] Starting analysis for session {session_id[:8]}...")
-                
-                # 🧹 Clear SSE history for fresh event stream (prevents duplicate results)
-                print(f"[🧹] Clearing SSE history for {session_id[:8]}...")
-                if session_id in progress_manager._history:
-                    progress_manager._history[session_id] = []
-                
-                # 👥 Get isolated agent for this session
-                session_agent = await get_agent_for_session(session_id)
-                
-                result = session_agent.analyze(
-                    file_path=file_path,
-                    task_description=task_description,
-                    target_col=target_col,
-                    use_cache=use_cache,
-                    max_iterations=max_iterations
-                )
-                
-                logger.info(f"[BACKGROUND] Analysis completed for session {session_id[:8]}...")
-                
-                # Send appropriate completion event based on status
-                if result.get("status") == "error":
-                    progress_manager.emit(session_id, {
-                        "type": "analysis_failed",
-                        "status": "error",
-                        "message": result.get("summary", "❌ Analysis failed"),
-                        "error": result.get("error", "Analysis error"),
-                        "result": result
-                    })
-                else:
-                    progress_manager.emit(session_id, {
-                        "type": "analysis_complete",
-                        "status": result.get("status"),
-                        "message": "✅ Analysis completed successfully!",
-                        "result": result
-                    })
-                
-            except Exception as e:
-                logger.error(f"[BACKGROUND] Analysis failed for session {session_id[:8]}...: {e}")
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                session_agent = loop.run_until_complete(get_agent_for_session(session_id))
+            finally:
+                loop.close()
+            
+            result = session_agent.analyze(
+                file_path=file_path,
+                task_description=task_description,
+                target_col=target_col,
+                use_cache=use_cache,
+                max_iterations=max_iterations
+            )
+            
+            logger.info(f"[BACKGROUND] Analysis completed for session {session_id[:8]}...")
+            
+            # Send appropriate completion event based on status
+            if result.get("status") == "error":
                 progress_manager.emit(session_id, {
                     "type": "analysis_failed",
-                    "error": str(e),
-                    "message": f"❌ Analysis failed: {str(e)}"
+                    "status": "error",
+                    "message": result.get("summary", "❌ Analysis failed"),
+                    "error": result.get("error", "Analysis error"),
+                    "result": result
                 })
-    
-    # Run async function in event loop
-    import asyncio
-    try:
-        loop = asyncio.get_event_loop()
-    except RuntimeError:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-    
-    loop.run_until_complete(_run_with_lock())
+            else:
+                progress_manager.emit(session_id, {
+                    "type": "analysis_complete",
+                    "status": result.get("status"),
+                    "message": "✅ Analysis completed successfully!",
+                    "result": result
+                })
+            
+        except Exception as e:
+            logger.error(f"[BACKGROUND] Analysis failed for session {session_id[:8]}...: {e}")
+            import traceback
+            traceback.print_exc()
+            progress_manager.emit(session_id, {
+                "type": "analysis_failed",
+                "error": str(e),
+                "message": f"❌ Analysis failed: {str(e)}"
+            })
 
 
 @app.post("/run-async")
@@ -572,7 +577,7 @@ async def run_analysis_async(
     else:
         # 🛡️ VALIDATION: Check if this session has dataset cached
         has_dataset = False
-        async with agent_cache_lock:
+        with agent_cache_lock:
             # Check session_states cache for this specific session_id
             if session_id in session_states:
                 state = session_states[session_id]

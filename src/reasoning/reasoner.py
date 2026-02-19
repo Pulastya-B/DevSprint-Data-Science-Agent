@@ -73,14 +73,16 @@ CRITICAL RULES:
 - Output ONLY valid JSON, no other text
 - Use EXACT tool names from the available tools list
 - Use EXACT column names from the dataset schema
-- The file_path argument should use the most recent output file when available
+- For the file_path argument, ALWAYS use the ORIGINAL DATA FILE path (the CSV/parquet that was uploaded), NOT any output artifact paths (HTML reports, plots, etc.)
+- If a previous tool produced a new data file (CSV/parquet), use THAT as file_path
+- NEVER use an HTML, PNG, or report path as file_path for data-consuming tools
 - For visualization, pick the chart type that best answers the question
 - NEVER hallucinate column names - use only columns from the schema"""
 
 REASONER_USER_TEMPLATE = """**User's question**: {question}
 
 **Dataset info**:
-- File: {file_path}
+- Original data file (use this for file_path): {file_path}
 - Rows: {num_rows:,} | Columns: {num_columns}
 - Numeric columns: {numeric_columns}
 - Categorical columns: {categorical_columns}
@@ -91,6 +93,8 @@ REASONER_USER_TEMPLATE = """**User's question**: {question}
 
 **Available tools**:
 {tools_description}
+
+IMPORTANT: For ANY tool that needs a file_path argument, use "{file_path}" — the original data file. Do NOT use paths to HTML reports, plots, or other output artifacts.
 
 Decide the next action. Respond with ONLY this JSON:
 {{
@@ -307,6 +311,13 @@ class Reasoner:
             "execute_python_code", "get_smart_summary"
         ]:
             arguments["file_path"] = file_path
+        
+        # 🛡️ SAFETY: Override file_path if LLM picked a non-data file (HTML, PNG, etc.)
+        if "file_path" in arguments:
+            fp = arguments["file_path"]
+            non_data_extensions = ('.html', '.png', '.jpg', '.jpeg', '.svg', '.gif', '.pdf')
+            if fp.lower().endswith(non_data_extensions):
+                arguments["file_path"] = file_path
         
         return ReasoningOutput(
             status=status,
