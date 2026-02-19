@@ -35,6 +35,8 @@ class Finding:
     confidence: float              # 0.0-1.0 confidence in this finding
     answered_question: bool        # Did this iteration answer the user's question?
     next_questions: List[str]      # Follow-up questions generated
+    success: bool = True           # Whether the tool execution succeeded
+    error_message: str = ""        # Error message if tool failed
     timestamp: str = field(default_factory=lambda: datetime.now().isoformat())
 
     def to_dict(self) -> Dict[str, Any]:
@@ -48,6 +50,8 @@ class Finding:
             "confidence": self.confidence,
             "answered": self.answered_question,
             "next_questions": self.next_questions,
+            "success": self.success,
+            "error_message": self.error_message,
             "timestamp": self.timestamp
         }
 
@@ -121,6 +125,7 @@ class FindingsAccumulator:
         self.hypotheses: List[Hypothesis] = []
         self.tools_used: List[str] = []
         self.files_produced: List[str] = []
+        self.failed_tools: Dict[str, str] = {}  # tool_name → error message
         self.is_answered = False
         self.answer_confidence = 0.0
         self.started_at = datetime.now().isoformat()
@@ -151,6 +156,23 @@ class FindingsAccumulator:
                     priority=0.5,
                     source_iteration=finding.iteration
                 ))
+
+    def add_failed_tool(self, tool_name: str, error_message: str):
+        """Record a tool that failed so the Reasoner avoids retrying it."""
+        self.failed_tools[tool_name] = error_message
+
+    def get_failed_tools_context(self) -> str:
+        """Build context string listing tools that failed."""
+        if not self.failed_tools:
+            return ""
+        parts = ["\n**FAILED TOOLS (do NOT retry these)**:"]
+        for tool, error in self.failed_tools.items():
+            parts.append(f"  - `{tool}`: {error[:150]}")
+        return "\n".join(parts)
+
+    def get_successful_findings(self) -> List[Finding]:
+        """Return only findings from successful tool executions."""
+        return [f for f in self.findings if f.success]
 
     def add_hypothesis(self, text: str, priority: float = 0.5, source_iteration: int = 0):
         """Add a hypothesis to test."""
@@ -215,12 +237,18 @@ class FindingsAccumulator:
         parts.append(f"**Investigations completed**: {len(self.findings)}")
         parts.append(f"**Tools used**: {', '.join(self.tools_used)}")
         
+        # Failed tools warning (critical for avoiding retries)
+        failed_ctx = self.get_failed_tools_context()
+        if failed_ctx:
+            parts.append(failed_ctx)
+        
         # Recent findings (most relevant for next decision)
         recent = self.findings[-max_findings:]
         parts.append("\n**Recent findings**:")
         for f in recent:
+            status_tag = "" if f.success else " [FAILED]"
             parts.append(
-                f"  Step {f.iteration}: Ran `{f.action}` to test: \"{f.hypothesis}\"\n"
+                f"  Step {f.iteration}: Ran `{f.action}`{status_tag} to test: \"{f.hypothesis}\"\n"
                 f"    → Result: {f.interpretation}\n"
                 f"    → Confidence: {f.confidence:.0%}"
             )
@@ -257,8 +285,9 @@ class FindingsAccumulator:
         # All findings in order
         parts.append("\n## Investigation Steps\n")
         for f in self.findings:
+            status_label = "\u2705 SUCCESS" if f.success else "\u274c FAILED"
             parts.append(
-                f"### Step {f.iteration}: {f.action}\n"
+                f"### Step {f.iteration}: {f.action} [{status_label}]\n"
                 f"**Hypothesis**: {f.hypothesis}\n"
                 f"**Arguments**: {json.dumps(f.arguments, default=str)}\n"
                 f"**Result**: {f.result_summary}\n"

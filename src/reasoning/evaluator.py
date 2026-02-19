@@ -177,7 +177,9 @@ class Evaluator:
         tool_name: str,
         arguments: Dict[str, Any],
         result_summary: str,
-        evaluation: "EvaluationOutput"
+        evaluation: "EvaluationOutput",
+        success: bool = True,
+        error_message: str = ""
     ) -> Finding:
         """
         Build a Finding from a completed iteration.
@@ -192,9 +194,11 @@ class Evaluator:
             arguments=arguments,
             result_summary=result_summary[:1000],  # Cap size
             interpretation=evaluation.interpretation,
-            confidence=evaluation.confidence,
-            answered_question=evaluation.answered,
-            next_questions=evaluation.next_questions
+            confidence=evaluation.confidence if success else 0.0,
+            answered_question=evaluation.answered if success else False,
+            next_questions=evaluation.next_questions,
+            success=success,
+            error_message=error_message
         )
 
     def _parse_response(self, response_text: str, result_summary: str) -> EvaluationOutput:

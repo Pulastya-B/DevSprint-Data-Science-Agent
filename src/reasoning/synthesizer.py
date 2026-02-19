@@ -39,7 +39,11 @@ RULES:
 - Mention generated files/plots so user can find them
 - Be honest about confidence levels
 - Keep it under 500 words unless complex analysis warrants more
-- Use markdown formatting (headers, bullets, bold for emphasis)"""
+- Use markdown formatting (headers, bullets, bold for emphasis)
+- ONLY report findings from SUCCESSFUL investigation steps
+- Do NOT invent numbers, statistics, or insights that are not present in the findings
+- If a step is marked [FAILED], ignore its results entirely — do not fabricate data from it
+- If most steps failed, be transparent about limited evidence and recommend re-running"""
 
 SYNTHESIS_USER_TEMPLATE = """**Original question**: {question}
 
@@ -93,9 +97,12 @@ class Synthesizer:
         # Build artifacts summary
         artifacts_summary = self._format_artifacts(artifacts or {}, findings)
         
+        # Build findings context — only successful findings get full detail
+        findings_context = self._build_filtered_context(findings)
+        
         user_prompt = SYNTHESIS_USER_TEMPLATE.format(
             question=findings.question,
-            findings_context=findings.get_context_for_synthesis(),
+            findings_context=findings_context,
             artifacts_summary=artifacts_summary
         )
         
@@ -136,14 +143,20 @@ RULES:
 - Use specific numbers and metrics
 - Mention all generated visualizations with file paths
 - Suggest actionable next analysis steps
-- Keep it engaging but data-driven"""
+- Keep it engaging but data-driven
+- ONLY report findings from SUCCESSFUL investigation steps
+- Do NOT invent numbers or statistics not present in the findings
+- If a step is marked [FAILED], ignore it entirely"""
 
         artifacts_summary = self._format_artifacts(artifacts or {}, findings)
+        
+        # Build filtered context — only successful findings
+        findings_context = self._build_filtered_context(findings)
         
         user_prompt = f"""**Analysis request**: {findings.question}
 
 **Investigation summary**:
-{findings.get_context_for_synthesis()}
+{findings_context}
 
 **Generated artifacts**:
 {artifacts_summary}
@@ -179,8 +192,10 @@ Write the exploratory analysis report."""
             for f in files:
                 parts.append(f"  - {f}")
         
-        # Extract from findings history
+        # Extract from findings history — only from successful steps
         for finding in findings.findings:
+            if not finding.success:
+                continue
             result = finding.result_summary
             if "output_file" in result or "output_path" in result or ".html" in result or ".png" in result:
                 parts.append(f"  - Step {finding.iteration} ({finding.action}): output in result")
@@ -191,5 +206,61 @@ Write the exploratory analysis report."""
         
         if not parts:
             return "No artifacts generated yet."
+        
+        return "\n".join(parts)
+
+    def _build_filtered_context(self, findings: FindingsAccumulator) -> str:
+        """
+        Build synthesis context that only includes SUCCESSFUL findings in detail.
+        Failed findings are listed as a brief summary so the LLM knows they happened
+        but cannot hallucinate data from them.
+        """
+        import json
+        
+        parts = []
+        parts.append(f"**Original question**: {findings.question}")
+        parts.append(f"**Mode**: {findings.mode}")
+        
+        successful = findings.get_successful_findings()
+        failed = [f for f in findings.findings if not f.success]
+        
+        parts.append(f"**Total iterations**: {len(findings.findings)} ({len(successful)} succeeded, {len(failed)} failed)")
+        parts.append(f"**Tools used**: {', '.join(findings.tools_used)}")
+        
+        # Only successful findings get full detail
+        if successful:
+            parts.append("\n## Successful Investigation Steps\n")
+            for f in successful:
+                parts.append(
+                    f"### Step {f.iteration}: {f.action}\n"
+                    f"**Hypothesis**: {f.hypothesis}\n"
+                    f"**Arguments**: {json.dumps(f.arguments, default=str)}\n"
+                    f"**Result**: {f.result_summary}\n"
+                    f"**Interpretation**: {f.interpretation}\n"
+                    f"**Confidence**: {f.confidence:.0%}\n"
+                )
+        
+        # Failed findings get just a one-line mention
+        if failed:
+            parts.append("\n## Failed Steps (no usable data — do NOT cite these)\n")
+            for f in failed:
+                parts.append(f"- Step {f.iteration}: `{f.action}` FAILED — {f.error_message or 'execution error'}")
+        
+        # Hypothesis outcomes
+        if findings.hypotheses:
+            parts.append("\n## Hypothesis Outcomes\n")
+            for h in findings.hypotheses:
+                status_emoji = {
+                    "supported": "\u2705",
+                    "refuted": "\u274c",
+                    "inconclusive": "\u2753",
+                    "testing": "\ud83d\udd04",
+                    "untested": "\u2b1c"
+                }.get(h.status, "\u2b1c")
+                parts.append(f"{status_emoji} **{h.text}** \u2192 {h.status}")
+                if h.evidence_for:
+                    parts.append(f"  Evidence for: {'; '.join(h.evidence_for)}")
+                if h.evidence_against:
+                    parts.append(f"  Evidence against: {'; '.join(h.evidence_against)}")
         
         return "\n".join(parts)

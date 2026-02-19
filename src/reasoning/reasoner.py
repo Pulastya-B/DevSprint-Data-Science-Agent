@@ -77,7 +77,18 @@ CRITICAL RULES:
 - If a previous tool produced a new data file (CSV/parquet), use THAT as file_path
 - NEVER use an HTML, PNG, or report path as file_path for data-consuming tools
 - For visualization, pick the chart type that best answers the question
-- NEVER hallucinate column names - use only columns from the schema"""
+- NEVER hallucinate column names - use only columns from the schema
+
+TOOL FAILURE RULES:
+- NEVER retry a tool that has already FAILED — try a DIFFERENT tool or approach instead
+- If the "FAILED TOOLS" section lists a tool, that tool WILL fail again — do not call it
+- If multiple tools have failed, consider stopping and synthesizing what you have
+
+QUERY TYPE AWARENESS:
+- For questions about "important features", "feature importance", "correlations", "patterns", or "explain the data":
+  Use EDA tools (profile_dataset, analyze_correlations, auto_feature_selection, generate_eda_plots)
+  Do NOT use model training tools (train_with_autogluon, train_model, etc.) — training is unnecessary for feature explanation
+- Only use model training tools when the user explicitly asks to train, predict, build a model, or classify/regress"""
 
 REASONER_USER_TEMPLATE = """**User's question**: {question}
 
@@ -94,7 +105,9 @@ REASONER_USER_TEMPLATE = """**User's question**: {question}
 **Available tools**:
 {tools_description}
 
-IMPORTANT: For ANY tool that needs a file_path argument, use "{file_path}" — the original data file. Do NOT use paths to HTML reports, plots, or other output artifacts.
+IMPORTANT:
+- For ANY tool that needs a file_path argument, use "{file_path}" — the original data file. Do NOT use paths to HTML reports, plots, or other output artifacts.
+- If a tool is listed under FAILED TOOLS above, do NOT call it again — it will fail. Choose a different tool or stop.
 
 Decide the next action. Respond with ONLY this JSON:
 {{
@@ -223,8 +236,8 @@ class Reasoner:
             max_tokens=1024
         )
         
-        # Parse response
-        return self._parse_response(response_text, file_path)
+        # Parse response (pass findings so we can reject failed tools)
+        return self._parse_response(response_text, file_path, findings)
 
     def generate_hypotheses(
         self,
@@ -273,7 +286,7 @@ class Reasoner:
         
         return self._parse_hypotheses(response_text)
 
-    def _parse_response(self, response_text: str, file_path: str) -> ReasoningOutput:
+    def _parse_response(self, response_text: str, file_path: str, findings: Optional[FindingsAccumulator] = None) -> ReasoningOutput:
         """Parse LLM response into ReasoningOutput."""
         try:
             # Try direct JSON parse
@@ -318,6 +331,14 @@ class Reasoner:
             non_data_extensions = ('.html', '.png', '.jpg', '.jpeg', '.svg', '.gif', '.pdf')
             if fp.lower().endswith(non_data_extensions):
                 arguments["file_path"] = file_path
+        
+        # 🛡️ SAFETY: Reject tools that already failed — force "done" to stop wasting iterations
+        if tool_name and findings and tool_name in findings.failed_tools:
+            print(f"   ⚠️  Reasoner picked failed tool '{tool_name}' — forcing done")
+            return ReasoningOutput.done(
+                reasoning=f"Tool '{tool_name}' previously failed. Stopping to synthesize available findings.",
+                confidence=max(0.3, findings.answer_confidence)
+            )
         
         return ReasoningOutput(
             status=status,

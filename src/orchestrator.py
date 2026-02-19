@@ -3240,8 +3240,12 @@ You receive quality reports from EDA agent and deliver clean data to modeling ag
             
             tool_result = self._execute_tool(tool_name, tool_args)
             
+            # Determine success/failure
+            tool_success = tool_result.get("success", True)
+            tool_error = ""
+            
             # Track output file for next iteration — ONLY update for data files
-            if tool_result.get("success", True):
+            if tool_success:
                 result_data = tool_result.get("result", {})
                 if isinstance(result_data, dict):
                     new_file = result_data.get("output_file") or result_data.get("output_path")
@@ -3265,7 +3269,10 @@ You receive quality reports from EDA agent and deliver clean data to modeling ag
                 print(f"   ✓ Tool completed successfully")
             else:
                 error_msg = tool_result.get("error", "Unknown error")
+                tool_error = str(error_msg)[:300]
                 print(f"   ❌ Tool failed: {error_msg}")
+                # Record failure so Reasoner won't retry this tool
+                findings.add_failed_tool(tool_name, tool_error)
                 if hasattr(self, 'session') and self.session:
                     progress_manager.emit(self.session.session_id, {
                         'type': 'tool_failed',
@@ -3286,7 +3293,7 @@ You receive quality reports from EDA agent and deliver clean data to modeling ag
             self._update_workflow_state(tool_name, tool_result)
             
             # Checkpoint
-            if tool_result.get("success", True):
+            if tool_success:
                 session_id = self.http_session_key or "default"
                 self.recovery_manager.checkpoint_manager.save_checkpoint(
                     session_id=session_id,
@@ -3333,7 +3340,9 @@ You receive quality reports from EDA agent and deliver clean data to modeling ag
                 tool_name=tool_name,
                 arguments=tool_args,
                 result_summary=compressed_result,
-                evaluation=evaluation
+                evaluation=evaluation,
+                success=tool_success,
+                error_message=tool_error
             )
             findings.add_finding(finding)
             
