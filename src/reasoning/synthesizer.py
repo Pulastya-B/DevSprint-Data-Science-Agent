@@ -1,0 +1,195 @@
+"""
+Synthesizer Module - The SYNTHESIZE step of the Reasoning Loop.
+
+Takes all accumulated findings and produces a coherent, narrative answer.
+
+Unlike the old approach (where the LLM's last response WAS the summary),
+the Synthesizer deliberately constructs the answer from evidence:
+- Connects findings into a coherent story
+- Cites evidence for each claim
+- Highlights confidence levels
+- Notes what wasn't investigated (limitations)
+- Produces actionable insights, not just numbers
+
+Architecture:
+    FindingsAccumulator → Synthesizer.synthesize() → Markdown narrative
+"""
+
+import json
+from typing import Dict, Any, List, Optional, Callable
+
+from .findings import FindingsAccumulator
+
+
+SYNTHESIS_SYSTEM_PROMPT = """You are a senior data scientist writing a concise analysis report.
+
+Given the investigation findings, synthesize a clear, evidence-based answer to the user's question.
+
+STRUCTURE (use markdown):
+1. **Executive Summary** (2-3 sentences answering the question directly)
+2. **Key Findings** (bullet points with evidence references)
+3. **Supporting Evidence** (specific metrics, correlations, patterns)
+4. **Visualizations** (mention any plots/charts generated, with file paths)
+5. **Limitations & Caveats** (what we didn't investigate, caveats)
+6. **Recommendations** (actionable next steps)
+
+RULES:
+- Lead with the answer, then show evidence
+- Use specific numbers (not "high correlation" but "r=0.72")
+- Mention generated files/plots so user can find them
+- Be honest about confidence levels
+- Keep it under 500 words unless complex analysis warrants more
+- Use markdown formatting (headers, bullets, bold for emphasis)"""
+
+SYNTHESIS_USER_TEMPLATE = """**Original question**: {question}
+
+**Investigation summary**:
+{findings_context}
+
+**Generated artifacts**:
+{artifacts_summary}
+
+Write the analysis report now. Focus on answering the question with evidence from the investigation."""
+
+
+class Synthesizer:
+    """
+    The SYNTHESIZE step of the Reasoning Loop.
+    
+    Produces the final answer from accumulated evidence.
+    
+    Usage:
+        synthesizer = Synthesizer(llm_caller=orchestrator._llm_text_call)
+        report = synthesizer.synthesize(
+            findings=findings_accumulator,
+            artifacts={"plots": [...], "files": [...]}
+        )
+    """
+    
+    def __init__(self, llm_caller: Callable):
+        """
+        Args:
+            llm_caller: Function (system_prompt, user_prompt, max_tokens) -> str
+        """
+        self.llm_caller = llm_caller
+
+    def synthesize(
+        self,
+        findings: FindingsAccumulator,
+        artifacts: Optional[Dict[str, Any]] = None,
+        max_tokens: int = 3000
+    ) -> str:
+        """
+        Synthesize all findings into a coherent answer.
+        
+        Args:
+            findings: Accumulated findings from the reasoning loop
+            artifacts: Optional dict of generated artifacts (plots, files, models)
+            max_tokens: Max tokens for synthesis response
+            
+        Returns:
+            Markdown-formatted analysis report
+        """
+        # Build artifacts summary
+        artifacts_summary = self._format_artifacts(artifacts or {}, findings)
+        
+        user_prompt = SYNTHESIS_USER_TEMPLATE.format(
+            question=findings.question,
+            findings_context=findings.get_context_for_synthesis(),
+            artifacts_summary=artifacts_summary
+        )
+        
+        response = self.llm_caller(
+            system_prompt=SYNTHESIS_SYSTEM_PROMPT,
+            user_prompt=user_prompt,
+            max_tokens=max_tokens
+        )
+        
+        return response.strip()
+
+    def synthesize_exploratory(
+        self,
+        findings: FindingsAccumulator,
+        artifacts: Optional[Dict[str, Any]] = None,
+        max_tokens: int = 3000
+    ) -> str:
+        """
+        Synthesize findings from exploratory analysis (no specific question).
+        
+        Uses a different prompt that focuses on discovering patterns
+        rather than answering a specific question.
+        """
+        exploratory_system = """You are a senior data scientist presenting exploratory analysis results.
+
+The user asked for a general analysis. Present the most interesting discoveries.
+
+STRUCTURE (use markdown):
+1. **Dataset Overview** (size, structure, key characteristics)
+2. **Most Interesting Discoveries** (ranked by insight value)
+3. **Key Patterns & Relationships** (correlations, distributions, trends)
+4. **Data Quality Notes** (missing data, outliers, issues found)
+5. **Visualizations Generated** (list with descriptions)
+6. **Recommended Next Steps** (what to investigate deeper)
+
+RULES:
+- Lead with the most surprising/important finding
+- Use specific numbers and metrics
+- Mention all generated visualizations with file paths
+- Suggest actionable next analysis steps
+- Keep it engaging but data-driven"""
+
+        artifacts_summary = self._format_artifacts(artifacts or {}, findings)
+        
+        user_prompt = f"""**Analysis request**: {findings.question}
+
+**Investigation summary**:
+{findings.get_context_for_synthesis()}
+
+**Generated artifacts**:
+{artifacts_summary}
+
+Write the exploratory analysis report."""
+
+        response = self.llm_caller(
+            system_prompt=exploratory_system,
+            user_prompt=user_prompt,
+            max_tokens=max_tokens
+        )
+        
+        return response.strip()
+
+    def _format_artifacts(self, artifacts: Dict[str, Any], findings: FindingsAccumulator) -> str:
+        """Format artifacts for the synthesis prompt."""
+        parts = []
+        
+        # Extract plots from findings
+        plots = artifacts.get("plots", [])
+        if plots:
+            parts.append("**Plots generated**:")
+            for plot in plots:
+                if isinstance(plot, dict):
+                    parts.append(f"  - {plot.get('title', 'Plot')}: {plot.get('url', plot.get('path', 'N/A'))}")
+                else:
+                    parts.append(f"  - {plot}")
+        
+        # Extract files from findings
+        files = artifacts.get("files", [])
+        if files:
+            parts.append("**Output files**:")
+            for f in files:
+                parts.append(f"  - {f}")
+        
+        # Extract from findings history
+        for finding in findings.findings:
+            result = finding.result_summary
+            if "output_file" in result or "output_path" in result or ".html" in result or ".png" in result:
+                parts.append(f"  - Step {finding.iteration} ({finding.action}): output in result")
+        
+        # Tools used summary
+        if findings.tools_used:
+            parts.append(f"\n**Tools used**: {', '.join(findings.tools_used)}")
+        
+        if not parts:
+            return "No artifacts generated yet."
+        
+        return "\n".join(parts)

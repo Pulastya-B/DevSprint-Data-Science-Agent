@@ -17,7 +17,16 @@ Architecture:
     
     Tool: "Here's what I found: {stats}"
     Reasoning: "Based on these stats, this means..."
+
+Reasoning Loop (NEW):
+    REASON → ACT → EVALUATE → LOOP/STOP → SYNTHESIZE
     
+    Modules:
+    - findings.py:    Accumulated evidence state (step tracker + decision ledger)
+    - reasoner.py:    REASON step - picks next investigation action
+    - evaluator.py:   EVALUATE step - interprets results, decides continue/stop
+    - synthesizer.py: SYNTHESIZE step - builds final answer from evidence
+
 Usage:
     from reasoning import get_reasoner
     
@@ -25,6 +34,12 @@ Usage:
     result = reasoner.explain_data(
         summary={"rows": 1000, "columns": 20, "missing": 50}
     )
+    
+    # Reasoning Loop components:
+    from reasoning.findings import FindingsAccumulator
+    from reasoning.reasoner import Reasoner
+    from reasoning.evaluator import Evaluator
+    from reasoning.synthesizer import Synthesizer
 """
 
 import os

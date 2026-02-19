@@ -21,6 +21,11 @@ from .tools.tools_registry import TOOLS, get_all_tool_names, get_tools_by_catego
 from .tools.agent_tool_mapping import (get_tools_for_agent, filter_tools_by_names, 
                                         get_agent_description, suggest_next_agent)
 from .reasoning.reasoning_trace import get_reasoning_trace, reset_reasoning_trace
+from .reasoning.findings import FindingsAccumulator, Finding
+from .reasoning.reasoner import Reasoner, ReasoningOutput
+from .reasoning.evaluator import Evaluator, EvaluationOutput
+from .reasoning.synthesizer import Synthesizer
+from .routing.intent_classifier import IntentClassifier, IntentResult
 from .session_memory import SessionMemory
 from .session_store import SessionStore
 from .workflow_state import WorkflowState
@@ -2898,6 +2903,526 @@ You receive quality reports from EDA agent and deliver clean data to modeling ag
                 "task_type": result_data.get("task_type")
             })
     
+    # ═══════════════════════════════════════════════════════════════════════════
+    # REASONING LOOP INFRASTRUCTURE
+    # Three new methods that power the hypothesis-driven analysis mode:
+    #   _llm_text_call       → Provider-agnostic text LLM call (no tool schemas)
+    #   _get_tools_description → Lightweight text description of available tools
+    #   _run_reasoning_loop   → The core Reason → Act → Evaluate → Loop/Stop cycle
+    # ═══════════════════════════════════════════════════════════════════════════
+
+    def _llm_text_call(self, system_prompt: str, user_prompt: str, max_tokens: int = 2048) -> str:
+        """
+        Simple text-only LLM call (no tool schemas).
+        
+        Used by Reasoner, Evaluator, and Synthesizer for lightweight
+        reasoning calls. Much cheaper than full tool-calling API calls.
+        
+        Args:
+            system_prompt: System prompt for the LLM
+            user_prompt: User prompt for the LLM
+            max_tokens: Maximum response tokens
+            
+        Returns:
+            Plain text response from the LLM
+        """
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt}
+        ]
+        
+        # Rate limiting
+        if self.min_api_call_interval > 0:
+            time_since_last_call = time.time() - self.last_api_call_time
+            if time_since_last_call < self.min_api_call_interval:
+                wait_time = self.min_api_call_interval - time_since_last_call
+                time.sleep(wait_time)
+        
+        try:
+            if self.provider == "mistral":
+                if hasattr(self.mistral_client, 'chat') and hasattr(self.mistral_client.chat, 'complete'):
+                    response = self.mistral_client.chat.complete(
+                        model=self.model,
+                        messages=messages,
+                        temperature=0.1,
+                        max_tokens=max_tokens
+                    )
+                else:
+                    response = self.mistral_client.chat(
+                        model=self.model,
+                        messages=messages,
+                        temperature=0.1,
+                        max_tokens=max_tokens
+                    )
+                self.api_calls_made += 1
+                self.last_api_call_time = time.time()
+                
+                if hasattr(response, 'usage') and response.usage:
+                    self.tokens_this_minute += response.usage.total_tokens
+                
+                return self._extract_content_text(response.choices[0].message.content)
+            
+            elif self.provider == "groq":
+                response = self.groq_client.chat.completions.create(
+                    model=self.model,
+                    messages=messages,
+                    temperature=0.1,
+                    max_tokens=max_tokens
+                )
+                self.api_calls_made += 1
+                self.last_api_call_time = time.time()
+                
+                if hasattr(response, 'usage') and response.usage:
+                    self.tokens_this_minute += response.usage.total_tokens
+                
+                return self._extract_content_text(response.choices[0].message.content)
+            
+            elif self.provider == "gemini":
+                full_prompt = f"{system_prompt}\n\n{user_prompt}"
+                response = self.gemini_model.generate_content(
+                    full_prompt,
+                    generation_config={
+                        "temperature": 0.1,
+                        "max_output_tokens": max_tokens
+                    }
+                )
+                self.api_calls_made += 1
+                self.last_api_call_time = time.time()
+                return response.text
+            
+            else:
+                raise ValueError(f"Unsupported provider: {self.provider}")
+                
+        except Exception as e:
+            error_str = str(e)
+            # Handle rate limits
+            if "429" in error_str or "rate_limit" in error_str.lower():
+                print(f"⏳ Rate limit in reasoning call, waiting 10s...")
+                time.sleep(10)
+                return self._llm_text_call(system_prompt, user_prompt, max_tokens)
+            raise
+
+    def _get_tools_description(self, tool_names: Optional[List[str]] = None) -> str:
+        """
+        Build a lightweight text description of available tools.
+        
+        Used in Reasoner prompts instead of sending full JSON tool schemas.
+        This is much more token-efficient than the OpenAI tools format.
+        
+        Args:
+            tool_names: Optional list of tool names to include (None = all tools)
+            
+        Returns:
+            Formatted text like:
+                - profile_dataset(file_path): Profile a dataset to understand structure
+                - analyze_correlations(file_path, target_col): Analyze column correlations
+                ...
+        """
+        import inspect
+        
+        lines = []
+        tool_map = self.tool_functions
+        
+        # Filter to specific tools if requested
+        if tool_names:
+            tool_map = {k: v for k, v in tool_map.items() if k in tool_names}
+        
+        for name, func in sorted(tool_map.items()):
+            # Get function signature
+            try:
+                sig = inspect.signature(func)
+                params = []
+                for param_name, param in sig.parameters.items():
+                    if param_name in ("kwargs", "args"):
+                        continue
+                    if param.default is inspect.Parameter.empty:
+                        params.append(param_name)
+                    else:
+                        params.append(f"{param_name}=...")
+                params_str = ", ".join(params[:5])  # Max 5 params shown
+                if len(sig.parameters) > 5:
+                    params_str += ", ..."
+            except (ValueError, TypeError):
+                params_str = "..."
+            
+            # Get first line of docstring
+            doc = (func.__doc__ or "").strip().split("\n")[0][:100]
+            
+            lines.append(f"- {name}({params_str}): {doc}")
+        
+        return "\n".join(lines)
+
+    def _run_reasoning_loop(
+        self,
+        question: str,
+        file_path: str,
+        dataset_info: Dict[str, Any],
+        target_col: Optional[str] = None,
+        mode: str = "investigative",
+        max_iterations: int = 7,
+        tool_names: Optional[List[str]] = None
+    ) -> Dict[str, Any]:
+        """
+        Run the Reasoning Loop: Reason → Act → Evaluate → Loop/Stop → Synthesize.
+        
+        This is the core of the hypothesis-driven analysis mode.
+        Instead of a pipeline, the agent:
+        1. REASONS about what to investigate next
+        2. ACTS (executes one tool)
+        3. EVALUATES the result
+        4. Decides to LOOP (investigate more) or STOP
+        5. SYNTHESIZES all findings into a coherent answer
+        
+        Args:
+            question: User's question or "Analyze this data"
+            file_path: Path to the dataset
+            dataset_info: Schema info from local extraction
+            target_col: Optional target column
+            mode: "investigative" or "exploratory"
+            max_iterations: Max reasoning iterations (default 7)
+            tool_names: Optional subset of tools to use
+            
+        Returns:
+            Dict with status, summary, findings, workflow_history, etc.
+        """
+        start_time = time.time()
+        
+        # Initialize reasoning components (pass our LLM caller)
+        reasoner = Reasoner(llm_caller=self._llm_text_call)
+        evaluator = Evaluator(llm_caller=self._llm_text_call)
+        synthesizer = Synthesizer(llm_caller=self._llm_text_call)
+        findings = FindingsAccumulator(question=question, mode=mode)
+        
+        # Get tools description for the reasoner
+        tools_desc = self._get_tools_description(tool_names)
+        
+        # Track for API response
+        workflow_history = []
+        current_file = file_path  # Tracks the latest output file
+        
+        # Emit mode info for UI
+        if hasattr(self, 'session') and self.session:
+            progress_manager.emit(self.session.session_id, {
+                'type': 'reasoning_mode',
+                'mode': mode,
+                'message': f"🧠 Reasoning Loop activated ({mode} mode)",
+                'question': question
+            })
+        
+        print(f"\n{'='*60}")
+        print(f"🧠 REASONING LOOP ({mode.upper()} mode)")
+        print(f"   Question: {question}")
+        print(f"   Max iterations: {max_iterations}")
+        print(f"{'='*60}")
+        
+        # ── EXPLORATORY MODE: Generate hypotheses first ──
+        if mode == "exploratory":
+            print(f"\n🔬 Generating hypotheses from data profile...")
+            
+            # Profile the dataset first if not already done
+            profile_result = self._execute_tool("profile_dataset", {"file_path": file_path})
+            profile_summary = ""
+            if profile_result.get("success", True):
+                profile_summary = json.dumps(
+                    self._compress_tool_result("profile_dataset", 
+                        self._make_json_serializable(profile_result)),
+                    default=str
+                )[:2000]
+                
+                workflow_history.append({
+                    "iteration": 0,
+                    "tool": "profile_dataset",
+                    "arguments": {"file_path": file_path},
+                    "result": profile_result
+                })
+                self._update_workflow_state("profile_dataset", profile_result)
+            
+            # Generate hypotheses
+            hypotheses = reasoner.generate_hypotheses(
+                dataset_info=dataset_info,
+                file_path=file_path,
+                target_col=target_col,
+                profile_summary=profile_summary
+            )
+            
+            print(f"   Generated {len(hypotheses)} hypotheses:")
+            for i, h in enumerate(hypotheses):
+                text = h.get("text", str(h))
+                priority = h.get("priority", 0.5)
+                findings.add_hypothesis(text, priority=priority, source_iteration=0)
+                print(f"   {i+1}. [{priority:.1f}] {text}")
+            
+            # Emit hypothesis info
+            if hasattr(self, 'session') and self.session:
+                progress_manager.emit(self.session.session_id, {
+                    'type': 'hypotheses_generated',
+                    'hypotheses': [h.get("text", str(h)) for h in hypotheses],
+                    'count': len(hypotheses)
+                })
+        
+        # ── MAIN REASONING LOOP ──
+        for iteration in range(1, max_iterations + 1):
+            print(f"\n── Iteration {iteration}/{max_iterations} ──")
+            
+            # STEP 1: REASON - What should we investigate next?
+            print(f"🤔 REASON: Deciding next action...")
+            
+            reasoning_output = reasoner.reason(
+                question=question,
+                dataset_info=dataset_info,
+                findings=findings,
+                available_tools=tools_desc,
+                file_path=current_file,
+                target_col=target_col
+            )
+            
+            print(f"   Status: {reasoning_output.status}")
+            print(f"   Reasoning: {reasoning_output.reasoning}")
+            
+            # Check if done
+            if reasoning_output.status == "done":
+                print(f"✅ Reasoner says: DONE (confidence: {reasoning_output.confidence:.0%})")
+                print(f"   Reason: {reasoning_output.reasoning}")
+                break
+            
+            tool_name = reasoning_output.tool_name
+            tool_args = reasoning_output.arguments
+            hypothesis = reasoning_output.hypothesis
+            
+            if not tool_name or tool_name not in self.tool_functions:
+                print(f"⚠️  Invalid tool: {tool_name}, skipping iteration")
+                continue
+            
+            print(f"   Tool: {tool_name}")
+            print(f"   Hypothesis: {hypothesis}")
+            
+            # Emit reasoning step for UI
+            if hasattr(self, 'session') and self.session:
+                progress_manager.emit(self.session.session_id, {
+                    'type': 'reasoning_step',
+                    'iteration': iteration,
+                    'tool': tool_name,
+                    'hypothesis': hypothesis,
+                    'reasoning': reasoning_output.reasoning
+                })
+            
+            # STEP 2: ACT - Execute the tool
+            print(f"⚡ ACT: Executing {tool_name}...")
+            
+            # Emit tool execution event
+            if hasattr(self, 'session') and self.session:
+                progress_manager.emit(self.session.session_id, {
+                    'type': 'tool_executing',
+                    'tool': tool_name,
+                    'message': f"🔧 Executing: {tool_name}",
+                    'arguments': tool_args
+                })
+            
+            tool_result = self._execute_tool(tool_name, tool_args)
+            
+            # Track output file for next iteration
+            if tool_result.get("success", True):
+                result_data = tool_result.get("result", {})
+                if isinstance(result_data, dict):
+                    new_file = result_data.get("output_file") or result_data.get("output_path")
+                    if new_file:
+                        current_file = new_file
+                
+                # Emit success
+                if hasattr(self, 'session') and self.session:
+                    progress_manager.emit(self.session.session_id, {
+                        'type': 'tool_completed',
+                        'tool': tool_name,
+                        'message': f"✓ Completed: {tool_name}"
+                    })
+                print(f"   ✓ Tool completed successfully")
+            else:
+                error_msg = tool_result.get("error", "Unknown error")
+                print(f"   ❌ Tool failed: {error_msg}")
+                if hasattr(self, 'session') and self.session:
+                    progress_manager.emit(self.session.session_id, {
+                        'type': 'tool_failed',
+                        'tool': tool_name,
+                        'message': f"❌ FAILED: {tool_name}",
+                        'error': error_msg
+                    })
+            
+            # Track in workflow history
+            workflow_history.append({
+                "iteration": iteration,
+                "tool": tool_name,
+                "arguments": tool_args,
+                "result": tool_result
+            })
+            
+            # Update workflow state
+            self._update_workflow_state(tool_name, tool_result)
+            
+            # Checkpoint
+            if tool_result.get("success", True):
+                session_id = self.http_session_key or "default"
+                self.recovery_manager.checkpoint_manager.save_checkpoint(
+                    session_id=session_id,
+                    workflow_state={
+                        'iteration': iteration,
+                        'workflow_history': workflow_history,
+                        'current_file': file_path,
+                        'task_description': question,
+                        'target_col': target_col
+                    },
+                    last_tool=tool_name,
+                    iteration=iteration
+                )
+            
+            # STEP 3: EVALUATE - What did we learn?
+            print(f"📊 EVALUATE: Interpreting results...")
+            
+            evaluation = evaluator.evaluate(
+                question=question,
+                tool_name=tool_name,
+                arguments=tool_args,
+                result=tool_result,
+                findings=findings,
+                result_compressor=lambda tn, r: self._compress_tool_result(
+                    tn, self._make_json_serializable(r)
+                )
+            )
+            
+            print(f"   Interpretation: {evaluation.interpretation}")
+            print(f"   Answered: {evaluation.answered} (confidence: {evaluation.confidence:.0%})")
+            print(f"   Should stop: {evaluation.should_stop}")
+            if evaluation.next_questions:
+                print(f"   Next questions: {evaluation.next_questions}")
+            
+            # Build finding and add to accumulator
+            compressed_result = json.dumps(
+                self._compress_tool_result(tool_name, self._make_json_serializable(tool_result)),
+                default=str
+            )
+            
+            finding = evaluator.build_finding(
+                iteration=iteration,
+                hypothesis=hypothesis,
+                tool_name=tool_name,
+                arguments=tool_args,
+                result_summary=compressed_result,
+                evaluation=evaluation
+            )
+            findings.add_finding(finding)
+            
+            # Emit finding for UI
+            if hasattr(self, 'session') and self.session:
+                progress_manager.emit(self.session.session_id, {
+                    'type': 'finding_discovered',
+                    'iteration': iteration,
+                    'interpretation': evaluation.interpretation,
+                    'confidence': evaluation.confidence,
+                    'answered': evaluation.answered
+                })
+            
+            # Check if we should stop
+            if evaluation.should_stop:
+                print(f"\n✅ Evaluator says: STOP (confidence: {evaluation.confidence:.0%})")
+                break
+        
+        # ── STEP 4: SYNTHESIZE - Build the final answer ──
+        print(f"\n{'='*60}")
+        print(f"📝 SYNTHESIZE: Building final answer from {len(findings.findings)} findings...")
+        print(f"{'='*60}")
+        
+        # Collect artifacts from workflow history
+        artifacts = self._collect_artifacts(workflow_history)
+        
+        # Generate synthesis
+        if mode == "exploratory":
+            summary_text = synthesizer.synthesize_exploratory(
+                findings=findings,
+                artifacts=artifacts
+            )
+        else:
+            summary_text = synthesizer.synthesize(
+                findings=findings,
+                artifacts=artifacts
+            )
+        
+        # Also generate enhanced summary for plots/metrics extraction
+        try:
+            enhanced = self._generate_enhanced_summary(
+                workflow_history, summary_text, question
+            )
+            plots_data = enhanced.get("plots", [])
+            metrics_data = enhanced.get("metrics", {})
+            artifacts_data = enhanced.get("artifacts", {})
+        except Exception as e:
+            print(f"⚠️  Enhanced summary generation failed: {e}")
+            plots_data = []
+            metrics_data = {}
+            artifacts_data = {}
+        
+        # Save to session
+        if self.session:
+            self.session.add_conversation(question, summary_text)
+            self.session_store.save(self.session)
+        
+        result = {
+            "status": "success",
+            "summary": summary_text,
+            "metrics": metrics_data,
+            "artifacts": artifacts_data,
+            "plots": plots_data,
+            "workflow_history": workflow_history,
+            "findings": findings.to_dict(),
+            "reasoning_trace": self.reasoning_trace.get_trace(),
+            "reasoning_summary": self.reasoning_trace.get_trace_summary(),
+            "execution_mode": mode,
+            "iterations": findings.iteration_count,
+            "api_calls": self.api_calls_made,
+            "execution_time": round(time.time() - start_time, 2)
+        }
+        
+        print(f"\n✅ Reasoning loop completed in {result['execution_time']}s")
+        print(f"   Iterations: {findings.iteration_count}")
+        print(f"   Tools used: {', '.join(findings.tools_used)}")
+        print(f"   API calls: {self.api_calls_made}")
+        
+        return result
+
+    def _collect_artifacts(self, workflow_history: List[Dict]) -> Dict[str, Any]:
+        """Collect plots, files, and other artifacts from workflow history."""
+        plots = []
+        files = []
+        
+        for step in workflow_history:
+            result = step.get("result", {})
+            if not isinstance(result, dict):
+                continue
+            
+            result_data = result.get("result", result)
+            if isinstance(result_data, dict):
+                # Collect output files
+                for key in ["output_file", "output_path", "report_path"]:
+                    if key in result_data and result_data[key]:
+                        files.append(result_data[key])
+                
+                # Collect plots
+                if "plots" in result_data:
+                    for plot in result_data["plots"]:
+                        if isinstance(plot, dict):
+                            plots.append(plot)
+                        elif isinstance(plot, str):
+                            plots.append({"path": plot, "title": step.get("tool", "Plot")})
+                
+                # Check for HTML files (interactive plots)
+                for key in ["html_path", "dashboard_path"]:
+                    if key in result_data and result_data[key]:
+                        plots.append({
+                            "path": result_data[key],
+                            "title": step.get("tool", "Interactive Plot"),
+                            "type": "html"
+                        })
+        
+        return {"plots": plots, "files": files}
+
     def analyze(self, file_path: str, task_description: str, 
                target_col: Optional[str] = None, 
                use_cache: bool = True,
@@ -3031,6 +3556,82 @@ You receive quality reports from EDA agent and deliver clean data to modeling ag
             if cached:
                 print("✓ Using cached results")
                 return cached
+        
+        # ═══════════════════════════════════════════════════════════════════════
+        # 🧠 INTENT CLASSIFICATION → MODE SELECTION
+        # Classify the user's request into one of three execution modes:
+        #   DIRECT:        "Make a scatter plot"      → existing pipeline
+        #   INVESTIGATIVE: "Why are customers churning?" → reasoning loop  
+        #   EXPLORATORY:   "Analyze this data"        → hypothesis-driven loop
+        # ═══════════════════════════════════════════════════════════════════════
+        intent_classifier = IntentClassifier()
+        intent_result = intent_classifier.classify(
+            query=task_description,
+            dataset_info=schema_info if 'error' not in schema_info else None,
+            has_target_col=bool(target_col)
+        )
+        
+        print(f"\n🎯 Intent Classification:")
+        print(f"   Mode: {intent_result.mode.upper()}")
+        print(f"   Confidence: {intent_result.confidence:.0%}")
+        print(f"   Reasoning: {intent_result.reasoning}")
+        print(f"   Sub-intent: {intent_result.sub_intent}")
+        
+        # Emit intent info for UI
+        if hasattr(self, 'session') and self.session:
+            progress_manager.emit(self.session.session_id, {
+                'type': 'intent_classified',
+                'mode': intent_result.mode,
+                'confidence': intent_result.confidence,
+                'reasoning': intent_result.reasoning,
+                'sub_intent': intent_result.sub_intent
+            })
+        
+        # 📝 Record intent classification in reasoning trace
+        self.reasoning_trace.trace_history.append({
+            "type": "intent_classification",
+            "query": task_description,
+            "mode": intent_result.mode,
+            "confidence": intent_result.confidence,
+            "reasoning": intent_result.reasoning,
+            "sub_intent": intent_result.sub_intent
+        })
+        
+        # ═══════════════════════════════════════════════════════════════════════
+        # 🧠 REASONING LOOP PATH (Investigative / Exploratory modes)
+        # ═══════════════════════════════════════════════════════════════════════
+        if intent_result.mode in ("investigative", "exploratory"):
+            print(f"\n🧠 Routing to REASONING LOOP ({intent_result.mode} mode)")
+            
+            # Determine iteration count based on mode and reasoning effort
+            if intent_result.mode == "exploratory":
+                loop_max = min(max_iterations, 8)  # Exploratory gets more iterations
+            else:
+                loop_max = min(max_iterations, 6)  # Investigative is more focused
+            
+            reasoning_result = self._run_reasoning_loop(
+                question=task_description,
+                file_path=file_path,
+                dataset_info=schema_info if 'error' not in schema_info else {},
+                target_col=target_col,
+                mode=intent_result.mode,
+                max_iterations=loop_max
+            )
+            
+            # Cache the result
+            if use_cache and reasoning_result.get("status") == "success":
+                self.cache.set(cache_key, reasoning_result, metadata={
+                    "file_path": file_path,
+                    "task": task_description,
+                    "mode": intent_result.mode
+                })
+            
+            return reasoning_result
+        
+        # ═══════════════════════════════════════════════════════════════════════
+        # 📋 DIRECT MODE PATH (existing pipeline - below is unchanged)
+        # ═══════════════════════════════════════════════════════════════════════
+        print(f"\n📋 Routing to DIRECT pipeline mode")
         
         # Build initial messages
         # Use dynamic prompts for small context models

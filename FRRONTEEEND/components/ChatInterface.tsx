@@ -9,6 +9,7 @@ import remarkGfm from 'remark-gfm';
 import { useAuth } from '../lib/AuthContext';
 import { trackQuery, incrementSessionQueries, getHuggingFaceStatus } from '../lib/supabase';
 import { SettingsModal } from './SettingsModal';
+import { PipelineView, PipelineStep } from './PipelineView';
 
 // HuggingFace logo SVG component for the export button
 const HuggingFaceLogo = ({ className = "w-4 h-4" }: { className?: string }) => (
@@ -214,6 +215,12 @@ export const ChatInterface: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   const processedAnalysisRef = useRef<Set<string>>(new Set()); // Track processed analysis_complete events
   const [sseReconnectTrigger, setSseReconnectTrigger] = useState(0); // Force SSE reconnection for follow-up queries
   
+  // Pipeline visualization state (reasoning loop)
+  const [pipelineSteps, setPipelineSteps] = useState<PipelineStep[]>([]);
+  const [pipelineMode, setPipelineMode] = useState<string | null>(null);
+  const [pipelineHypotheses, setPipelineHypotheses] = useState<string[]>([]);
+  const pipelineStepCounterRef = useRef(0); // Unique step ID counter
+  
   // Auth context for user tracking
   const { user, isAuthenticated, dbSessionId, signOut } = useAuth();
   
@@ -349,16 +356,114 @@ export const ChatInterface: React.FC<{ onBack: () => void }> = ({ onBack }) => {
               console.log(`🤖 Agent assigned: ${data.agent}`);
             } else if (data.type === 'tool_executing') {
               setCurrentStep(data.message || `🔧 Executing: ${data.tool}`);
+              // Add pipeline step if in reasoning mode
+              if (pipelineMode) {
+                const stepId = `act-${++pipelineStepCounterRef.current}`;
+                setPipelineSteps(prev => [...prev, {
+                  id: stepId,
+                  type: 'act',
+                  status: 'active',
+                  title: `Executing: ${data.tool}`,
+                  subtitle: data.message || '',
+                  tool: data.tool,
+                  timestamp: new Date()
+                }]);
+              }
             } else if (data.type === 'tool_completed') {
               setCurrentStep(data.message || `✓ Completed: ${data.tool}`);
+              // Update pipeline step status
+              if (pipelineMode) {
+                setPipelineSteps(prev => prev.map(s =>
+                  s.type === 'act' && s.status === 'active' ? { ...s, status: 'completed' as const } : s
+                ));
+              }
             } else if (data.type === 'tool_failed') {
               setCurrentStep(data.message || `❌ Failed: ${data.tool}`);
+              // Update pipeline step status
+              if (pipelineMode) {
+                setPipelineSteps(prev => prev.map(s =>
+                  s.type === 'act' && s.status === 'active' ? { ...s, status: 'failed' as const, subtitle: data.message || 'Tool failed' } : s
+                ));
+              }
             } else if (data.type === 'token_update') {
               // Optional: Display token budget updates
               console.log('💰 Token update:', data.message);
+            } else if (data.type === 'intent_classified') {
+              // 🎯 Reasoning Loop: Intent classification result
+              console.log(`🎯 Intent: ${data.mode} (${Math.round(data.confidence * 100)}%)`);
+              setPipelineMode(data.mode);
+              const stepId = `intent-${++pipelineStepCounterRef.current}`;
+              setPipelineSteps(prev => [...prev, {
+                id: stepId,
+                type: 'intent',
+                status: 'completed',
+                title: `Intent: ${data.mode.charAt(0).toUpperCase() + data.mode.slice(1)}`,
+                subtitle: data.sub_intent || data.reasoning,
+                detail: data.reasoning,
+                confidence: data.confidence,
+                timestamp: new Date()
+              }]);
+            } else if (data.type === 'reasoning_mode') {
+              // 🧠 Reasoning Loop activated
+              console.log(`🧠 Reasoning mode: ${data.mode}`);
+              setPipelineMode(data.mode);
+              setCurrentStep(data.message || `🧠 Reasoning Loop (${data.mode})`);
+            } else if (data.type === 'hypotheses_generated') {
+              // 💡 Exploratory mode: hypotheses generated
+              console.log(`💡 ${data.count} hypotheses generated`);
+              setPipelineHypotheses(data.hypotheses || []);
+              const stepId = `hyp-${++pipelineStepCounterRef.current}`;
+              setPipelineSteps(prev => [...prev, {
+                id: stepId,
+                type: 'hypothesis',
+                status: 'completed',
+                title: `${data.count} Hypotheses Generated`,
+                subtitle: data.hypotheses?.[0] || '',
+                detail: (data.hypotheses || []).map((h: string, i: number) => `${i + 1}. ${h}`).join('\n'),
+                timestamp: new Date()
+              }]);
+            } else if (data.type === 'reasoning_step') {
+              // 🤔 Reasoning step: LLM decided next action
+              console.log(`🤔 Iteration ${data.iteration}: ${data.tool}`);
+              // Mark previous "reason" steps as completed
+              setPipelineSteps(prev => prev.map(s => 
+                s.type === 'reason' && s.status === 'active' ? { ...s, status: 'completed' as const } : s
+              ));
+              const stepId = `reason-${++pipelineStepCounterRef.current}`;
+              setPipelineSteps(prev => [...prev, {
+                id: stepId,
+                type: 'reason',
+                status: 'completed',
+                title: `Reason → ${data.tool}`,
+                subtitle: data.hypothesis || '',
+                detail: data.reasoning,
+                iteration: data.iteration,
+                tool: data.tool,
+                timestamp: new Date()
+              }]);
+            } else if (data.type === 'finding_discovered') {
+              // 🔬 Finding from evaluation step
+              console.log(`🔬 Finding (confidence: ${Math.round(data.confidence * 100)}%)`);
+              const stepId = `finding-${++pipelineStepCounterRef.current}`;
+              setPipelineSteps(prev => [...prev, {
+                id: stepId,
+                type: 'finding',
+                status: 'completed',
+                title: data.answered ? '✓ Question Answered' : 'Finding Discovered',
+                subtitle: data.interpretation?.substring(0, 100) || '',
+                detail: data.interpretation,
+                confidence: data.confidence,
+                iteration: data.iteration,
+                timestamp: new Date()
+              }]);
             } else if (data.type === 'analysis_failed') {
               console.log('❌ Analysis failed', data);
               setIsTyping(false);
+              
+              // Reset pipeline state
+              setPipelineSteps([]);
+              setPipelineMode(null);
+              setPipelineHypotheses([]);
               
               // Show error message to user - add to sessions
               setSessions(prev => prev.map(s => {
@@ -381,6 +486,11 @@ export const ChatInterface: React.FC<{ onBack: () => void }> = ({ onBack }) => {
             } else if (data.type === 'analysis_complete') {
               console.log('✅ Analysis completed', data.result);
               setIsTyping(false);
+              
+              // Reset pipeline state
+              setPipelineSteps([]);
+              setPipelineMode(null);
+              setPipelineHypotheses([]);
               
               // Create a unique key based on actual workflow content to prevent duplicates
               // Use the last tool executed + summary hash for uniqueness
@@ -539,6 +649,12 @@ export const ChatInterface: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     
     // Show loading indicator immediately (for UI feedback)
     setIsTyping(true);
+    
+    // Reset pipeline state for new analysis
+    setPipelineSteps([]);
+    setPipelineMode(null);
+    setPipelineHypotheses([]);
+    pipelineStepCounterRef.current = 0;
 
     try {
       
@@ -1197,23 +1313,13 @@ export const ChatInterface: React.FC<{ onBack: () => void }> = ({ onBack }) => {
             ))
           )}
           {isTyping && (
-             <div className="flex gap-4">
-                <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 bg-white/5 border border-white/10">
-                  <Bot className="w-4 h-4 text-indigo-400" />
-                </div>
-                <div className="bg-white/[0.03] p-4 rounded-2xl border border-white/5">
-                  <div className="flex items-center gap-3">
-                    <div className="flex gap-1">
-                      <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
-                      <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
-                      <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-bounce"></span>
-                    </div>
-                    <span className="text-sm text-white/60">
-                      {currentStep || '🔧 Starting analysis...'}
-                    </span>
-                  </div>
-                </div>
-             </div>
+             <PipelineView
+               steps={pipelineSteps}
+               mode={pipelineMode}
+               currentStep={currentStep}
+               isActive={isTyping}
+               hypotheses={pipelineHypotheses}
+             />
           )}
         </div>
 
@@ -1394,7 +1500,7 @@ export const ChatInterface: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                 const allPlots: Array<{title: string, url: string, type?: string}> = [];
                 const allReports: Array<{name: string, path: string}> = [];
                 const allDataFiles: string[] = [];
-                const baselineModels = ['xgboost', 'random_forest', 'catboost', 'lightgbm', 'ridge', 'lasso'];
+                const baselineModels = ['xgboost', 'random_forest', 'lightgbm', 'ridge', 'lasso'];
                 const foundModels = new Set<string>();
                 
                 activeSession.messages.forEach(msg => {
