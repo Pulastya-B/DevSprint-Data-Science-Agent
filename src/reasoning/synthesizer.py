@@ -40,6 +40,7 @@ RULES:
 - Be honest about confidence levels
 - Keep it under 500 words unless complex analysis warrants more
 - Use markdown formatting (headers, bullets, bold for emphasis)
+- Do NOT wrap your response in code fences (``` or ```markdown) — output raw markdown directly
 - ONLY report findings from SUCCESSFUL investigation steps
 - Do NOT invent numbers, statistics, or insights that are not present in the findings
 - If a step is marked [FAILED], ignore its results entirely — do not fabricate data from it
@@ -112,7 +113,7 @@ class Synthesizer:
             max_tokens=max_tokens
         )
         
-        return response.strip()
+        return self._strip_code_fences(response.strip())
 
     def synthesize_exploratory(
         self,
@@ -144,6 +145,7 @@ RULES:
 - Mention all generated visualizations with file paths
 - Suggest actionable next analysis steps
 - Keep it engaging but data-driven
+- Do NOT wrap your response in code fences (``` or ```markdown) — output raw markdown directly
 - ONLY report findings from SUCCESSFUL investigation steps
 - Do NOT invent numbers or statistics not present in the findings
 - If a step is marked [FAILED], ignore it entirely"""
@@ -169,7 +171,21 @@ Write the exploratory analysis report."""
             max_tokens=max_tokens
         )
         
-        return response.strip()
+        return self._strip_code_fences(response.strip())
+
+    def _strip_code_fences(self, text: str) -> str:
+        """
+        Remove wrapping code fences from LLM output.
+        
+        LLMs sometimes wrap markdown in ```markdown ... ``` which causes
+        ReactMarkdown to render the entire response as a code block
+        instead of parsing the markdown.
+        """
+        import re
+        # Strip leading ```markdown or ``` and trailing ```
+        stripped = re.sub(r'^\s*```(?:markdown|md|text)?\s*\n', '', text)
+        stripped = re.sub(r'\n\s*```\s*$', '', stripped)
+        return stripped.strip()
 
     def _format_artifacts(self, artifacts: Dict[str, Any], findings: FindingsAccumulator) -> str:
         """Format artifacts for the synthesis prompt."""

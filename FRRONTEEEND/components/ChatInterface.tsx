@@ -65,6 +65,12 @@ const cleanMarkdown = (content: string): string => {
   
   let cleaned = content;
   
+  // PHASE 0: Strip wrapping code fences that LLMs add around markdown
+  // This causes ReactMarkdown to render the ENTIRE response as a <code> block
+  // instead of parsing the markdown. Must be done FIRST.
+  cleaned = cleaned.replace(/^\s*```(?:markdown|md|text)?\s*\n/, '');
+  cleaned = cleaned.replace(/\n\s*```\s*$/, '');
+  
   // PHASE 1: Fix inline code that got split across lines
   // Pattern: `code` followed by newline(s) then comma
   cleaned = cleaned.replace(/`([^`\n]+)`\s*\n+\s*,/g, '`$1`, ');

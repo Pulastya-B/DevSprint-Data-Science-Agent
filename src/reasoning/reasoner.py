@@ -319,6 +319,15 @@ class Reasoner:
         tool_name = data.get("tool_name")
         arguments = data.get("arguments", {})
         
+        # 🛡️ SAFETY: If LLM says "investigating" but provides no tool, treat as "done"
+        # This prevents wasting iterations on empty responses (seen in logs: 5 consecutive skips)
+        if status == "investigating" and not tool_name:
+            print(f"   ⚠️  Reasoner returned 'investigating' with no tool — forcing done")
+            return ReasoningOutput.done(
+                reasoning=data.get("reasoning", "No further tool selected. Synthesizing available findings."),
+                confidence=max(0.4, float(data.get("confidence", 0.4)))
+            )
+        
         # Ensure file_path is in arguments if tool needs it
         if tool_name and "file_path" not in arguments and tool_name not in [
             "execute_python_code", "get_smart_summary"
