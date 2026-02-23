@@ -2251,6 +2251,40 @@ You receive quality reports from EDA agent and deliver clean data to modeling ag
                         print(f"   ✓ Stripped invalid parameter '{invalid_param}': {val}")
                         print(f"   ℹ️ create_statistical_features creates row-wise stats (mean, std, min, max)")
             
+            # 🔧 FIX: analyze_autogluon_model path resolution
+            # The Reasoner hallucinates model paths — resolve to actual saved path
+            if tool_name == "analyze_autogluon_model":
+                model_path = arguments.get("model_path", "")
+                if model_path and not Path(model_path).exists():
+                    # Try the default AutoGluon output dir
+                    fallback_paths = [
+                        "./outputs/autogluon_model",
+                        "outputs/autogluon_model",
+                        "/tmp/data_science_agent/outputs/autogluon_model",
+                    ]
+                    for fallback in fallback_paths:
+                        if Path(fallback).exists():
+                            print(f"   ✓ Fixed model_path: '{model_path}' → '{fallback}'")
+                            arguments["model_path"] = fallback
+                            break
+                    else:
+                        print(f"   ⚠️ Model path '{model_path}' not found, no fallback available")
+            
+            # 🔧 FIX: predict_with_autogluon path resolution (same issue)
+            if tool_name == "predict_with_autogluon":
+                model_path = arguments.get("model_path", "")
+                if model_path and not Path(model_path).exists():
+                    fallback_paths = [
+                        "./outputs/autogluon_model",
+                        "outputs/autogluon_model",
+                        "/tmp/data_science_agent/outputs/autogluon_model",
+                    ]
+                    for fallback in fallback_paths:
+                        if Path(fallback).exists():
+                            print(f"   ✓ Fixed model_path: '{model_path}' → '{fallback}'")
+                            arguments["model_path"] = fallback
+                            break
+            
             # 🔥 FIX: Generic parameter sanitization - strip any unknown kwargs
             # This prevents "got an unexpected keyword argument" errors from LLM hallucinations
             import inspect
@@ -2653,6 +2687,61 @@ You receive quality reports from EDA agent and deliver clean data to modeling ag
                     "trials_completed": r.get("n_trials")
                 }
                 compressed["next_steps"] = ["perform_cross_validation", "generate_model_performance_plots"]
+            
+            # ── Feature importance / selection tools ──
+            elif tool_name == "auto_feature_selection":
+                r = result.get("result", {})
+                # Preserve the actual feature scores — this IS the answer for "feature importance" queries
+                feature_scores = r.get("feature_scores", r.get("feature_rankings", {}))
+                # Keep top 15 features max
+                if isinstance(feature_scores, dict):
+                    sorted_feats = sorted(feature_scores.items(), key=lambda x: abs(float(x[1])) if x[1] is not None else 0, reverse=True)[:15]
+                    feature_scores = {k: round(float(v), 4) if v is not None else 0 for k, v in sorted_feats}
+                compressed["summary"] = {
+                    "n_features_original": r.get("n_features_original"),
+                    "n_features_selected": r.get("n_features_selected"),
+                    "selected_features": r.get("selected_features", [])[:15],
+                    "feature_scores": feature_scores,
+                    "selection_method": r.get("selection_method"),
+                    "task_type": r.get("task_type"),
+                    "output_path": r.get("output_path")
+                }
+                compressed["next_steps"] = ["analyze_correlations", "generate_eda_plots"]
+            
+            elif tool_name == "analyze_correlations":
+                r = result.get("result", {})
+                # Preserve high correlations and target correlations — key analytical data
+                high_corrs = r.get("high_correlations", [])[:10]  # Top 10 pairs
+                target_corrs = r.get("target_correlations", {})
+                if isinstance(target_corrs, dict) and "top_features" in target_corrs:
+                    target_corrs = {
+                        "target": target_corrs.get("target"),
+                        "top_features": target_corrs["top_features"][:10]
+                    }
+                compressed["summary"] = {
+                    "numeric_columns_count": len(r.get("numeric_columns", [])),
+                    "high_correlations": high_corrs,
+                    "target_correlations": target_corrs,
+                }
+                compressed["next_steps"] = ["auto_feature_selection", "generate_eda_plots"]
+            
+            elif tool_name in ["train_with_autogluon", "analyze_autogluon_model"]:
+                r = result.get("result", {})
+                # Preserve model metrics AND feature importance
+                feature_importance = r.get("feature_importance", [])
+                if isinstance(feature_importance, list):
+                    feature_importance = feature_importance[:10]  # Top 10 features
+                compressed["summary"] = {
+                    "task_type": r.get("task_type"),
+                    "best_model": r.get("best_model"),
+                    "best_score": r.get("best_score"),
+                    "eval_metric": r.get("eval_metric"),
+                    "n_models_trained": r.get("n_models_trained"),
+                    "feature_importance": feature_importance,
+                    "model_path": r.get("model_path", r.get("output_path")),
+                    "training_time_seconds": r.get("training_time_seconds")
+                }
+                compressed["next_steps"] = ["predict_with_autogluon", "generate_model_report"]
                 
             else:
                 # Generic compression: Keep only key fields
@@ -3071,6 +3160,109 @@ You receive quality reports from EDA agent and deliver clean data to modeling ag
         
         return "\n".join(lines)
 
+    def _get_relevant_tools_sbert(
+        self,
+        query: str,
+        candidate_tools: Optional[set] = None,
+        top_k: int = 20,
+        threshold: float = 0.15
+    ) -> set:
+        """
+        Use SBERT semantic similarity to rank tools by relevance to the query.
+        
+        Encodes the query and each tool's (name + docstring) into embeddings,
+        then keeps only tools whose cosine similarity exceeds the threshold.
+        Tool embeddings are lazily computed and cached for the lifetime of the
+        orchestrator instance.
+        
+        Args:
+            query: User's natural language question
+            candidate_tools: Tools to score (default: all tool_functions)
+            top_k: Max number of tools to return
+            threshold: Minimum cosine similarity to include a tool (0.0-1.0)
+            
+        Returns:
+            Set of tool names that are semantically relevant to the query.
+            Falls back to candidate_tools unchanged if SBERT is unavailable.
+        """
+        if not self.semantic_layer.enabled:
+            return candidate_tools or set(self.tool_functions.keys())
+        
+        try:
+            from sklearn.metrics.pairwise import cosine_similarity as cos_sim
+            import numpy as np
+        except ImportError:
+            return candidate_tools or set(self.tool_functions.keys())
+        
+        candidates = candidate_tools or set(self.tool_functions.keys())
+        
+        # ── Lazily build & cache tool embeddings ──
+        if not hasattr(self, '_tool_embeddings_cache'):
+            self._tool_embeddings_cache = {}
+        
+        # Compute embeddings for any tools not yet cached
+        tools_needing_embed = [t for t in candidates if t not in self._tool_embeddings_cache]
+        if tools_needing_embed:
+            texts = []
+            for name in tools_needing_embed:
+                func = self.tool_functions.get(name)
+                doc = (func.__doc__ or "").strip().split("\n")[0][:150] if func else ""
+                texts.append(f"{name}: {doc}")
+            
+            try:
+                embeddings = self.semantic_layer.model.encode(
+                    texts, convert_to_numpy=True, show_progress_bar=False, batch_size=32
+                )
+                for name, emb in zip(tools_needing_embed, embeddings):
+                    self._tool_embeddings_cache[name] = emb
+            except Exception as e:
+                print(f"⚠️ SBERT tool encoding failed: {e}, returning all candidates")
+                return candidates
+        
+        # ── Encode the query ──
+        try:
+            query_emb = self.semantic_layer.model.encode(
+                query, convert_to_numpy=True, show_progress_bar=False
+            ).reshape(1, -1)
+        except Exception as e:
+            print(f"⚠️ SBERT query encoding failed: {e}")
+            return candidates
+        
+        # ── Score each candidate tool ──
+        scored = []
+        for name in candidates:
+            emb = self._tool_embeddings_cache.get(name)
+            if emb is None:
+                continue
+            sim = float(cos_sim(query_emb, emb.reshape(1, -1))[0][0])
+            scored.append((name, sim))
+        
+        # Sort descending by similarity
+        scored.sort(key=lambda x: x[1], reverse=True)
+        
+        # Keep tools above threshold, up to top_k
+        selected = {name for name, sim in scored[:top_k] if sim >= threshold}
+        
+        # ── Always include universally-useful core tools ──
+        CORE_TOOLS = {
+            "profile_dataset", "analyze_correlations", "auto_feature_selection",
+            "generate_eda_plots", "clean_missing_values",
+            "execute_python_code",
+        }
+        selected |= (CORE_TOOLS & candidates)
+        
+        if selected:
+            # Log what SBERT chose
+            top5 = scored[:5]
+            print(f"   🧠 SBERT tool routing: {len(selected)}/{len(candidates)} tools selected")
+            print(f"      Top-5 by similarity: {[(n, f'{s:.3f}') for n, s in top5]}")
+        else:
+            # Safety: if nothing passed threshold, return all candidates
+            print(f"   ⚠️ SBERT: no tools above threshold {threshold}, using all {len(candidates)} candidates")
+            selected = candidates
+        
+        return selected
+
     def _run_reasoning_loop(
         self,
         question: str,
@@ -3112,8 +3304,59 @@ You receive quality reports from EDA agent and deliver clean data to modeling ag
         synthesizer = Synthesizer(llm_caller=self._llm_text_call)
         findings = FindingsAccumulator(question=question, mode=mode)
         
-        # Get tools description for the reasoner
-        tools_desc = self._get_tools_description(tool_names)
+        # ── Intelligent tool filtering for the reasoning loop ──
+        # Step 1: Hard-exclude tools that can never work in the reasoning loop
+        EXCLUDED_FROM_REASONING = {
+            "generate_feature_importance_plot",  # needs Dict[str, float] — Reasoner can't supply
+        }
+        TRAINING_TOOLS = {
+            "train_with_autogluon", "train_baseline_models", "train_model",
+            "hyperparameter_tuning", "predict_with_autogluon",
+            "analyze_autogluon_model", "advanced_model_training",
+            "neural_architecture_search"
+        }
+        
+        # Build initial candidate pool
+        effective_tool_names = set(tool_names) if tool_names else set(self.tool_functions.keys())
+        effective_tool_names -= EXCLUDED_FROM_REASONING
+        
+        # Step 2: SBERT semantic routing — score tools against the query
+        # This replaces the old keyword-only approach with real semantic understanding
+        if self.semantic_layer.enabled:
+            print(f"   🧠 Using SBERT semantic routing for tool selection...")
+            effective_tool_names = self._get_relevant_tools_sbert(
+                query=question,
+                candidate_tools=effective_tool_names,
+                top_k=20,
+                threshold=0.15
+            )
+        
+        # Step 3: Hard safety rail — even if SBERT scores a training tool highly,
+        # block it for pure EDA queries (training wastes 120-180s for no benefit)
+        question_lower = question.lower()
+        explicitly_wants_training = any(kw in question_lower for kw in [
+            "train", "predict", "build a model", "classification", "regression",
+            "classify", "forecast", "deploy model", "autogluon"
+        ])
+        if not explicitly_wants_training:
+            EDA_KEYWORDS = [
+                "feature importance", "important features", "most important",
+                "correlations", "correlation", "explore", "explain",
+                "understand", "patterns", "insights", "eda", "profiling",
+                "distribution", "outliers", "summary", "describe", "overview",
+                "what drives", "what affects", "key factors", "top features",
+                "feature ranking", "data quality", "missing values"
+            ]
+            is_eda_query = any(kw in question_lower for kw in EDA_KEYWORDS)
+            if is_eda_query:
+                removed = effective_tool_names & TRAINING_TOOLS
+                if removed:
+                    print(f"   🚫 EDA safety rail — removing training tools: {removed}")
+                effective_tool_names -= TRAINING_TOOLS
+        
+        # Get tools description for the reasoner (filtered)
+        tools_desc = self._get_tools_description(list(effective_tool_names))
+        print(f"   📋 Reasoning loop will see {len(effective_tool_names)} tools (of {len(self.tool_functions)})")
         
         # Track for API response
         workflow_history = []

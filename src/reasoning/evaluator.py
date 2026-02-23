@@ -51,6 +51,12 @@ Be concise but insightful. Focus on:
 - Confounders and caveats
 - What's surprising vs expected
 
+IMPORTANT CONFIDENCE RULES:
+- If the tool returned feature_scores, feature_importance, or correlation values, and the user asked about features/importance/correlations → this IS the answer. Set answered=true, confidence ≥ 0.7.
+- If the tool returned actual ranked data (top features, sorted scores, correlation pairs), set confidence ≥ 0.6.
+- Do NOT keep saying "not answered" when the tool literally returned the requested information.
+- Only say answered=false when the result is genuinely unrelated to the question or contains NO useful data.
+
 CRITICAL: Output ONLY valid JSON, no other text."""
 
 EVALUATOR_USER_TEMPLATE = """**User's original question**: {question}
@@ -77,11 +83,15 @@ Guidelines for should_stop:
 - true: Question is fully answered OR we've gathered enough evidence OR no more useful actions
 - false: Important aspects remain uninvestigated
 
+Guidelines for answered:
+- true: The result contains data that directly addresses the user's question (e.g., feature scores for "which features are important?", correlations for "what correlates with X?")
+- false: Result is unrelated to the question or contains only metadata without actual answers
+
 Guidelines for confidence:
 - 0.0-0.3: Weak evidence, need more investigation
 - 0.3-0.6: Moderate evidence, some aspects unclear
-- 0.6-0.8: Strong evidence, minor questions remain
-- 0.8-1.0: Very strong evidence, question well answered"""
+- 0.6-0.8: Strong evidence, minor questions remain (e.g., got feature importance scores but could add more context)
+- 0.8-1.0: Very strong evidence, question well answered (e.g., got ranked feature list with scores AND correlations)"""
 
 
 class Evaluator:
