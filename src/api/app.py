@@ -9,6 +9,7 @@ import tempfile
 import shutil
 import time
 import copy
+import math
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 import logging
@@ -45,7 +46,14 @@ def safe_json_dumps(obj):
         if isinstance(o, (np.integer, np.int64, np.int32)):
             return int(o)
         elif isinstance(o, (np.floating, np.float64, np.float32)):
-            return float(o)
+            val = float(o)
+            if math.isnan(val) or math.isinf(val):
+                return None
+            return val
+        elif isinstance(o, float):
+            if math.isnan(o) or math.isinf(o):
+                return None
+            return o
         elif isinstance(o, np.ndarray):
             return o.tolist()
         elif isinstance(o, (datetime, date)):
