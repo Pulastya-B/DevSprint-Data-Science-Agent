@@ -45,8 +45,8 @@ class ProgressManager:
         self._history[session_id].append(event)
         
         # Limit history size to prevent memory leaks
-        if len(self._history[session_id]) > 500:
-            self._history[session_id] = self._history[session_id][-500:]
+        if len(self._history[session_id]) > 100:
+            self._history[session_id] = self._history[session_id][-100:]
         
         print(f"[SSE] History stored, total events for {session_id}: {len(self._history[session_id])}")
         

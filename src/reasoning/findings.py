@@ -124,6 +124,7 @@ class FindingsAccumulator:
         self.findings: List[Finding] = []
         self.hypotheses: List[Hypothesis] = []
         self.tools_used: List[str] = []
+        self.tools_with_args: List[Dict[str, Any]] = []  # Track tool+args to detect repeats
         self.files_produced: List[str] = []
         self.failed_tools: Dict[str, str] = {}  # tool_name → error message
         self.is_answered = False
@@ -141,6 +142,12 @@ class FindingsAccumulator:
         
         if finding.action not in self.tools_used:
             self.tools_used.append(finding.action)
+        
+        # Track tool+args for duplicate detection
+        self.tools_with_args.append({
+            "tool": finding.action,
+            "args_key": json.dumps(finding.arguments, sort_keys=True, default=str)
+        })
         
         # Track answer progress
         if finding.answered_question:
@@ -236,6 +243,11 @@ class FindingsAccumulator:
         # Summary of what's been done
         parts.append(f"**Investigations completed**: {len(self.findings)}")
         parts.append(f"**Tools used**: {', '.join(self.tools_used)}")
+        
+        # Warn about tools already called (with args) to prevent repeats
+        if self.tools_with_args:
+            seen = [f"`{t['tool']}`" for t in self.tools_with_args]
+            parts.append(f"**Tools already called (DO NOT repeat with same args)**: {', '.join(seen)}")
         
         # Failed tools warning (critical for avoiding retries)
         failed_ctx = self.get_failed_tools_context()

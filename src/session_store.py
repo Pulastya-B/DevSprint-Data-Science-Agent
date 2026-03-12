@@ -45,34 +45,7 @@ class SessionStore:
     def _init_database(self):
         """Create sessions table if it doesn't exist."""
         try:
-            conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS sessions (
-                    session_id TEXT PRIMARY KEY,
-                    created_at TEXT NOT NULL,
-                    last_active TEXT NOT NULL,
-                    context_json TEXT NOT NULL
-                )
-            """)
-            
-            # Create index on last_active for faster queries
-            cursor.execute("""
-                CREATE INDEX IF NOT EXISTS idx_last_active 
-                ON sessions(last_active DESC)
-            """)
-            
-            conn.commit()
-            conn.close()
-            print(f"✅ Sessions database initialized at {self.db_path}")
-        except Exception as e:
-            print(f"⚠️ Failed to initialize sessions database: {e}")
-            # Try to recreate the database if corrupted
-            try:
-                Path(self.db_path).unlink(missing_ok=True)
-                print(f"   Deleted corrupted database, reinitializing...")
-                conn = sqlite3.connect(self.db_path)
+            with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
                 
                 cursor.execute("""
@@ -84,13 +57,38 @@ class SessionStore:
                     )
                 """)
                 
+                # Create index on last_active for faster queries
                 cursor.execute("""
                     CREATE INDEX IF NOT EXISTS idx_last_active 
                     ON sessions(last_active DESC)
                 """)
                 
                 conn.commit()
-                conn.close()
+            print(f"✅ Sessions database initialized at {self.db_path}")
+        except Exception as e:
+            print(f"⚠️ Failed to initialize sessions database: {e}")
+            # Try to recreate the database if corrupted
+            try:
+                Path(self.db_path).unlink(missing_ok=True)
+                print(f"   Deleted corrupted database, reinitializing...")
+                with sqlite3.connect(self.db_path) as conn:
+                    cursor = conn.cursor()
+                    
+                    cursor.execute("""
+                        CREATE TABLE IF NOT EXISTS sessions (
+                            session_id TEXT PRIMARY KEY,
+                            created_at TEXT NOT NULL,
+                            last_active TEXT NOT NULL,
+                            context_json TEXT NOT NULL
+                        )
+                    """)
+                    
+                    cursor.execute("""
+                        CREATE INDEX IF NOT EXISTS idx_last_active 
+                        ON sessions(last_active DESC)
+                    """)
+                    
+                    conn.commit()
                 print(f"✅ Sessions database reinitialized successfully")
             except Exception as retry_error:
                 print(f"❌ Failed to reinitialize sessions database: {retry_error}")
@@ -151,49 +149,47 @@ class SessionStore:
             session: SessionMemory instance to save
         """
         try:
-            conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            
-            # Serialize session to JSON - clean non-serializable objects first
-            data = session.to_dict()
-            clean_data = self._make_json_serializable(data)
-            
-            cursor.execute("""
-                INSERT OR REPLACE INTO sessions (session_id, created_at, last_active, context_json)
-                VALUES (?, ?, ?, ?)
-            """, (
-                session.session_id,
-                session.created_at.isoformat(),
-                session.last_active.isoformat(),
-                json.dumps(clean_data)
-            ))
-            
-            conn.commit()
-            conn.close()
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                # Serialize session to JSON - clean non-serializable objects first
+                data = session.to_dict()
+                clean_data = self._make_json_serializable(data)
+                
+                cursor.execute("""
+                    INSERT OR REPLACE INTO sessions (session_id, created_at, last_active, context_json)
+                    VALUES (?, ?, ?, ?)
+                """, (
+                    session.session_id,
+                    session.created_at.isoformat(),
+                    session.last_active.isoformat(),
+                    json.dumps(clean_data)
+                ))
+                
+                conn.commit()
         except sqlite3.OperationalError as e:
             if "no such table" in str(e):
                 print(f"⚠️ Sessions table not found, reinitializing database...")
                 self._init_database()
                 # Retry save after reinitialization
                 try:
-                    conn = sqlite3.connect(self.db_path)
-                    cursor = conn.cursor()
-                    
-                    data = session.to_dict()
-                    clean_data = self._make_json_serializable(data)
-                    
-                    cursor.execute("""
-                        INSERT OR REPLACE INTO sessions (session_id, created_at, last_active, context_json)
-                        VALUES (?, ?, ?, ?)
-                    """, (
-                        session.session_id,
-                        session.created_at.isoformat(),
-                        session.last_active.isoformat(),
-                        json.dumps(clean_data)
-                    ))
-                    
-                    conn.commit()
-                    conn.close()
+                    with sqlite3.connect(self.db_path) as conn:
+                        cursor = conn.cursor()
+                        
+                        data = session.to_dict()
+                        clean_data = self._make_json_serializable(data)
+                        
+                        cursor.execute("""
+                            INSERT OR REPLACE INTO sessions (session_id, created_at, last_active, context_json)
+                            VALUES (?, ?, ?, ?)
+                        """, (
+                            session.session_id,
+                            session.created_at.isoformat(),
+                            session.last_active.isoformat(),
+                            json.dumps(clean_data)
+                        ))
+                        
+                        conn.commit()
                     print(f"✅ Session saved successfully after database reinitialization")
                 except Exception as retry_error:
                     print(f"❌ Failed to save session after reinitialization: {retry_error}")
@@ -211,15 +207,14 @@ class SessionStore:
         Returns:
             SessionMemory instance or None if not found
         """
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        cursor.execute("""
-            SELECT context_json FROM sessions WHERE session_id = ?
-        """, (session_id,))
-        
-        result = cursor.fetchone()
-        conn.close()
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                SELECT context_json FROM sessions WHERE session_id = ?
+            """, (session_id,))
+            
+            result = cursor.fetchone()
         
         if not result:
             return None
@@ -246,20 +241,19 @@ class SessionStore:
             if session:
                 print(f"Resuming session: {session.last_dataset}")
         """
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        cutoff_time = (datetime.now() - timedelta(hours=max_age_hours)).isoformat()
-        
-        cursor.execute("""
-            SELECT context_json FROM sessions
-            WHERE last_active > ?
-            ORDER BY last_active DESC
-            LIMIT 1
-        """, (cutoff_time,))
-        
-        result = cursor.fetchone()
-        conn.close()
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            
+            cutoff_time = (datetime.now() - timedelta(hours=max_age_hours)).isoformat()
+            
+            cursor.execute("""
+                SELECT context_json FROM sessions
+                WHERE last_active > ?
+                ORDER BY last_active DESC
+                LIMIT 1
+            """, (cutoff_time,))
+            
+            result = cursor.fetchone()
         
         if not result:
             return None
@@ -282,18 +276,17 @@ class SessionStore:
             for s in sessions:
                 print(f"{s['session_id']}: {s['last_active']}")
         """
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        cursor.execute("""
-            SELECT session_id, created_at, last_active
-            FROM sessions
-            ORDER BY last_active DESC
-            LIMIT ?
-        """, (limit,))
-        
-        results = cursor.fetchall()
-        conn.close()
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                SELECT session_id, created_at, last_active
+                FROM sessions
+                ORDER BY last_active DESC
+                LIMIT ?
+            """, (limit,))
+            
+            results = cursor.fetchall()
         
         return [
             {
@@ -314,14 +307,13 @@ class SessionStore:
         Returns:
             True if deleted, False if not found
         """
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        cursor.execute("DELETE FROM sessions WHERE session_id = ?", (session_id,))
-        rows_deleted = cursor.rowcount
-        
-        conn.commit()
-        conn.close()
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            
+            cursor.execute("DELETE FROM sessions WHERE session_id = ?", (session_id,))
+            rows_deleted = cursor.rowcount
+            
+            conn.commit()
         
         return rows_deleted > 0
     
@@ -340,16 +332,15 @@ class SessionStore:
             deleted = store.cleanup_old_sessions(days=7)
             print(f"Cleaned up {deleted} old sessions")
         """
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        cutoff_time = (datetime.now() - timedelta(days=days)).isoformat()
-        
-        cursor.execute("DELETE FROM sessions WHERE last_active < ?", (cutoff_time,))
-        rows_deleted = cursor.rowcount
-        
-        conn.commit()
-        conn.close()
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            
+            cutoff_time = (datetime.now() - timedelta(days=days)).isoformat()
+            
+            cursor.execute("DELETE FROM sessions WHERE last_active < ?", (cutoff_time,))
+            rows_deleted = cursor.rowcount
+            
+            conn.commit()
         
         return rows_deleted
     
@@ -360,11 +351,10 @@ class SessionStore:
         Returns:
             Session count
         """
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            
+            cursor.execute("SELECT COUNT(*) FROM sessions")
+            count = cursor.fetchone()[0]
         
-        cursor.execute("SELECT COUNT(*) FROM sessions")
-        count = cursor.fetchone()[0]
-        
-        conn.close()
         return count

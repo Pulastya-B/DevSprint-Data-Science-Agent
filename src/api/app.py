@@ -8,6 +8,7 @@ import sys
 import tempfile
 import shutil
 import time
+import copy
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 import logging
@@ -29,6 +30,7 @@ import numpy as np
 from src.orchestrator import DataScienceCopilot
 from src.progress_manager import progress_manager
 from src.session_memory import SessionMemory
+from src.workflow_state import WorkflowState
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -224,14 +226,13 @@ async def get_agent_for_session(session_id: str) -> DataScienceCopilot:
             state.request_count += 1
             logger.info(f"[♻️] Reusing session {session_id[:8]}... (requests: {state.request_count})")
             
-            # Store in thread-local storage for isolation
-            agent_thread_local.session = state.session
-            agent_thread_local.session_id = session_id
-            
-            # Return agent with session set (safe because of workflow_lock)
-            agent.session = state.session
-            agent.http_session_key = session_id
-            return agent
+            # Create a lightweight copy so each request has its own session/state
+            # Heavy components (SBERT, tool_functions, LLM client) are shared references
+            request_agent = copy.copy(agent)
+            request_agent.session = state.session
+            request_agent.http_session_key = session_id
+            request_agent.workflow_state = WorkflowState()
+            return request_agent
         
         # 🚀 FAST PATH: Create new session memory only (no SBERT reload!)
         logger.info(f"[🆕] Creating lightweight session for {session_id[:8]}...")
@@ -260,17 +261,15 @@ async def get_agent_for_session(session_id: str) -> DataScienceCopilot:
         )
         session_states[session_id] = session_state
         
-        # Store in thread-local storage
-        agent_thread_local.session = new_session
-        agent_thread_local.session_id = session_id
-        
-        # Set session on shared agent (safe with workflow_lock)
-        agent.session = new_session
-        agent.http_session_key = session_id
+        # Create a lightweight copy so each request has its own session/state
+        request_agent = copy.copy(agent)
+        request_agent.session = new_session
+        request_agent.http_session_key = session_id
+        request_agent.workflow_state = WorkflowState()
         
         logger.info(f"✅ Session created for {session_id[:8]} (cache: {len(session_states)}/{MAX_CACHED_SESSIONS}) - <1s init")
         
-        return agent
+        return request_agent
 
 def cleanup_expired_sessions():
     """Remove expired sessions based on TTL."""
@@ -398,8 +397,12 @@ async def stream_progress(session_id: str):
                         yield f"data: {safe_json_dumps(past_event)}\n\n"
                     else:
                         # If analysis already completed before we connected, send it and close
+                        # Set a very long retry interval to prevent EventSource auto-reconnect
+                        yield f"retry: 86400000\n\n"
                         yield f"data: {safe_json_dumps(past_event)}\n\n"
                         print(f"[SSE] Analysis already completed before subscriber connected - closing")
+                        # Brief delay to ensure the client receives and processes the event
+                        await asyncio.sleep(2)
                         return
             else:
                 print(f"[SSE] No history to replay (fresh session)")
@@ -527,8 +530,8 @@ def run_analysis_background(file_path: str, task_description: str, target_col: O
             traceback.print_exc()
             progress_manager.emit(session_id, {
                 "type": "analysis_failed",
-                "error": str(e),
-                "message": f"❌ Analysis failed: {str(e)}"
+                "error": "Analysis failed. Please try again.",
+                "message": "❌ Analysis failed. Please try again or upload a different file."
             })
 
 
@@ -566,9 +569,23 @@ async def run_analysis_async(
     # Handle file upload
     temp_file_path = None
     if file:
+        # File size guard: reject uploads > 500MB to prevent OOM
+        MAX_UPLOAD_BYTES = 500 * 1024 * 1024  # 500MB
+        file.file.seek(0, 2)  # Seek to end
+        file_size = file.file.tell()
+        file.file.seek(0)  # Reset
+        if file_size > MAX_UPLOAD_BYTES:
+            return JSONResponse(
+                content={"success": False, "error": f"File too large ({file_size / 1024 / 1024:.0f}MB). Maximum is 500MB."},
+                status_code=413
+            )
+        
         temp_dir = Path("/tmp") / "data_science_agent"
         temp_dir.mkdir(parents=True, exist_ok=True)
-        temp_file_path = temp_dir / file.filename
+        # Sanitize filename to prevent path traversal
+        import secrets
+        safe_name = secrets.token_hex(8) + Path(file.filename).suffix
+        temp_file_path = temp_dir / safe_name
         
         with open(temp_file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
@@ -751,8 +768,8 @@ async def run_analysis(
             raise HTTPException(
                 status_code=500,
                 detail={
-                    "error": str(e),
-                    "error_type": type(e).__name__,
+                    "error": "Follow-up request failed. Make sure you've uploaded a file first.",
+                    "error_type": "InternalError",
                     "message": "Follow-up request failed. Make sure you've uploaded a file first."
                 }
             )
@@ -765,6 +782,14 @@ async def run_analysis(
             detail="Invalid file format. Only CSV and Parquet files are supported."
         )
     
+    # File size guard: reject uploads > 500MB to prevent OOM
+    MAX_UPLOAD_BYTES = 500 * 1024 * 1024  # 500MB
+    file.file.seek(0, 2)
+    file_size = file.file.tell()
+    file.file.seek(0)
+    if file_size > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail=f"File too large ({file_size / 1024 / 1024:.0f}MB). Maximum is 500MB.")
+    
     # Use /tmp for Cloud Run (ephemeral storage)
     temp_dir = Path("/tmp") / "data_science_agent"
     temp_dir.mkdir(parents=True, exist_ok=True)
@@ -772,8 +797,10 @@ async def run_analysis(
     temp_file_path = None
     
     try:
-        # Save uploaded file to temporary location
-        temp_file_path = temp_dir / file.filename
+        # Sanitize filename to prevent path traversal
+        import secrets
+        safe_name = secrets.token_hex(8) + Path(file.filename).suffix
+        temp_file_path = temp_dir / safe_name
         logger.info(f"Saving uploaded file to: {temp_file_path}")
         
         with open(temp_file_path, "wb") as buffer:
@@ -856,8 +883,8 @@ async def run_analysis(
         raise HTTPException(
             status_code=500,
             detail={
-                "error": str(e),
-                "error_type": type(e).__name__,
+                "error": "Analysis workflow failed. Please try again.",
+                "error_type": "InternalError",
                 "message": "Analysis workflow failed. Check logs for details."
             }
         )
@@ -901,8 +928,10 @@ async def profile_dataset(
     temp_file_path = None
     
     try:
-        # Save file temporarily
-        temp_file_path = temp_dir / file.filename
+        # Sanitize filename to prevent path traversal
+        import secrets
+        safe_name = secrets.token_hex(8) + Path(file.filename).suffix
+        temp_file_path = temp_dir / safe_name
         with open(temp_file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
         
@@ -930,8 +959,8 @@ async def profile_dataset(
         raise HTTPException(
             status_code=500,
             detail={
-                "error": str(e),
-                "error_type": type(e).__name__
+                "error": "Profiling failed. Please try again.",
+                "error_type": "InternalError"
             }
         )
     
@@ -1069,8 +1098,8 @@ async def chat(request: ChatRequest) -> JSONResponse:
         raise HTTPException(
             status_code=500,
             detail={
-                "error": str(e),
-                "error_type": type(e).__name__
+                "error": "Chat request failed. Please try again.",
+                "error_type": "InternalError"
             }
         )
 
@@ -1167,7 +1196,7 @@ async def get_user_files(
         )
     except Exception as e:
         logger.error(f"Error fetching user files: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="An internal error occurred. Please try again.")
 
 @app.get("/api/files/{file_id}")
 async def get_file(file_id: str):
@@ -1221,7 +1250,7 @@ async def get_file(file_id: str):
         raise
     except Exception as e:
         logger.error(f"Error fetching file: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="An internal error occurred. Please try again.")
 
 @app.delete("/api/files/{file_id}")
 async def delete_file(file_id: str, user_id: str):
@@ -1253,7 +1282,7 @@ async def delete_file(file_id: str, user_id: str):
         raise
     except Exception as e:
         logger.error(f"Error deleting file: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="An internal error occurred. Please try again.")
 
 @app.get("/api/files/stats/{user_id}")
 async def get_storage_stats(user_id: str):
@@ -1304,7 +1333,7 @@ async def extend_file_expiration(file_id: str, user_id: str, days: int = 7):
         raise
     except Exception as e:
         logger.error(f"Error extending expiration: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="An internal error occurred. Please try again.")
 
 
 # Error handlers
@@ -1330,8 +1359,8 @@ async def general_exception_handler(request, exc):
         content={
             "success": False,
             "error": "Internal server error",
-            "detail": str(exc),
-            "error_type": type(exc).__name__
+            "detail": "An unexpected error occurred. Please try again.",
+            "error_type": "InternalError"
         }
     )
 
@@ -1457,7 +1486,7 @@ async def export_to_huggingface(request: HuggingFaceExportRequest):
             raise
         except Exception as e:
             logger.error(f"[HF Export] Supabase query error: {e}")
-            raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+            raise HTTPException(status_code=500, detail="Database error. Please try again.")
         
         if not hf_token:
             raise HTTPException(
@@ -1471,14 +1500,14 @@ async def export_to_huggingface(request: HuggingFaceExportRequest):
             logger.info(f"[HF Export] HuggingFaceStorage imported successfully")
         except ImportError as e:
             logger.error(f"[HF Export] Failed to import HuggingFaceStorage: {e}")
-            raise HTTPException(status_code=500, detail=f"Server error: {str(e)}")
+            raise HTTPException(status_code=500, detail="Server error: required component not available")
         
         try:
             hf_service = HuggingFaceStorage(hf_token=hf_token)
             logger.info(f"[HF Export] HuggingFaceStorage initialized for user: {hf_username}")
         except Exception as e:
             logger.error(f"[HF Export] Failed to initialize HuggingFaceStorage: {e}")
-            raise HTTPException(status_code=500, detail=f"HuggingFace error: {str(e)}")
+            raise HTTPException(status_code=500, detail="HuggingFace connection error. Please check your token.")
         
         # Collect all session assets
         uploaded_files = []
@@ -1598,7 +1627,7 @@ async def export_to_huggingface(request: HuggingFaceExportRequest):
             logger.error(f"[HF Export] All uploads failed: {errors}")
             raise HTTPException(
                 status_code=500, 
-                detail=f"Export failed: {'; '.join(errors)}"
+                detail=f"Export failed: {len(errors)} file(s) could not be uploaded."
             )
         
         if not uploaded_files and not errors:
@@ -1622,7 +1651,7 @@ async def export_to_huggingface(request: HuggingFaceExportRequest):
         raise
     except Exception as e:
         logger.error(f"HuggingFace export failed: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Export failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Export failed. Please try again.")
 
 
 @app.get("/{full_path:path}")

@@ -34,28 +34,56 @@ def _compress_tool_result(self, tool_name: str, result: Dict[str, Any]) -> Dict[
     
     # Tool-specific compression rules
     if tool_name == "profile_dataset":
-        # Original: ~5K tokens with full stats
-        # Compressed: ~200 tokens with key metrics
+        # Compressed but preserves actual data values to prevent hallucination
         r = result.get("result", {})
+        shape = r.get("shape", {})
+        mem = r.get("memory_usage", {})
+        col_types = r.get("column_types", {})
+        columns_info = r.get("columns", {})
+        
+        # Build per-column stats summary (min/max/mean/median for numeric)
+        column_stats = {}
+        for col_name, col_info in columns_info.items():
+            stats = {"dtype": col_info.get("dtype", "unknown")}
+            if col_info.get("mean") is not None:
+                stats["min"] = col_info.get("min")
+                stats["max"] = col_info.get("max")
+                stats["mean"] = round(col_info["mean"], 4) if col_info["mean"] is not None else None
+                stats["median"] = round(col_info["median"], 4) if col_info.get("median") is not None else None
+            stats["null_pct"] = col_info.get("null_percentage", 0)
+            stats["unique"] = col_info.get("unique_count", 0)
+            if "top_values" in col_info:
+                stats["top_values"] = col_info["top_values"][:3]
+            column_stats[col_name] = stats
+        
         compressed["summary"] = {
-            "rows": r.get("num_rows"),
-            "cols": r.get("num_columns"),
-            "missing_pct": r.get("missing_percentage"),
-            "numeric_cols": len(r.get("numeric_columns", [])),
-            "categorical_cols": len(r.get("categorical_columns", [])),
-            "file_size_mb": round(r.get("memory_usage_mb", 0), 1),
-            "key_columns": list(r.get("columns", {}).keys())[:5]  # First 5 columns only
+            "rows": shape.get("rows"),
+            "cols": shape.get("columns"),
+            "missing_pct": r.get("overall_stats", {}).get("null_percentage", 0),
+            "duplicate_rows": r.get("overall_stats", {}).get("duplicate_rows", 0),
+            "numeric_cols": col_types.get("numeric", []),
+            "categorical_cols": col_types.get("categorical", []),
+            "file_size_mb": mem.get("total_mb", 0),
+            "column_stats": column_stats
         }
         compressed["next_steps"] = ["clean_missing_values", "detect_data_quality_issues"]
         
     elif tool_name == "detect_data_quality_issues":
         r = result.get("result", {})
+        summary_data = r.get("summary", {})
+        # Preserve actual issue details so LLM can cite real numbers
+        critical_issues = r.get("critical", [])
+        warning_issues = r.get("warning", [])[:10]
+        info_issues = r.get("info", [])[:10]
+        
         compressed["summary"] = {
-            "total_issues": r.get("total_issues", 0),
-            "critical_issues": r.get("critical_issues", 0),
-            "missing_data": r.get("has_missing"),
-            "outliers": r.get("has_outliers"),
-            "duplicates": r.get("has_duplicates")
+            "total_issues": summary_data.get("total_issues", 0),
+            "critical_count": summary_data.get("critical_count", 0),
+            "warning_count": summary_data.get("warning_count", 0),
+            "info_count": summary_data.get("info_count", 0),
+            "critical_issues": [{"type": i.get("type"), "column": i.get("column"), "message": i.get("message")} for i in critical_issues],
+            "warning_issues": [{"type": i.get("type"), "column": i.get("column"), "message": i.get("message"), "bounds": i.get("bounds")} for i in warning_issues],
+            "info_issues": [{"type": i.get("type"), "column": i.get("column"), "message": i.get("message")} for i in info_issues]
         }
         compressed["next_steps"] = ["clean_missing_values", "handle_outliers"]
         

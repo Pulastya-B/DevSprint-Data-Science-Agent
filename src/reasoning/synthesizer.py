@@ -35,14 +35,20 @@ STRUCTURE (use markdown):
 
 RULES:
 - Lead with the answer, then show evidence
-- Use specific numbers (not "high correlation" but "r=0.72")
+- ONLY cite numbers that appear VERBATIM in the findings below — do NOT round, invent thresholds, or fabricate statistics
+- Do NOT claim data quality issues unless the tool results explicitly report them
+- BUT DO deeply interpret what the ACTUAL data tells us:
+  • Explain what real value ranges mean for the domain (e.g., "Distance_to_Sink spans 0.0–64.26m, indicating a moderately sized network")
+  • Derive insights from actual distributions: compare min/median/mean/max to identify skewness, tight vs wide spreads
+  • Explain the practical significance of correlation values (e.g., "r=0.825 between Energy and Alive suggests strongly coupled depletion")
+  • Identify which features show the most variation and what that implies
+  • Compare column ranges to draw cross-feature insights
 - Mention generated files/plots so user can find them
-- Be honest about confidence levels
+- Be honest about confidence levels — if the data is insufficient for a conclusion, say so
 - Keep it under 500 words unless complex analysis warrants more
 - Use markdown formatting (headers, bullets, bold for emphasis)
 - Do NOT wrap your response in code fences (``` or ```markdown) — output raw markdown directly
 - ONLY report findings from SUCCESSFUL investigation steps
-- Do NOT invent numbers, statistics, or insights that are not present in the findings
 - If a step is marked [FAILED], ignore its results entirely — do not fabricate data from it
 - If most steps failed, be transparent about limited evidence and recommend re-running"""
 
@@ -141,13 +147,19 @@ STRUCTURE (use markdown):
 
 RULES:
 - Lead with the most surprising/important finding
-- Use specific numbers and metrics
+- ONLY cite numbers that appear VERBATIM in the tool results — do NOT round, invent thresholds, or fabricate statistics
+- Do NOT claim data quality issues or anomalies unless the tools explicitly reported them
+- BUT DO provide RICH analytical depth using the ACTUAL data:
+  • For each key column, interpret what its real min/max/mean/median tells us about the domain
+  • Explain what the actual correlation values mean in practical terms — not just "correlated" but WHY it matters
+  • Identify the most and least variable features and explain what that variability implies
+  • Highlight interesting contrasts between columns (e.g., "while X spans a wide range, Y is tightly clustered")
+  • Derive actionable insights from the real distributions — what do the actual values suggest the user should do?
 - Mention all generated visualizations with file paths
-- Suggest actionable next analysis steps
-- Keep it engaging but data-driven
+- Suggest actionable next analysis steps grounded in the actual findings
+- Keep it engaging, analytical, and data-driven — DEPTH comes from interpreting real data, not inventing data
 - Do NOT wrap your response in code fences (``` or ```markdown) — output raw markdown directly
 - ONLY report findings from SUCCESSFUL investigation steps
-- Do NOT invent numbers or statistics not present in the findings
 - If a step is marked [FAILED], ignore it entirely"""
 
         artifacts_summary = self._format_artifacts(artifacts or {}, findings)

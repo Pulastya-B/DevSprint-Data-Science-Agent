@@ -991,9 +991,12 @@ When you've finished all tool executions and are ready to return the final respo
 
 1. **What was accomplished**: List all major steps completed (data cleaning, feature engineering, model training, etc.)
 2. **Key findings from the data**:
-   - What patterns were discovered in the data?
-   - What were the most important features?
-   - Were there any interesting correlations or anomalies?
+   - ONLY cite statistics and numbers that appeared in ACTUAL tool results — do NOT fabricate thresholds, anomalies, or percentages
+   - If no data quality issues were reported by tools, state "No significant data quality issues detected"
+   - BUT DO provide DEEP interpretation of actual values: explain what real column ranges, correlations, and distributions MEAN for the user's domain
+   - Derive insights from actual data: compare feature distributions, explain what strong/weak correlations imply practically, identify which features vary most and why that matters
+   - What correlations were found? (report EXACT values from tool results AND explain their practical significance)
+   - What were the most important features? (based on actual scores, with domain interpretation)
 3. **Model performance** (if trained) - **CRITICAL: YOU MUST INCLUDE THESE METRICS**:
    - **ALWAYS extract and display** the exact metrics from tool results:
    - R² Score, RMSE, MAE from the train_with_autogluon or train_baseline_models results
@@ -1002,10 +1005,10 @@ When you've finished all tool executions and are ready to return the final respo
    - If hyperparameter tuning was done, show before/after comparison
    - How accurate is the model? What does the score mean in practical terms?
    - Were there any challenges (imbalanced data, multicollinearity, etc.)?
-4. **Recommendations**:
+4. **Recommendations** (grounded in data — recommend based on what the tools found, not hypothetical scenarios):
    - Is the model ready for use?
    - What could improve performance further?
-   - Any data quality issues that should be addressed?
+   - Align recommendations with the user's stated goal (e.g., if the user said "energy optimization", recommend optimization-relevant next steps, NOT generic survival analysis)
 5. **Generated artifacts**: Mention reports, plots, and visualizations (but DON'T include file paths - the UI shows buttons automatically)
 
 Example final response:
@@ -1371,6 +1374,15 @@ You receive quality reports from EDA agent and deliver clean data to modeling ag
         }
         
         return next_steps.get(stuck_tool, "generate_eda_plots OR train_baseline_models")
+    
+    @staticmethod
+    def _is_safe_path(path: Path, allowed_root: Path) -> bool:
+        """Check if path is within an allowed root directory."""
+        try:
+            path.resolve().relative_to(allowed_root)
+            return True
+        except ValueError:
+            return False
     
     # 🚀 PARALLEL EXECUTION: Helper methods for concurrent tool execution
     def _execute_tool_sync(self, tool_name: str, tool_args: Dict[str, Any]) -> Dict[str, Any]:
@@ -2146,6 +2158,27 @@ You receive quality reports from EDA agent and deliver clean data to modeling ag
                 "available_tools": get_all_tool_names()
             }
         
+        # Validate file_path arguments are within allowed directories
+        ALLOWED_ROOTS = [
+            Path("/tmp/data_science_agent").resolve(),
+            Path("./outputs").resolve(),
+            Path("./data").resolve(),
+            Path("./cache_db").resolve(),
+            Path("./checkpoints").resolve(),
+        ]
+        for key in ("file_path", "input_path", "train_data_path", "test_data_path"):
+            if key in arguments and arguments[key]:
+                try:
+                    resolved = Path(arguments[key]).resolve()
+                    if not any(self._is_safe_path(resolved, root) for root in ALLOWED_ROOTS):
+                        return {
+                            "success": False, 
+                            "error": f"Path '{arguments[key]}' is outside allowed directories",
+                            "error_type": "SecurityError"
+                        }
+                except (ValueError, OSError):
+                    pass  # Let the tool handle invalid paths
+        
         try:
             # Report progress before executing
             if self.progress_callback:
@@ -2610,28 +2643,56 @@ You receive quality reports from EDA agent and deliver clean data to modeling ag
             
             # Tool-specific compression rules
             if tool_name == "profile_dataset":
-                # Original: ~5K tokens with full stats
-                # Compressed: ~200 tokens with key metrics
+                # Compressed but preserves actual data values to prevent hallucination
                 r = result.get("result", {})
+                shape = r.get("shape", {})
+                mem = r.get("memory_usage", {})
+                col_types = r.get("column_types", {})
+                columns_info = r.get("columns", {})
+                
+                # Build per-column stats summary (min/max/mean/median for numeric)
+                column_stats = {}
+                for col_name, col_info in columns_info.items():
+                    stats = {"dtype": col_info.get("dtype", "unknown")}
+                    if col_info.get("mean") is not None:
+                        stats["min"] = col_info.get("min")
+                        stats["max"] = col_info.get("max")
+                        stats["mean"] = round(col_info["mean"], 4) if col_info["mean"] is not None else None
+                        stats["median"] = round(col_info["median"], 4) if col_info.get("median") is not None else None
+                    stats["null_pct"] = col_info.get("null_percentage", 0)
+                    stats["unique"] = col_info.get("unique_count", 0)
+                    if "top_values" in col_info:
+                        stats["top_values"] = col_info["top_values"][:3]
+                    column_stats[col_name] = stats
+                
                 compressed["summary"] = {
-                    "rows": r.get("num_rows"),
-                    "cols": r.get("num_columns"),
-                    "missing_pct": r.get("missing_percentage"),
-                    "numeric_cols": len(r.get("numeric_columns", [])),
-                    "categorical_cols": len(r.get("categorical_columns", [])),
-                    "file_size_mb": round(r.get("memory_usage_mb", 0), 1),
-                    "key_columns": list(r.get("columns", {}).keys())[:5]  # First 5 columns only
+                    "rows": shape.get("rows"),
+                    "cols": shape.get("columns"),
+                    "missing_pct": r.get("overall_stats", {}).get("null_percentage", 0),
+                    "duplicate_rows": r.get("overall_stats", {}).get("duplicate_rows", 0),
+                    "numeric_cols": col_types.get("numeric", []),
+                    "categorical_cols": col_types.get("categorical", []),
+                    "file_size_mb": mem.get("total_mb", 0),
+                    "column_stats": column_stats
                 }
                 compressed["next_steps"] = ["clean_missing_values", "detect_data_quality_issues"]
                 
             elif tool_name == "detect_data_quality_issues":
                 r = result.get("result", {})
+                summary_data = r.get("summary", {})
+                # Preserve actual issue details so LLM can cite real numbers
+                critical_issues = r.get("critical", [])
+                warning_issues = r.get("warning", [])[:10]  # Cap at 10
+                info_issues = r.get("info", [])[:10]
+                
                 compressed["summary"] = {
-                    "total_issues": r.get("total_issues", 0),
-                    "critical_issues": r.get("critical_issues", 0),
-                    "missing_data": r.get("has_missing"),
-                    "outliers": r.get("has_outliers"),
-                    "duplicates": r.get("has_duplicates")
+                    "total_issues": summary_data.get("total_issues", 0),
+                    "critical_count": summary_data.get("critical_count", 0),
+                    "warning_count": summary_data.get("warning_count", 0),
+                    "info_count": summary_data.get("info_count", 0),
+                    "critical_issues": [{"type": i.get("type"), "column": i.get("column"), "message": i.get("message")} for i in critical_issues],
+                    "warning_issues": [{"type": i.get("type"), "column": i.get("column"), "message": i.get("message"), "bounds": i.get("bounds")} for i in warning_issues],
+                    "info_issues": [{"type": i.get("type"), "column": i.get("column"), "message": i.get("message")} for i in info_issues]
                 }
                 compressed["next_steps"] = ["clean_missing_values", "handle_outliers"]
                 
@@ -2962,12 +3023,30 @@ You receive quality reports from EDA agent and deliver clean data to modeling ag
         
         # Profile dataset
         if tool_name == "profile_dataset":
+            shape = result_data.get("shape", {})
+            col_types = result_data.get("column_types", {})
+            overall = result_data.get("overall_stats", {})
+            columns_info = result_data.get("columns", {})
+            
+            # Extract actual per-column stats for grounding
+            column_ranges = {}
+            for col_name, col_info in columns_info.items():
+                if col_info.get("mean") is not None:
+                    column_ranges[col_name] = {
+                        "min": col_info.get("min"),
+                        "max": col_info.get("max"),
+                        "mean": round(col_info["mean"], 4) if col_info["mean"] is not None else None,
+                        "median": round(col_info["median"], 4) if col_info.get("median") is not None else None,
+                    }
+            
             self.workflow_state.update_profiling({
-                "num_rows": result_data.get("num_rows"),
-                "num_columns": result_data.get("num_columns"),
-                "missing_percentage": result_data.get("missing_percentage"),
-                "numeric_columns": result_data.get("numeric_columns", []),
-                "categorical_columns": result_data.get("categorical_columns", [])
+                "num_rows": shape.get("rows"),
+                "num_columns": shape.get("columns"),
+                "missing_percentage": overall.get("null_percentage", 0),
+                "duplicate_rows": overall.get("duplicate_rows", 0),
+                "numeric_columns": col_types.get("numeric", []),
+                "categorical_columns": col_types.get("categorical", []),
+                "column_ranges": column_ranges
             })
         
         # Quality check
@@ -3589,6 +3668,21 @@ You receive quality reports from EDA agent and deliver clean data to modeling ag
             )
             findings.add_finding(finding)
             
+            # Update hypothesis status based on evaluation results
+            if hypothesis:
+                if tool_success and evaluation.confidence >= 0.6:
+                    findings.update_hypothesis(
+                        hypothesis, "supported", evaluation.interpretation, is_supporting=True
+                    )
+                elif tool_success and evaluation.confidence >= 0.3:
+                    findings.update_hypothesis(
+                        hypothesis, "inconclusive", evaluation.interpretation, is_supporting=True
+                    )
+                elif not tool_success:
+                    findings.update_hypothesis(
+                        hypothesis, "inconclusive", f"Tool failed: {tool_error}", is_supporting=False
+                    )
+            
             # Emit finding for UI
             if hasattr(self, 'session') and self.session:
                 progress_manager.emit(self.session.session_id, {
@@ -3609,20 +3703,39 @@ You receive quality reports from EDA agent and deliver clean data to modeling ag
         print(f"📝 SYNTHESIZE: Building final answer from {len(findings.findings)} findings...")
         print(f"{'='*60}")
         
-        # Collect artifacts from workflow history
-        artifacts = self._collect_artifacts(workflow_history)
-        
-        # Generate synthesis
-        if mode == "exploratory":
-            summary_text = synthesizer.synthesize_exploratory(
-                findings=findings,
-                artifacts=artifacts
+        # Guard: If ALL findings failed, return honest error instead of hallucinated synthesis
+        successful_findings = findings.get_successful_findings()
+        if findings.findings and not successful_findings:
+            failed_tools = ", ".join(findings.failed_tools.keys()) if findings.failed_tools else "unknown"
+            summary_text = (
+                "## Analysis Could Not Be Completed\n\n"
+                f"All {len(findings.findings)} investigation steps failed. "
+                f"**Failed tools**: {failed_tools}\n\n"
+                "**Possible causes:**\n"
+                "- The dataset file may be corrupted or in an unsupported format\n"
+                "- Column names in the query may not match the actual dataset\n"
+                "- Required dependencies may be missing\n\n"
+                "**Recommended next steps:**\n"
+                "1. Re-upload the dataset and try again\n"
+                "2. Check that column names are correct\n"
+                "3. Try a simpler query first (e.g., 'profile this dataset')"
             )
+            print(f"⚠️  All tools failed — returning honest error instead of synthesis")
         else:
-            summary_text = synthesizer.synthesize(
-                findings=findings,
-                artifacts=artifacts
-            )
+            # Collect artifacts from workflow history
+            artifacts = self._collect_artifacts(workflow_history)
+        
+            # Generate synthesis
+            if mode == "exploratory":
+                summary_text = synthesizer.synthesize_exploratory(
+                    findings=findings,
+                    artifacts=artifacts
+                )
+            else:
+                summary_text = synthesizer.synthesize(
+                    findings=findings,
+                    artifacts=artifacts
+                )
         
         # Also generate enhanced summary for plots/metrics extraction
         try:
@@ -3792,6 +3905,16 @@ You receive quality reports from EDA agent and deliver clean data to modeling ag
         schema_info = extract_schema_local(file_path, sample_rows=3)
         
         if 'error' not in schema_info:
+            # Guard: Reject empty datasets immediately instead of wasting reasoning iterations
+            if schema_info.get('num_rows', 0) == 0:
+                return {
+                    "status": "error",
+                    "error": "Dataset is empty (0 rows)",
+                    "summary": "The uploaded dataset contains no data rows. Please upload a dataset with at least one row of data.",
+                    "workflow_history": [],
+                    "execution_time": time.time() - start_time
+                }
+            
             # 🧠 SEMANTIC LAYER: Enrich dataset info with column embeddings
             if self.semantic_layer.enabled:
                 try:
@@ -3843,7 +3966,7 @@ You receive quality reports from EDA agent and deliver clean data to modeling ag
         #   INVESTIGATIVE: "Why are customers churning?" → reasoning loop  
         #   EXPLORATORY:   "Analyze this data"        → hypothesis-driven loop
         # ═══════════════════════════════════════════════════════════════════════
-        intent_classifier = IntentClassifier()
+        intent_classifier = IntentClassifier(semantic_layer=self.semantic_layer)
         intent_result = intent_classifier.classify(
             query=task_description,
             dataset_info=schema_info if 'error' not in schema_info else None,
@@ -4186,13 +4309,32 @@ You receive quality reports from EDA agent and deliver clean data to modeling ag
                     messages = [system_msg, user_msg] + cleaned_recent
                     print(f"✂️  Pruned conversation (keeping last 12 exchanges for better context preservation)")
                     
-                    # 🎯 INJECT TARGET COLUMN REMINDER after pruning (prevent LLM from forgetting)
+                    # 🎯 INJECT CONTEXT REMINDER after pruning (prevent LLM from forgetting)
+                    context_parts = []
                     if target_col and self.workflow_state.task_type:
-                        target_reminder = {
+                        context_parts.append(f"📌 Target column: '{target_col}' (Task: {self.workflow_state.task_type})")
+                    
+                    # Inject profiling/quality context that would have been pruned
+                    if self.workflow_state.profiling_summary:
+                        ps = self.workflow_state.profiling_summary
+                        context_parts.append(f"📊 Dataset: {ps.get('num_rows', '?')} rows × {ps.get('num_columns', '?')} cols")
+                        if ps.get('column_ranges'):
+                            ranges = ps['column_ranges']
+                            range_lines = [f"  {col}: min={v.get('min')}, max={v.get('max')}, mean={v.get('mean')}" 
+                                          for col, v in list(ranges.items())[:8]]
+                            context_parts.append("Column ranges:\n" + "\n".join(range_lines))
+                    
+                    if self.workflow_state.quality_issues:
+                        qi = self.workflow_state.quality_issues
+                        if qi.get('total_issues', 0) > 0:
+                            context_parts.append(f"⚠️ Quality: {qi.get('total_issues', 0)} issues found")
+                    
+                    if context_parts:
+                        reminder = {
                             "role": "user",
-                            "content": f"📌 REMINDER: Target column is '{target_col}' (Task: {self.workflow_state.task_type})"
+                            "content": "REMINDER (original profiling context — preserved after pruning):\n" + "\n".join(context_parts)
                         }
-                        messages.insert(2, target_reminder)  # Insert after system + user query
+                        messages.insert(2, reminder)  # Insert after system + user query
                 
                 # 🔍 Token estimation and warning
                 estimated_tokens = sum(

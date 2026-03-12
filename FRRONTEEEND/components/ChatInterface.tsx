@@ -523,6 +523,12 @@ export const ChatInterface: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                 }
               } else {
                 console.log('⏭️ Skipping duplicate analysis result', resultKey);
+                // MUST close EventSource on duplicates to prevent reconnect loop
+                if (eventSourceRef.current) {
+                  eventSourceRef.current.close();
+                  eventSourceRef.current = null;
+                  sseSessionRef.current = null;
+                }
               }
             }
           } catch (err) {

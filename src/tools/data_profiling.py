@@ -98,7 +98,7 @@ def profile_dataset(file_path: str) -> Dict[str, Any]:
                 # Convert to string and then count unique
                 unique_count = df[col].cast(pl.Utf8).n_unique()
                 profile["unique_counts_per_column"][col] = int(unique_count)
-            except:
+            except Exception:
                 profile["unique_counts_per_column"][col] = "N/A (unhashable type)"
     
     # Overall statistics
@@ -161,7 +161,7 @@ def get_smart_summary(file_path: str, n_samples: int = 30) -> Dict[str, Any]:
                 # Check if it's a complex type
                 if isinstance(first_val, (dict, list)):
                     df = df.with_columns(pl.col(col).cast(pl.Utf8).alias(col))
-        except:
+        except Exception:
             # If any error, just continue
             pass
     
@@ -185,12 +185,12 @@ def get_smart_summary(file_path: str, n_samples: int = 30) -> Dict[str, Any]:
         try:
             unique_count = df[col].n_unique()
             unique_counts[col] = int(unique_count)
-        except:
+        except Exception:
             # Fallback for unhashable types
             try:
                 unique_count = df[col].cast(pl.Utf8).n_unique()
                 unique_counts[col] = int(unique_count)
-            except:
+            except Exception:
                 unique_counts[col] = "N/A"
     
     # Get column data types

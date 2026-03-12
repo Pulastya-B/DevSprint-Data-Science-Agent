@@ -133,10 +133,13 @@ HYPOTHESIS_SYSTEM_PROMPT = """You are a senior data scientist examining a datase
 Given the dataset profile, generate 3-5 hypotheses worth investigating.
 
 Focus on:
-- Surprising patterns (unexpected correlations, outliers)
-- Business-relevant relationships (what drives the target variable?)
-- Data quality issues that could affect analysis
-- Distribution anomalies
+- Relationships between columns that could explain the target variable
+- Which features might have the strongest predictive power
+- Distribution patterns visible in the actual column stats (min/max/mean/median)
+- Potential feature interactions worth exploring
+
+Frame each hypothesis as a TESTABLE QUESTION (e.g., "Does Distance_to_Sink correlate with energy depletion?"), NOT as an assumed conclusion (e.g., "There is a distance penalty beyond 75m").
+Base hypotheses on column names and any profile stats provided — do NOT assume anomalies or quality issues before seeing the data.
 
 Output ONLY valid JSON array of hypotheses, ranked by priority (most interesting first)."""
 
