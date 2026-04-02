@@ -361,18 +361,7 @@ async def get_progress(session_id: str):
 
 @app.get("/api/progress/stream/{session_id}")
 async def stream_progress(session_id: str):
-    """Stream real-time progress updates using Server-Sent Events (SSE).
-    
-    This endpoint connects clients to the global progress_manager which
-    receives events from the orchestrator as tools execute.
-    
-    Events:
-        - tool_executing: When a tool begins execution
-        - tool_completed: When a tool finishes successfully  
-        - tool_failed: When a tool fails
-        - token_update: Token budget updates
-        - analysis_complete: When the entire workflow finishes
-    """
+    """Stream real-time progress updates using Server-Sent Events (SSE)."""
     print(f"[SSE] ENDPOINT: Client connected for session_id={session_id}")
     
     # CRITICAL: Create queue and register subscriber IMMEDIATELY
@@ -384,71 +373,102 @@ async def stream_progress(session_id: str):
     
     async def event_generator():
         try:
-            # Send initial connection event
-            connection_event = {
-                'type': 'connected',
-                'message': '🔗 Connected to progress stream',
-                'session_id': session_id
-            }
-            print(f"[SSE] SENDING connection event to client")
-            yield f"data: {safe_json_dumps(connection_event)}\n\n"
+            # 1. Send initial connection confirmation immediately
+            try:
+                connection_event = {
+                    'type': 'connected',
+                    'message': '🔗 Connected to progress stream',
+                    'session_id': session_id
+                }
+                data_str = safe_json_dumps(connection_event)
+                print(f"[SSE] SENDING connection event to client: {data_str[:100]}")
+                yield f"data: {data_str}\n\n"
+            except Exception as e:
+                print(f"[SSE] ERROR sending connection event: {e}")
+                logger.error(f"SSE connection event error: {e}", exc_info=True)
+                yield f"data: {json.dumps({'type': 'error', 'message': 'Connection failed'})}\n\n"
+                return
             
-            # 🔥 FIX: Replay any events that were emitted BEFORE this subscriber connected
-            # This handles the race condition where background analysis starts emitting events
-            # before the frontend's SSE reconnection completes
-            history = progress_manager.get_history(session_id)
-            if history:
-                print(f"[SSE] Replaying {len(history)} missed events for late-joining subscriber")
-                for past_event in history:
-                    # Don't replay if it's already a terminal event
-                    if past_event.get('type') != 'analysis_complete':
-                        yield f"data: {safe_json_dumps(past_event)}\n\n"
-                    else:
-                        # If analysis already completed before we connected, send it and close
-                        # Set a very long retry interval to prevent EventSource auto-reconnect
-                        yield f"retry: 86400000\n\n"
-                        yield f"data: {safe_json_dumps(past_event)}\n\n"
-                        print(f"[SSE] Analysis already completed before subscriber connected - closing")
-                        # Brief delay to ensure the client receives and processes the event
-                        await asyncio.sleep(2)
-                        return
-            else:
-                print(f"[SSE] No history to replay (fresh session)")
-            
-            print(f"[SSE] Starting event stream loop for session {session_id}")
-            
-            # Stream new events from the queue (poll with get_nowait to avoid blocking issues)
-            while True:
-                if not queue.empty():
-                    event = queue.get_nowait()
-                    print(f"[SSE] GOT event from queue: {event.get('type')}")
-                    yield f"data: {safe_json_dumps(event)}\n\n"
-                    
-                    # Check if analysis is complete
-                    if event.get('type') == 'analysis_complete':
-                        break
+            # 2. Replay history
+            try:
+                history = progress_manager.get_history(session_id)
+                if history:
+                    print(f"[SSE] Found {len(history)} events in history")
+                    for past_event in history:
+                        if past_event.get('type') != 'analysis_complete':
+                            data_str = safe_json_dumps(past_event)
+                            yield f"data: {data_str}\n\n"
+                        else:
+                            # Terminal event - send it with long retry, then close
+                            data_str = safe_json_dumps(past_event)
+                            yield f"retry: 86400000\ndata: {data_str}\n\n"
+                            print(f"[SSE] Analysis already complete, closing stream")
+                            await asyncio.sleep(1)
+                            return
                 else:
-                    # No events available, send keepalive and wait
-                    yield f": keepalive\n\n"
-                    await asyncio.sleep(0.5)  # Poll every 500ms
+                    print(f"[SSE] No history to replay (fresh session)")
+            except Exception as e:
+                print(f"[SSE] ERROR replaying history: {e}")
+                logger.error(f"SSE history replay error: {e}", exc_info=True)
+            
+            # 3. Stream new events
+            print(f"[SSE] Starting event stream loop for session {session_id}")
+            consecutive_empty_cycles = 0
+            
+            while True:
+                try:
+                    if not queue.empty():
+                        consecutive_empty_cycles = 0
+                        event = queue.get_nowait()
+                        try:
+                            data_str = safe_json_dumps(event)
+                            print(f"[SSE] Sending {event.get('type')}: {data_str[:100]}")
+                            yield f"data: {data_str}\n\n"
+                            
+                            if event.get('type') == 'analysis_complete':
+                                print(f"[SSE] Analysis complete, closing stream")
+                                await asyncio.sleep(1)
+                                return
+                        except Exception as e:
+                            print(f"[SSE] ERROR serializing event: {e}")
+                            logger.error(f"SSE event serialization error: {e}", exc_info=True)
+                    else:
+                        # Keep-alive ping every 500ms
+                        consecutive_empty_cycles += 1
+                        if consecutive_empty_cycles % 2 == 0:  # Every 1 second
+                            yield ": keep-alive\n\n"
+                        await asyncio.sleep(0.5)
+                except asyncio.CancelledError:
+                    print(f"[SSE] Stream cancelled for session {session_id}")
+                    break
+                except Exception as e:
+                    print(f"[SSE] ERROR in event loop: {e}")
+                    logger.error(f"SSE event loop error: {e}", exc_info=True)
+                    yield f"data: {json.dumps({'type': 'error', 'message': 'Stream error'})}\n\n"
+                    break
                     
-        except asyncio.CancelledError:
-            logger.info(f"SSE stream cancelled for session {session_id}")
         except Exception as e:
-            logger.error(f"SSE error for session {session_id}: {e}")
+            print(f"[SSE] CRITICAL ERROR in event_generator: {e}")
+            logger.error(f"SSE generator error: {e}", exc_info=True)
         finally:
-            # Cleanup queue
-            if session_id in progress_manager._queues and queue in progress_manager._queues[session_id]:
-                progress_manager._queues[session_id].remove(queue)
-            logger.info(f"SSE stream closed for session {session_id}")
+            # Cleanup
+            try:
+                if session_id in progress_manager._queues and queue in progress_manager._queues[session_id]:
+                    progress_manager._queues[session_id].remove(queue)
+                print(f"[SSE] Stream closed for session {session_id}, remaining subscribers: {len(progress_manager._queues.get(session_id, []))}")
+            except Exception as e:
+                print(f"[SSE] ERROR in cleanup: {e}")
     
     return StreamingResponse(
         event_generator(),
         media_type="text/event-stream",
         headers={
-            "Cache-Control": "no-cache",
+            "Cache-Control": "no-cache, no-store, must-revalidate",
             "Connection": "keep-alive",
-            "X-Accel-Buffering": "no"  # Disable nginx buffering
+            "X-Accel-Buffering": "no",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET",
+            "Access-Control-Max-Age": "3600"
         }
     )
 
